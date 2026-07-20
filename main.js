@@ -16,6 +16,11 @@ let tray = null;
 let quitting = false;
 let hasTray = false;
 
+// Pin the profile directory instead of letting Electron derive it from the app
+// name. Otherwise every rename moves userData and silently signs the user out.
+// Must run before requestSingleInstanceLock, which uses this path for its lock.
+app.setPath('userData', path.join(app.getPath('appData'), 'musicunofficial'));
+
 if (!app.requestSingleInstanceLock()) {
   app.quit();
   return;
