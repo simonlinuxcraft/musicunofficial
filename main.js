@@ -37,13 +37,20 @@ function loadBounds() {
   return { ...DEFAULT_BOUNDS };
 }
 
+// Only sampled while the window is mapped: isMaximized() reports false on a
+// hidden or minimised window, so reading it then would persist a wrong state.
+// The last good sample is kept so quitting from the tray still writes the real
+// geometry instead of writing nothing.
+let lastBounds = null;
+
 function saveBounds() {
-  // Skip while hidden or minimised: isMaximized() reports false on an unmapped
-  // window, and quitting from the tray would overwrite a good state with that.
-  if (!win || win.isDestroyed() || !win.isVisible() || win.isMinimized()) return;
-  const s = { ...win.getNormalBounds(), maximized: win.isMaximized() };
+  if (!win || win.isDestroyed()) return;
+  if (win.isVisible() && !win.isMinimized()) {
+    lastBounds = { ...win.getNormalBounds(), maximized: win.isMaximized() };
+  }
+  if (!lastBounds) return;
   try {
-    fs.writeFileSync(statePath(), JSON.stringify(s));
+    fs.writeFileSync(statePath(), JSON.stringify(lastBounds));
   } catch {}
 }
 

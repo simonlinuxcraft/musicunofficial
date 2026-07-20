@@ -17,7 +17,17 @@
     // page have no nav bar, and without this a frameless window has no close
     // button there at all. The host is position:fixed, so body works fine.
     const bar = document.querySelector('ytmusic-nav-bar #right-content') || document.body;
-    if (!bar || bar.querySelector('.ytm-winctl-host')) return false;
+    if (!bar) return false;
+
+    // Search the whole document, not just this container. On startup the host
+    // is created on body because Polymer has not built the nav bar yet; once it
+    // appears, a container-local check would miss that host and add a second
+    // one, leaving a dead node with live listeners behind. Move it instead.
+    const existing = document.querySelector('.ytm-winctl-host');
+    if (existing) {
+      if (existing.parentElement !== bar) bar.appendChild(existing);
+      return false;
+    }
 
     const host = document.createElement('div');
     host.className = 'ytm-winctl-host';

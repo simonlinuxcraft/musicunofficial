@@ -31,7 +31,12 @@
       "description": "Runs the YouTube Music player (music.youtube.com) in its own window with tray support, media key integration and a frameless interface. Not affiliated with, endorsed by, or sponsored by Google or YouTube.",
       "maintainer": "simonlinuxcraft",
       "syncDesktopName": true,
-      "executableName": "musicunofficial"
+      "executableName": "musicunofficial",
+      "desktop": {
+        "entry": {
+          "Name": "YouTube Music"
+        }
+      }
     },
     "electronLanguages": [
       "en-US",
