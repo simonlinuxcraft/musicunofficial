@@ -67,14 +67,29 @@ fewer things that break when YouTube changes its site.
 
 ## Mini player
 
-`Ctrl` `M`, the button in the navigation bar or the tray entry shrinks the app
-to a small window that floats above everything else. It shows the cover, the
-track, a progress bar and play, previous and next. The full window comes back
-when the mini player is closed.
+<div align="center">
 
-Track information is read from the page's own `mediaSession` data, the same
+<img src="docs/miniplayer.png" width="344" alt="The mini player: cover art, track, artist, progress bar and playback controls">
+
+</div>
+
+`Ctrl` `M`, the button in the navigation bar or the tray entry shrinks the app
+to a small window that stays above every other window. It shows the cover art,
+the track, the artist, a progress bar and play, previous and next.
+
+Drag it anywhere by its background; it comes back where you left it. The two
+buttons on the right go back to the full window and quit the application. There
+is no third button that only closes the mini player: with the main window
+hidden behind it, that would leave no way out on a desktop whose tray does not
+render.
+
+The progress bar runs forward on its own and resyncs whenever new data arrives,
+so it stays smooth without polling the page constantly.
+
+Track information comes from the page's own `mediaSession` data, the same
 source the media keys and the desktop's media widget use, so it does not depend
-on the site's markup staying the way it is today.
+on the site's markup staying the way it is today. The page is only polled while
+the mini player or Rich Presence is there to read the result.
 
 ## Discord Rich Presence
 
