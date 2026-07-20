@@ -1,7 +1,7 @@
 {
-  "name": "ytmusic-unofficial",
+  "name": "musicunofficial",
   "version": "0.0.1",
-  "description": "Unofficial desktop wrapper for YouTube Music on Linux",
+  "description": "Unofficial desktop wrapper for the YouTube Music player",
   "main": "main.js",
   "license": "MIT",
   "author": {
@@ -18,8 +18,8 @@
     "icons": "node scripts/gen-icons.js"
   },
   "build": {
-    "appId": "io.github.simonlinuxcraft.ytmusicunofficial",
-    "productName": "YouTube Music Unofficial",
+    "appId": "io.github.simonlinuxcraft.musicunofficial",
+    "productName": "MusicUnofficial",
     "afterPack": "./scripts/after-pack.js",
     "linux": {
       "target": [
@@ -27,11 +27,11 @@
       ],
       "icon": "icon.png",
       "category": "AudioVideo",
-      "synopsis": "Unofficial desktop player for YouTube Music",
-      "description": "Runs music.youtube.com in its own window with tray support. Not affiliated with Google or YouTube.",
+      "synopsis": "Unofficial desktop wrapper for the YouTube Music player",
+      "description": "Runs the YouTube Music player (music.youtube.com) in its own window with tray support, media key integration and a frameless interface. Not affiliated with, endorsed by, or sponsored by Google or YouTube.",
       "maintainer": "simonlinuxcraft",
       "syncDesktopName": true,
-      "executableName": "ytmusic-unofficial"
+      "executableName": "musicunofficial"
     },
     "electronLanguages": [
       "en-US",
@@ -60,12 +60,12 @@
       "!node_modules/**/*.{md,ts,map,d.ts}"
     ],
     "appImage": {
-      "artifactName": "YouTube-Music-Unofficial-${version}.AppImage"
+      "artifactName": "MusicUnofficial-${version}.AppImage"
     }
   },
   "devDependencies": {
     "electron": "^41.7.1",
     "electron-builder": "^26.15.2"
   },
-  "desktopName": "ytmusic-unofficial.desktop"
+  "desktopName": "musicunofficial.desktop"
 }
