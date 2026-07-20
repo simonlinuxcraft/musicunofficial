@@ -168,6 +168,10 @@ function createWindow() {
     if (isMainFrame && !isInPlace) setTrack(null);
   });
 
+  // Safety net: whatever the state ended up being after a load or a reload,
+  // reconcile it once the page has settled.
+  win.webContents.on('did-stop-loading', syncPolling);
+
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (isInternal(url)) return { action: 'allow' };
     shell.openExternal(url);
@@ -233,21 +237,31 @@ function setTrack(next) {
 // playback: polling regardless cost about 14 CPU points, roughly two thirds of
 // the app's total, and nothing was reading it.
 function syncPolling() {
-  if (!win || win.isDestroyed() || win.webContents.isLoading()) return;
+  // No isLoading() guard here. dom-ready fires while the page is still pulling
+  // resources, so it would swallow the one call that follows injection and
+  // leave Rich Presence without a single track for the whole session. By the
+  // time the injected script has resolved its listener is registered, which is
+  // all that matters.
+  if (!win || win.isDestroyed()) return;
   const needed = !!(mini && !mini.isDestroyed()) || !!(presence && presence.enabled);
   win.webContents.send('nowplaying:active', needed);
   if (!needed) setTrack(null);
 }
 
 let miniSaveTimer = null;
+
+function saveMiniBounds() {
+  clearTimeout(miniSaveTimer);
+  miniSaveTimer = null;
+  if (!mini || mini.isDestroyed()) return;
+  const b = mini.getBounds();
+  settings.miniBounds = { x: b.x, y: b.y };
+  saveSettings();
+}
+
 function scheduleSaveMiniBounds() {
   clearTimeout(miniSaveTimer);
-  miniSaveTimer = setTimeout(() => {
-    if (!mini || mini.isDestroyed()) return;
-    const b = mini.getBounds();
-    settings.miniBounds = { x: b.x, y: b.y };
-    saveSettings();
-  }, 400);
+  miniSaveTimer = setTimeout(saveMiniBounds, 400);
 }
 
 function miniStartBounds() {
@@ -308,6 +322,11 @@ function openMini() {
   // continuously while dragging and saveSettings writes synchronously. Writing
   // on every event blocks the main process and makes the whole app stutter.
   mini.on('moved', scheduleSaveMiniBounds);
+
+  // Runs before the window is gone, so a move made within the debounce window
+  // still gets written. 'closed' would be too late, the bounds are unreadable
+  // by then and the pending timer bails out on the destroyed window.
+  mini.on('close', saveMiniBounds);
 
   // Covers Alt+F4 and the window manager's own close as well as our button.
   // Without this the main window would stay hidden with no way back.
@@ -389,13 +408,15 @@ function createTray() {
   hasTray = true;
 }
 
-ipcMain.on('window:minimize', () => win && win.minimize());
+const alive = () => win && !win.isDestroyed();
+
+ipcMain.on('window:minimize', () => alive() && win.minimize());
 ipcMain.on('window:toggle-maximize', () => {
-  if (!win) return;
+  if (!alive()) return;
   if (win.isMaximized()) win.unmaximize();
   else win.maximize();
 });
-ipcMain.on('window:close', () => win && win.close());
+ipcMain.on('window:close', () => alive() && win.close());
 ipcMain.on('mini:open', () => openMini());
 
 ipcMain.on('nowplaying:update', (e, raw) => {
@@ -430,7 +451,7 @@ ipcMain.on('mini:restore', () => {
 });
 
 app.on('second-instance', () => {
-  if (win) {
+  if (alive()) {
     closeMini();
     win.show();
     win.focus();
