@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { isInternal, keyAction } = require('./utils/pure');
 
-const APP_TITLE = 'YouTube Music';
+const APP_TITLE = 'MusicUnofficial';
 const START_URL = 'https://music.youtube.com/';
 const DEFAULT_BOUNDS = { width: 1280, height: 860 };
 const INJECT_CSS = fs.readFileSync(path.join(__dirname, 'inject', 'style.css'), 'utf8');
