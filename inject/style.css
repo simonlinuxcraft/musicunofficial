@@ -1,0 +1,127 @@
+/* Replaces the YouTube Music wordmark. The anchor keeps its click target and
+   gets the symbol as a fixed-size background; the wordmark is real text so the
+   browser renders it with proper hinting. */
+ytmusic-logo a {
+  display: flex;
+  align-items: center;
+  /* Full height plus line-height 1: otherwise the box is only as tall as the
+     text box and the mark sits higher than the hamburger button next to it. */
+  height: 100%;
+  line-height: 1;
+  padding-left: 33px;
+  background-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgdmlld0JveD0iMCAwIDY0IDY0Ij48IS0tIHIgKyBoYWxmIHRoZSBzdHJva2Ugc3RheXMgYmVsb3cgMzIgc28gdGhlIG91dGVyIGVkZ2UgaXMgbm90IGNsaXBwZWQuIC0tPgogIDxjaXJjbGUgY3g9IjMyIiBjeT0iMzIiIHI9IjI3LjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmMDAzMyIgc3Ryb2tlLXdpZHRoPSI1Ii8+CiAgPHBhdGggZD0iTTI2LjUgMjFsMTYgMTEtMTYgMTF6IiBmaWxsPSIjZmYwMDMzIi8+PC9zdmc+");
+  background-repeat: no-repeat;
+  background-position: left center;
+  background-size: 25px 25px;
+  color: #fff;
+  font-family: Roboto, "YouTube Sans", Arial, sans-serif;
+  font-size: 15px;
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+}
+
+ytmusic-logo a::after {
+  content: 'MusicUnofficial';
+}
+
+/* display:none, not visibility:hidden, so the original mark frees its space. */
+ytmusic-logo a > * {
+  display: none;
+}
+
+/* The logo is wider than YouTube's own mark, and #left-content is flex:0 0 auto
+   so it does not grow with it. Without a floor the mark overruns its container
+   and collides with the search box once the sidebar is collapsed. */
+ytmusic-nav-bar #left-content {
+  min-width: 214px;
+}
+
+/* The window is frameless, so the nav bar has to double as the drag handle.
+   Everything clickable inside it must opt back out. */
+ytmusic-nav-bar {
+  -webkit-app-region: drag;
+}
+
+ytmusic-nav-bar a,
+ytmusic-nav-bar button,
+ytmusic-nav-bar input,
+ytmusic-nav-bar tp-yt-paper-icon-button,
+ytmusic-nav-bar ytmusic-search-box,
+ytmusic-nav-bar ytmusic-settings-button,
+ytmusic-nav-bar #right-content {
+  -webkit-app-region: no-drag;
+}
+
+/* Window controls, injected by inject/controls.js. */
+.ytm-winctl-host {
+  /* Pinned to the window, not to the nav bar: the nav bar carries its own
+     right padding, which pushed the controls away from the corner. */
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  height: 64px;
+  padding-right: 6px;
+  gap: 2px;
+  -webkit-app-region: no-drag;
+}
+
+/* Keep the page's own header buttons clear of the pinned controls. */
+ytmusic-nav-bar #right-content {
+  padding-right: 108px;
+}
+
+.ytm-winctl {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease;
+}
+
+.ytm-winctl::after {
+  content: '';
+  width: 10px;
+  height: 10px;
+  background-color: currentColor;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+}
+
+.ytm-winctl:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.ytm-winctl-close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+.ytm-winctl-minimize::after {
+  -webkit-mask-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgdmlld0JveD0iMCAwIDEwIDEwIj48cGF0aCBkPSJNMCA1aDEwIiBzdHJva2U9ImJsYWNrIiBzdHJva2Utd2lkdGg9IjEuMiIvPjwvc3ZnPg==");
+}
+
+.ytm-winctl-maximize::after {
+  -webkit-mask-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgdmlld0JveD0iMCAwIDEwIDEwIj48cmVjdCB4PSIwLjYiIHk9IjAuNiIgd2lkdGg9IjguOCIgaGVpZ2h0PSI4LjgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMS4yIi8+PC9zdmc+");
+}
+
+.ytm-winctl-close::after {
+  -webkit-mask-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgdmlld0JveD0iMCAwIDEwIDEwIj48cGF0aCBkPSJNMCAwbDEwIDEwTTEwIDBMMCAxMCIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIxLjIiLz48L3N2Zz4=");
+}
+
+/* Restore glyph while maximised. The class is set on <html> by
+   inject/controls.js from the main process window state. */
+html.ytm-maximized .ytm-winctl-maximize::after {
+  -webkit-mask-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgdmlld0JveD0iMCAwIDEwIDEwIj48cmVjdCB4PSIwLjYiIHk9IjIuNiIgd2lkdGg9IjYuOCIgaGVpZ2h0PSI2LjgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMS4yIi8+PHBhdGggZD0iTTIuNiAyLjZWMC42aDYuOHY2LjhoLTIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMS4yIi8+PC9zdmc+");
+}

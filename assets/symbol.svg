@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <!-- r + half the stroke stays below 32 so the outer edge is not clipped. -->
+  <circle cx="32" cy="32" r="27.5" fill="none" stroke="#ff0033" stroke-width="5"/>
+  <path d="M26.5 21l16 11-16 11z" fill="#ff0033"/>
+</svg>

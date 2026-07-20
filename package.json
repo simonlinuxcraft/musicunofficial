@@ -1,0 +1,71 @@
+{
+  "name": "ytmusic-unofficial",
+  "version": "0.0.1",
+  "description": "Unofficial desktop wrapper for YouTube Music on Linux",
+  "main": "main.js",
+  "license": "MIT",
+  "author": {
+    "name": "simonlinuxcraft",
+    "email": "simonlinuxcraft@pm.me"
+  },
+  "scripts": {
+    "start": "electron .",
+    "dev": "unset ELECTRON_RUN_AS_NODE GIO_MODULE_DIR; electron . --no-sandbox --ozone-platform=x11",
+    "test": "node --test",
+    "build": "electron-builder --linux && node scripts/swap-runtime.js",
+    "build-appimage": "electron-builder --linux AppImage && node scripts/swap-runtime.js",
+    "build-deb": "electron-builder --linux deb",
+    "icons": "node scripts/gen-icons.js"
+  },
+  "build": {
+    "appId": "io.github.simonlinuxcraft.ytmusicunofficial",
+    "productName": "YouTube Music Unofficial",
+    "afterPack": "./scripts/after-pack.js",
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "icon.png",
+      "category": "AudioVideo",
+      "synopsis": "Unofficial desktop player for YouTube Music",
+      "description": "Runs music.youtube.com in its own window with tray support. Not affiliated with Google or YouTube.",
+      "maintainer": "simonlinuxcraft",
+      "syncDesktopName": true,
+      "executableName": "ytmusic-unofficial"
+    },
+    "electronLanguages": [
+      "en-US",
+      "de"
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "icon.png",
+      "icon-tray.png"
+    ],
+    "files": [
+      "main.js",
+      "preload.js",
+      "utils/**/*",
+      "inject/**/*",
+      "icon.png",
+      "icon-tray.png",
+      "LICENSE",
+      "THIRD-PARTY-NOTICES.md",
+      "package.json",
+      "node_modules/**/*",
+      "!node_modules/*/{test,tests,__tests__,docs,doc,example,examples,benchmark,benchmarks}/**",
+      "!node_modules/**/*.{md,markdown,ts,map,d.ts,coffee,bak,log,h,c,cc,cpp,gyp,gypi,Makefile,mk}",
+      "!node_modules/**/{LICENSE,license,LICENCE,licence,CHANGELOG,changelog,HISTORY,history,AUTHORS,CONTRIBUTORS,NOTICE,README,readme}*",
+      "!node_modules/**/{.github,.idea,.vscode,.nyc_output,.eslintrc*,.prettierrc*,.editorconfig,.travis.yml,.gitignore,.gitattributes,.npmignore,tsconfig*.json,jest.config*,karma.conf*,webpack.config*,rollup.config*,gulpfile*,Gruntfile*}",
+      "!node_modules/**/*.{md,ts,map,d.ts}"
+    ],
+    "appImage": {
+      "artifactName": "YouTube-Music-Unofficial-${version}.AppImage"
+    }
+  },
+  "devDependencies": {
+    "electron": "^41.7.1",
+    "electron-builder": "^26.15.2"
+  },
+  "desktopName": "ytmusic-unofficial.desktop"
+}
