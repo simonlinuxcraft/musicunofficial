@@ -33,6 +33,14 @@
 
 ---
 
+<div align="center">
+
+<img src="docs/screenshot.png" width="820" alt="The player running in its own frameless window">
+
+<sub>Playlist names and profile picture replaced for this screenshot.</sub>
+
+</div>
+
 ## What it is
 
 A thin desktop shell around `music.youtube.com`. It exists so that music does not
