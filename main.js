@@ -5,7 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const { isInternal, keyAction } = require('./utils/pure');
 
-const APP_TITLE = 'MusicUnofficial';
+const APP_TITLE = 'YouTube Music';
 const START_URL = 'https://music.youtube.com/';
 const DEFAULT_BOUNDS = { width: 1280, height: 860 };
 const INJECT_CSS = fs.readFileSync(path.join(__dirname, 'inject', 'style.css'), 'utf8');
@@ -93,8 +93,8 @@ function createWindow() {
   win.once('ready-to-show', () => win.show());
   win.setMenuBarVisibility(false);
 
-  // The page keeps setting the title to "YouTube Music", which would drop the
-  // "Unofficial" marker from the task bar and Alt-Tab.
+  // Pin the title: the page overwrites it on every navigation, which would
+  // otherwise put a changing string in the task bar and Alt-Tab.
   win.setTitle(APP_TITLE);
   win.on('page-title-updated', (e) => {
     e.preventDefault();
