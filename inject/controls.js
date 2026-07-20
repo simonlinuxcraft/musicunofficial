@@ -4,9 +4,10 @@
 
   // No innerHTML anywhere: YouTube enforces Trusted Types, which rejects
   // string-to-markup assignment. Icons come from CSS masks instead.
-  function button(kind, action) {
+  function button(kind, label, action) {
     const b = document.createElement('button');
     b.className = 'ytm-winctl ytm-winctl-' + kind;
+    b.title = label;
     b.tabIndex = -1;
     b.addEventListener('click', action);
     return b;
@@ -31,9 +32,10 @@
 
     const host = document.createElement('div');
     host.className = 'ytm-winctl-host';
-    host.appendChild(button('minimize', () => window.windowControls.minimize()));
-    host.appendChild(button('maximize', () => window.windowControls.toggleMaximize()));
-    host.appendChild(button('close', () => window.windowControls.close()));
+    host.appendChild(button('mini', 'Mini player (Ctrl+M)', () => window.windowControls.openMini()));
+    host.appendChild(button('minimize', 'Minimise', () => window.windowControls.minimize()));
+    host.appendChild(button('maximize', 'Maximise', () => window.windowControls.toggleMaximize()));
+    host.appendChild(button('close', 'Close', () => window.windowControls.close()));
     bar.appendChild(host);
     return true;
   }
@@ -42,7 +44,19 @@
   // SPA navigation. The observer has to stay armed even when the first mount
   // succeeds, otherwise the buttons vanish on the next rebuild.
   mount();
-  new MutationObserver(() => mount()).observe(document.documentElement, {
+
+  // Coalesced to one check per frame. The page mutates constantly during
+  // playback, and running two document-wide querySelector calls on every
+  // single mutation is what makes the window feel sluggish.
+  let queued = false;
+  new MutationObserver(() => {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(() => {
+      queued = false;
+      mount();
+    });
+  }).observe(document.documentElement, {
     childList: true,
     subtree: true,
   });

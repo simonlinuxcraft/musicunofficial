@@ -30,9 +30,42 @@ function keyAction(input) {
       return 'zoom-out';
     case '0':
       return 'zoom-reset';
+    case 'm':
+      return 'mini';
     default:
       return null;
   }
 }
 
-module.exports = { isInternal, INTERNAL_HOSTS, keyAction };
+// Track data arrives over IPC from a window that runs YouTube's own code, and
+// parts of it are forwarded to Discord. Everything is clamped and retyped here
+// rather than trusted.
+function sanitizeTrack(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const str = (v) => (typeof v === 'string' ? v.trim().slice(0, 256) : '');
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
+
+  const title = str(raw.title);
+  if (!title) return null;
+
+  // Only https images. A file: or data: url here would be handed straight to
+  // Discord and rendered by the mini player.
+  let art = '';
+  if (typeof raw.art === 'string' && raw.art.length < 2048) {
+    try {
+      if (new URL(raw.art).protocol === 'https:') art = raw.art;
+    } catch {}
+  }
+
+  return {
+    title,
+    artist: str(raw.artist),
+    album: str(raw.album),
+    art,
+    playing: raw.playing === true,
+    position: num(raw.position),
+    duration: num(raw.duration),
+  };
+}
+
+module.exports = { isInternal, INTERNAL_HOSTS, keyAction, sanitizeTrack };

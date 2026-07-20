@@ -71,7 +71,7 @@ ytmusic-nav-bar #right-content {
 
 /* Keep the page's own header buttons clear of the pinned controls. */
 ytmusic-nav-bar #right-content {
-  padding-right: 108px;
+  padding-right: 144px;
 }
 
 .ytm-winctl {
@@ -106,6 +106,10 @@ ytmusic-nav-bar #right-content {
 .ytm-winctl-close:hover {
   background: #e81123;
   color: #fff;
+}
+
+.ytm-winctl-mini::after {
+  -webkit-mask-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgdmlld0JveD0iMCAwIDEwIDEwIj48cmVjdCB4PSIwLjYiIHk9IjAuNiIgd2lkdGg9IjguOCIgaGVpZ2h0PSI4LjgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMS4yIi8+PHJlY3QgeD0iNC4yIiB5PSI0LjgiIHdpZHRoPSI1LjIiIGhlaWdodD0iNC42IiBmaWxsPSJibGFjayIvPjwvc3ZnPg==");
 }
 
 .ytm-winctl-minimize::after {

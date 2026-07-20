@@ -56,18 +56,48 @@ fewer things that break when YouTube changes its site.
 | | |
 |---|---|
 | Own window | Frameless, with window controls placed in the page's own navigation bar |
+| Mini player | A small always-on-top window with cover, title and playback controls |
 | Media keys | Play, pause and skip work through MPRIS, including the GNOME media widget and the lock screen |
+| Discord | Optional Rich Presence, off by default, switched on from the tray |
 | Tray | Closing the window keeps playback running; quit from the tray or with `Ctrl+Q` |
 | Remembers itself | Window size, position and maximised state are restored on the next start |
 | Stays signed in | The profile survives updates, so an update does not sign you out |
 | Runs anywhere | No `libfuse2` required, works on distributions that stopped shipping it |
 | No dependencies | Zero runtime dependencies beyond Electron itself |
 
+## Mini player
+
+`Ctrl` `M`, the button in the navigation bar or the tray entry shrinks the app
+to a small window that floats above everything else. It shows the cover, the
+track, a progress bar and play, previous and next. The full window comes back
+when the mini player is closed.
+
+Track information is read from the page's own `mediaSession` data, the same
+source the media keys and the desktop's media widget use, so it does not depend
+on the site's markup staying the way it is today.
+
+## Discord Rich Presence
+
+Off by default. Switch it on under `Discord Rich Presence` in the tray menu and
+what you are listening to appears on your Discord profile.
+
+It talks to Discord's local socket directly, with no third-party library and no
+network access. Only title, artist, album and cover art are sent, and only
+while something is playing. Switching it off clears the presence immediately.
+
+If Discord is not running, nothing happens and the app retries quietly in the
+background.
+
+> Under a strictly confined Snap this cannot work: Discord's local socket sits
+> outside the sandbox and AppArmor blocks the connection. The feature is
+> AppImage only until that changes upstream.
+
 ## Keyboard shortcuts
 
 | Shortcut | Action |
 |---|---|
 | `Ctrl` `Q` | Quit |
+| `Ctrl` `M` | Mini player |
 | `Ctrl` `R` | Reload the page |
 | `Ctrl` `+` / `Ctrl` `-` | Zoom in and out |
 | `Ctrl` `0` | Reset zoom |

@@ -1,20 +1,32 @@
 'use strict';
 
-const { app, BrowserWindow, Tray, Menu, shell, session, nativeImage, ipcMain } = require('electron');
+const { app, BrowserWindow, Tray, Menu, shell, session, nativeImage, ipcMain, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { isInternal, keyAction } = require('./utils/pure');
+const { isInternal, keyAction, sanitizeTrack } = require('./utils/pure');
+const { createPresence } = require('./utils/discord');
 
 const APP_TITLE = 'MusicUnofficial';
 const START_URL = 'https://music.youtube.com/';
 const DEFAULT_BOUNDS = { width: 1280, height: 860 };
+const MINI_SIZE = { width: 344, height: 104 };
 const INJECT_CSS = fs.readFileSync(path.join(__dirname, 'inject', 'style.css'), 'utf8');
 const INJECT_JS = fs.readFileSync(path.join(__dirname, 'inject', 'controls.js'), 'utf8');
+const INJECT_NOWPLAYING = fs.readFileSync(path.join(__dirname, 'inject', 'nowplaying.js'), 'utf8');
+
+// Discord application id. Client ids are public by design, this is not a
+// secret. The override lets a fork point at its own application without
+// patching the source; empty falls back to the feature staying greyed out
+// rather than failing at runtime.
+const DISCORD_CLIENT_ID = process.env.MUSICUNOFFICIAL_DISCORD_ID || '1528803144937635890';
 
 let win = null;
+let mini = null;
 let tray = null;
 let quitting = false;
 let hasTray = false;
+let track = null;
+let presence = null;
 
 // Pin the profile directory instead of letting Electron derive it from the app
 // name. Otherwise every rename moves userData and silently signs the user out.
@@ -32,6 +44,25 @@ app.commandLine.appendSwitch('enable-features', 'OverlayScrollbar,FluentOverlayS
 
 function statePath() {
   return path.join(app.getPath('userData'), 'window-state.json');
+}
+
+function settingsPath() {
+  return path.join(app.getPath('userData'), 'settings.json');
+}
+
+let settings = { discord: false, miniBounds: null };
+
+function loadSettings() {
+  try {
+    const s = JSON.parse(fs.readFileSync(settingsPath(), 'utf8'));
+    if (s && typeof s === 'object') settings = { ...settings, ...s };
+  } catch {}
+}
+
+function saveSettings() {
+  try {
+    fs.writeFileSync(settingsPath(), JSON.stringify(settings));
+  } catch {}
 }
 
 function loadBounds() {
@@ -88,14 +119,21 @@ function createWindow() {
     icon: path.join(__dirname, 'icon.png'),
     webPreferences: {
       // Chromium throttles timers in hidden windows, which stalls playback
-      // once the window is minimised or sent to the tray.
+      // once the window is minimised or sent to the tray. It also keeps the
+      // now playing poll running while the mini player is the only thing
+      // on screen.
       backgroundThrottling: false,
       preload: path.join(__dirname, 'preload.js'),
     },
   });
 
   if (s.maximized) win.maximize();
-  win.once('ready-to-show', () => win.show());
+  // Loading music.youtube.com takes long enough that the mini player can be
+  // open by the time this fires. Showing the big window then would undo the
+  // switch the user just made.
+  win.once('ready-to-show', () => {
+    if (!mini || mini.isDestroyed()) win.show();
+  });
   win.setMenuBarVisibility(false);
 
   // Pin the title: the page overwrites it on every navigation, which would
@@ -113,9 +151,21 @@ function createWindow() {
   // from flashing up first.
   win.webContents.on('dom-ready', () => {
     win.webContents.insertCSS(INJECT_CSS).catch((e) => console.log('[inject] css: ' + e.message));
-    win.webContents.executeJavaScript(INJECT_JS)
+    win.webContents
+      .executeJavaScript(INJECT_JS)
       .then(() => win.webContents.send('window:maximized', win.isMaximized()))
       .catch((e) => console.log('[inject] js: ' + e.message));
+    win.webContents
+      .executeJavaScript(INJECT_NOWPLAYING)
+      .then(syncPolling)
+      .catch((e) => console.log('[inject] nowplaying: ' + e.message));
+  });
+
+  // A reload throws away the injected poller and its last known track. Without
+  // this the mini player would keep showing the previous song until the user
+  // starts a new one.
+  win.webContents.on('did-start-navigation', (e, url, isInPlace, isMainFrame) => {
+    if (isMainFrame && !isInPlace) setTrack(null);
   });
 
   win.webContents.setWindowOpenHandler(({ url }) => {
@@ -140,6 +190,8 @@ function createWindow() {
       app.quit();
     } else if (action === 'reload') {
       wc.reload();
+    } else if (action === 'mini') {
+      openMini();
     } else if (action === 'zoom-in') {
       wc.setZoomLevel(Math.min(wc.getZoomLevel() + 0.5, 5));
     } else if (action === 'zoom-out') {
@@ -171,14 +223,155 @@ function createWindow() {
   win.on('move', scheduleSaveBounds);
 }
 
+function setTrack(next) {
+  track = next;
+  if (mini && !mini.isDestroyed()) mini.webContents.send('mini:track', track);
+  if (presence) presence.update(track);
+}
+
+// The page only polls while someone consumes the result. Measured during
+// playback: polling regardless cost about 14 CPU points, roughly two thirds of
+// the app's total, and nothing was reading it.
+function syncPolling() {
+  if (!win || win.isDestroyed() || win.webContents.isLoading()) return;
+  const needed = !!(mini && !mini.isDestroyed()) || !!(presence && presence.enabled);
+  win.webContents.send('nowplaying:active', needed);
+  if (!needed) setTrack(null);
+}
+
+let miniSaveTimer = null;
+function scheduleSaveMiniBounds() {
+  clearTimeout(miniSaveTimer);
+  miniSaveTimer = setTimeout(() => {
+    if (!mini || mini.isDestroyed()) return;
+    const b = mini.getBounds();
+    settings.miniBounds = { x: b.x, y: b.y };
+    saveSettings();
+  }, 400);
+}
+
+function miniStartBounds() {
+  const b = settings.miniBounds;
+  // Reject a saved position that no longer lands on a connected display, which
+  // is what happens after unplugging the monitor it was parked on.
+  if (b && Number.isInteger(b.x) && Number.isInteger(b.y)) {
+    const fits = screen.getAllDisplays().some((d) => {
+      const a = d.workArea;
+      return b.x >= a.x - 50 && b.y >= a.y - 50 && b.x < a.x + a.width - 50 && b.y < a.y + a.height - 50;
+    });
+    if (fits) return { x: b.x, y: b.y };
+  }
+  const area = screen.getPrimaryDisplay().workArea;
+  return {
+    x: area.x + area.width - MINI_SIZE.width - 24,
+    y: area.y + area.height - MINI_SIZE.height - 24,
+  };
+}
+
+function openMini() {
+  if (mini && !mini.isDestroyed()) {
+    mini.show();
+    mini.focus();
+    return;
+  }
+  const pos = miniStartBounds();
+
+  mini = new BrowserWindow({
+    ...MINI_SIZE,
+    ...pos,
+    frame: false,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    backgroundColor: '#0f0f0f',
+    show: false,
+    icon: path.join(__dirname, 'icon.png'),
+    title: APP_TITLE,
+    webPreferences: {
+      backgroundThrottling: false,
+      preload: path.join(__dirname, 'miniplayer-preload.js'),
+    },
+  });
+
+  mini.setMenuBarVisibility(false);
+  mini.loadFile(path.join(__dirname, 'miniplayer.html'));
+
+  mini.once('ready-to-show', () => {
+    mini.show();
+    if (win && !win.isDestroyed()) win.hide();
+  });
+
+  syncPolling();
+
+  // Debounced for the same reason the main window's geometry is: moved fires
+  // continuously while dragging and saveSettings writes synchronously. Writing
+  // on every event blocks the main process and makes the whole app stutter.
+  mini.on('moved', scheduleSaveMiniBounds);
+
+  // Covers Alt+F4 and the window manager's own close as well as our button.
+  // Without this the main window would stay hidden with no way back.
+  mini.on('closed', () => {
+    mini = null;
+    syncPolling();
+    if (!quitting && win && !win.isDestroyed()) {
+      win.show();
+      win.focus();
+    }
+  });
+}
+
+function closeMini() {
+  if (mini && !mini.isDestroyed()) mini.close();
+}
+
 function toggleWindow() {
   if (!win) return;
   if (win.isVisible() && !win.isMinimized()) {
     win.hide();
   } else {
+    closeMini();
     win.show();
     win.focus();
   }
+}
+
+function buildTrayMenu() {
+  if (!tray) return;
+  tray.setContextMenu(
+    Menu.buildFromTemplate([
+      { label: 'Show / Hide', click: toggleWindow },
+      { label: 'Mini player', accelerator: 'CommandOrControl+M', click: openMini },
+      { type: 'separator' },
+      {
+        label: DISCORD_CLIENT_ID ? 'Discord Rich Presence' : 'Discord Rich Presence (not configured)',
+        type: 'checkbox',
+        enabled: !!DISCORD_CLIENT_ID,
+        checked: settings.discord,
+        click: (item) => setDiscord(item.checked),
+      },
+      { type: 'separator' },
+      {
+        label: 'Quit',
+        accelerator: 'CommandOrControl+Q',
+        click: () => {
+          quitting = true;
+          app.quit();
+        },
+      },
+    ])
+  );
+}
+
+function setDiscord(on) {
+  settings.discord = !!on && !!DISCORD_CLIENT_ID;
+  saveSettings();
+  if (presence) {
+    presence.setEnabled(settings.discord);
+    if (settings.discord) presence.update(track);
+  }
+  syncPolling();
+  buildTrayMenu();
 }
 
 function createTray() {
@@ -191,20 +384,7 @@ function createTray() {
   }
   tray = new Tray(icon);
   tray.setToolTip(APP_TITLE);
-  tray.setContextMenu(
-    Menu.buildFromTemplate([
-      { label: 'Show / Hide', click: toggleWindow },
-      { type: 'separator' },
-      {
-        label: 'Quit',
-        accelerator: 'CommandOrControl+Q',
-        click: () => {
-          quitting = true;
-          app.quit();
-        },
-      },
-    ])
-  );
+  buildTrayMenu();
   tray.on('click', toggleWindow);
   hasTray = true;
 }
@@ -216,9 +396,42 @@ ipcMain.on('window:toggle-maximize', () => {
   else win.maximize();
 });
 ipcMain.on('window:close', () => win && win.close());
+ipcMain.on('mini:open', () => openMini());
+
+ipcMain.on('nowplaying:update', (e, raw) => {
+  // Only the main window reports playback. Anything else on this channel is
+  // not ours.
+  if (!win || win.isDestroyed() || e.sender !== win.webContents) return;
+  setTrack(sanitizeTrack(raw));
+});
+
+// The mini player asks for the current track once it has loaded, instead of
+// being pushed one on ready-to-show, which raced with its own script.
+ipcMain.on('mini:request', (e) => {
+  if (mini && !mini.isDestroyed() && e.sender === mini.webContents) e.sender.send('mini:track', track);
+});
+
+ipcMain.on('mini:command', (e, cmd) => {
+  if (!['previous', 'playpause', 'next'].includes(cmd)) return;
+  if (win && !win.isDestroyed()) win.webContents.send('player:command', cmd);
+});
+
+ipcMain.on('mini:quit', () => {
+  quitting = true;
+  app.quit();
+});
+
+ipcMain.on('mini:restore', () => {
+  if (win && !win.isDestroyed()) {
+    win.show();
+    win.focus();
+  }
+  closeMini();
+});
 
 app.on('second-instance', () => {
   if (win) {
+    closeMini();
     win.show();
     win.focus();
   }
@@ -227,13 +440,32 @@ app.on('second-instance', () => {
 app.on('before-quit', () => {
   quitting = true;
   saveBounds();
+  if (presence) presence.setEnabled(false);
 });
 
 app.whenReady().then(() => {
+  loadSettings();
+
   // On the session, not on a single webContents: the login flow opens popups,
   // and those would otherwise carry the Electron token that Google rejects.
   const ua = session.defaultSession.getUserAgent().replace(/ Electron\/[\d.]+/, '');
   session.defaultSession.setUserAgent(ua);
+
+  if (DISCORD_CLIENT_ID) {
+    presence = createPresence(
+      DISCORD_CLIENT_ID,
+      (m) => console.log('[discord] ' + m),
+      // Discord turned us away for good. Untick the box rather than leaving it
+      // on next to a feature that is not running.
+      () => {
+        settings.discord = false;
+        saveSettings();
+        syncPolling();
+        buildTrayMenu();
+      }
+    );
+    presence.setEnabled(settings.discord);
+  }
 
   createWindow();
   try {
