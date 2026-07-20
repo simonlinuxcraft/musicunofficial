@@ -57,6 +57,13 @@ function sanitizeTrack(raw) {
     } catch {}
   }
 
+  // When position was measured, so consumers can project it forward instead of
+  // treating a stale value as current. A missing or absurd stamp falls back to
+  // now, which is the old behaviour and never worse.
+  const now = Date.now();
+  let at = typeof raw.at === 'number' && Number.isFinite(raw.at) ? raw.at : now;
+  if (at > now || now - at > 60000) at = now;
+
   return {
     title,
     artist: str(raw.artist),
@@ -65,7 +72,16 @@ function sanitizeTrack(raw) {
     playing: raw.playing === true,
     position: num(raw.position),
     duration: num(raw.duration),
+    at,
   };
 }
 
-module.exports = { isInternal, INTERNAL_HOSTS, keyAction, sanitizeTrack };
+// Position projected to right now. Only advances while playing, and never runs
+// past the end of the track.
+function positionNow(track, now = Date.now()) {
+  if (!track || !(track.duration > 0)) return 0;
+  const elapsed = track.playing ? Math.max(0, now - (track.at || now)) / 1000 : 0;
+  return Math.min(track.duration, track.position + elapsed);
+}
+
+module.exports = { isInternal, INTERNAL_HOSTS, keyAction, sanitizeTrack, positionNow };

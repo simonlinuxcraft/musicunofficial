@@ -10,6 +10,7 @@
 const net = require('net');
 const path = require('path');
 const crypto = require('crypto');
+const { positionNow } = require('./pure');
 
 const OP_HANDSHAKE = 0;
 const OP_FRAME = 1;
@@ -202,15 +203,18 @@ function createPresence(clientId, log = () => {}, onFatal = () => {}) {
   let tsValue = null;
 
   function timestampsFor(track) {
-    const pos = Math.min(track.position, track.duration);
+    const now = Date.now();
+    // Projected to now from when it was measured. Discord renders a live
+    // counter from these, so anchoring on a position that is a poll interval
+    // and a rate limit window old puts the whole countdown behind by that much.
+    const pos = Math.min(positionNow(track, now), track.duration);
     const key = track.title + '|' + track.artist + '|' + Math.round(track.duration);
     if (tsKey === key && tsValue) {
-      // Same track: keep the existing anchor unless the user seeked, which
-      // shows up as the real position drifting away from the projected one.
-      const projected = (Date.now() - tsValue.start) / 1000;
-      if (Math.abs(pos - projected) < 3) return tsValue;
+      // Same track: keep the anchor so Discord's counter runs continuously.
+      // Only a real discontinuity, a seek, is worth re-anchoring for.
+      const projected = (now - tsValue.start) / 1000;
+      if (Math.abs(pos - projected) < 1.5) return tsValue;
     }
-    const now = Date.now();
     tsKey = key;
     tsValue = {
       start: now - Math.round(pos * 1000),

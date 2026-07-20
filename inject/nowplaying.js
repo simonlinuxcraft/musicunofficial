@@ -47,6 +47,11 @@
       playing: !v.paused && !v.ended,
       position: Number.isFinite(v.currentTime) ? v.currentTime : 0,
       duration: Number.isFinite(v.duration) ? v.duration : 0,
+      // When position was read. Everything downstream is asynchronous: the IPC
+      // hop, the mini player's own redraw, Discord's rate limit. Without this
+      // each consumer treats a stale position as current and ends up behind by
+      // however long the trip took.
+      at: Date.now(),
     };
   }
 
@@ -68,30 +73,54 @@
   let last = null;
   let sentAt = 0;
 
-  function tick() {
+  function send() {
     const now = read();
-    // The heartbeat exists so a seek in the main window resyncs the mini
-    // player's bar; the interpolation covers the gap in between.
-    if (differs(now, last) || Date.now() - sentAt > 2000) {
-      last = now;
-      sentAt = Date.now();
-      window.nowPlaying.report(now);
-    }
+    last = now;
+    sentAt = Date.now();
+    window.nowPlaying.report(now);
   }
 
-  // Polling only happens while something consumes the result. Measured: running
-  // it unconditionally cost about 14 CPU points during playback, roughly two
-  // thirds of the app's total, for data nobody was looking at.
+  function tick() {
+    // Only worth a message when something other than the position moved; the
+    // consumers project the position forward themselves from `at`. The slow
+    // heartbeat is a safety net for metadata, which has no event to listen to.
+    if (differs(read(), last) || Date.now() - sentAt > 5000) send();
+  }
+
+  // Events, not polling, for anything that moves the playhead. A seek is a
+  // discontinuity no interval can catch in time: with a 500 ms poll the
+  // consumers stayed on the old position until the next tick.
+  const EVENTS = ['seeked', 'play', 'pause', 'ratechange', 'durationchange', 'loadedmetadata', 'ended'];
+  let bound = null;
+
+  function bind() {
+    const v = video();
+    if (v === bound) return;
+    if (bound) for (const e of EVENTS) bound.removeEventListener(e, send);
+    bound = v;
+    if (bound) for (const e of EVENTS) bound.addEventListener(e, send);
+  }
+
+  // Only runs while something consumes the result, so a plain window with no
+  // mini player and no Rich Presence does no work at all.
   let timer = null;
   window.nowPlaying.onActive((on) => {
     if (on && !timer) {
-      timer = setInterval(tick, 500);
+      bind();
+      // Catches a swapped <video> element and metadata changes, which fire no
+      // events of their own.
+      timer = setInterval(() => {
+        bind();
+        tick();
+      }, 1000);
       window.__ytmPollId = timer;
-      tick();
+      send();
     } else if (!on && timer) {
       clearInterval(timer);
       timer = null;
       window.__ytmPollId = 0;
+      if (bound) for (const e of EVENTS) bound.removeEventListener(e, send);
+      bound = null;
       last = null;
     }
   });

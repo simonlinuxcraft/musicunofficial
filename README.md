@@ -85,8 +85,11 @@ is no third button that only closes the mini player: with the main window
 hidden behind it, that would leave no way out on a desktop whose tray does not
 render.
 
-The progress bar runs forward on its own and resyncs whenever new data arrives,
-so it stays smooth without polling the page constantly.
+The progress bar tracks the player rather than approximating it. Every reading
+carries the moment it was taken, so the bar and the Discord countdown project
+from that instant instead of from whenever the message happened to arrive.
+Seeking is picked up from the player's own events, so the bar jumps with the
+track rather than catching up a second later.
 
 Track information comes from the page's own `mediaSession` data, the same
 source the media keys and the desktop's media widget use, so it does not depend

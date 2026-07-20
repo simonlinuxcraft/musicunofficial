@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { isInternal, keyAction, sanitizeTrack } = require('../utils/pure');
+const { isInternal, keyAction, sanitizeTrack, positionNow } = require('../utils/pure');
 
 test('keeps YouTube Music and the Google login flow in-app', () => {
   assert.ok(isInternal('https://music.youtube.com/'));
@@ -77,4 +77,33 @@ test('rejects junk instead of forwarding it to Discord', () => {
   assert.equal(t.duration, 0);
   assert.equal(t.playing, false);
   assert.equal(sanitizeTrack({ title: 'x'.repeat(500) }).title.length, 256);
+});
+
+test('stamps the track so consumers can project the position', () => {
+  const before = Date.now();
+  const t = sanitizeTrack({ title: 'x', position: 10, duration: 100, playing: true });
+  assert.ok(t.at >= before && t.at <= Date.now());
+  // A stamp from the future or the distant past is not trustworthy.
+  assert.ok(sanitizeTrack({ title: 'x', at: Date.now() + 99999 }).at <= Date.now());
+  assert.ok(sanitizeTrack({ title: 'x', at: 1 }).at > 1);
+  assert.ok(sanitizeTrack({ title: 'x', at: 'nope' }).at > 0);
+});
+
+test('projects the position forward from when it was measured', () => {
+  const at = Date.now() - 3000;
+  const playing = { position: 10, duration: 100, playing: true, at };
+  // Three seconds passed since the reading, so the position is 13, not 10.
+  assert.ok(Math.abs(positionNow(playing) - 13) < 0.05);
+  // Paused tracks do not advance.
+  assert.equal(positionNow({ ...playing, playing: false }), 10);
+});
+
+test('never projects past the end of the track', () => {
+  const t = { position: 95, duration: 100, playing: true, at: Date.now() - 60000 };
+  assert.equal(positionNow(t), 100);
+});
+
+test('handles tracks with no duration', () => {
+  assert.equal(positionNow({ position: 5, duration: 0, playing: true, at: Date.now() }), 0);
+  assert.equal(positionNow(null), 0);
 });

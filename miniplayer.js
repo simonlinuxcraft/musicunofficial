@@ -3,24 +3,32 @@
 const $ = (id) => document.getElementById(id);
 let lastArt = null;
 let track = null;
-// When the position in `track` was measured, so the bar can carry on from there
-// between updates instead of standing still and then jumping.
-let stamp = 0;
+
+let lastWidth = null;
 
 function drawProgress() {
-  if (!track || !(track.duration > 0)) {
-    $('fill').style.width = '0%';
-    return;
+  let width = '0%';
+  if (track && track.duration > 0) {
+    // Projected from when the position was measured in the page, not from when
+    // this window received it. The IPC hop and this window's own redraw would
+    // otherwise both be counted as playback time and the bar would sit behind.
+    // Falls back to now rather than producing NaN if a track ever arrives
+    // without a stamp.
+    const at = Number.isFinite(track.at) ? track.at : Date.now();
+    const elapsed = track.playing ? Math.max(0, Date.now() - at) / 1000 : 0;
+    const pos = Math.min(track.duration, track.position + elapsed);
+    // One decimal is about a third of a pixel at this window's width. Finer
+    // than that only produces writes nobody can see.
+    width = ((pos / track.duration) * 100).toFixed(1) + '%';
   }
-  const elapsed = track.playing ? (performance.now() - stamp) / 1000 : 0;
-  const pos = Math.min(track.duration, track.position + elapsed);
-  $('fill').style.width = (pos / track.duration) * 100 + '%';
+  if (width === lastWidth) return;
+  lastWidth = width;
+  $('fill').style.width = width;
 }
 
 window.mini.onTrack((t) => {
   const has = !!(t && t.title);
   track = has ? t : null;
-  stamp = performance.now();
 
   document.body.classList.toggle('has-track', has);
   document.body.classList.toggle('playing', has && !!t.playing);
@@ -43,12 +51,13 @@ window.mini.onTrack((t) => {
   drawProgress();
 });
 
-// Runs the bar forward locally. Every incoming update resets the reference
-// point, so this can drift for at most one update interval and never
-// accumulates error.
-setInterval(() => {
-  if (track && track.playing) drawProgress();
-}, 250);
+// Redrawn per frame rather than on a timer, so the bar is never older than one
+// frame. The change check above keeps that cheap, and requestAnimationFrame
+// stops on its own while the window is hidden.
+(function frame() {
+  drawProgress();
+  requestAnimationFrame(frame);
+})();
 
 for (const id of ['previous', 'playpause', 'next']) {
   $(id).addEventListener('click', () => window.mini.command(id));
