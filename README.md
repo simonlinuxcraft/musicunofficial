@@ -73,6 +73,8 @@ fewer things that break when YouTube changes its site.
 
 </div>
 
+
+
 `Ctrl` `M`, the button in the navigation bar or the tray entry shrinks the app
 to a small window that stays above every other window. It shows the cover art,
 the track, the artist, a progress bar and play, previous and next.
