@@ -84,4 +84,32 @@ function positionNow(track, now = Date.now()) {
   return Math.min(track.duration, track.position + elapsed);
 }
 
-module.exports = { isInternal, INTERNAL_HOSTS, keyAction, sanitizeTrack, positionNow };
+// A resume snapshot comes from the player API in the renderer and becomes a
+// navigation target on next launch, so the id is validated hard: no id, no
+// resume. videoId is YouTube's fixed 11-char handle; list is a playlist/radio
+// id. Anything that fails the shape is dropped rather than trusted.
+const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+const LIST_ID = /^[A-Za-z0-9_-]{2,64}$/;
+
+function sanitizeResume(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const videoId = typeof raw.videoId === 'string' && VIDEO_ID.test(raw.videoId) ? raw.videoId : null;
+  if (!videoId) return null;
+
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
+  const now = Date.now();
+  let at = typeof raw.at === 'number' && Number.isFinite(raw.at) ? raw.at : now;
+  if (at > now || now - at > 60000) at = now;
+
+  return {
+    videoId,
+    list: typeof raw.list === 'string' && LIST_ID.test(raw.list) ? raw.list : null,
+    title: typeof raw.title === 'string' ? raw.title.trim().slice(0, 256) : '',
+    position: num(raw.position),
+    duration: num(raw.duration),
+    playing: raw.playing === true,
+    at,
+  };
+}
+
+module.exports = { isInternal, INTERNAL_HOSTS, keyAction, sanitizeTrack, positionNow, sanitizeResume };

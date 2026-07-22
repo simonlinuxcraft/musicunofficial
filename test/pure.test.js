@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { isInternal, keyAction, sanitizeTrack, positionNow } = require('../utils/pure');
+const { isInternal, keyAction, sanitizeTrack, positionNow, sanitizeResume } = require('../utils/pure');
 
 test('keeps YouTube Music and the Google login flow in-app', () => {
   assert.ok(isInternal('https://music.youtube.com/'));
@@ -106,4 +106,30 @@ test('never projects past the end of the track', () => {
 test('handles tracks with no duration', () => {
   assert.equal(positionNow({ position: 5, duration: 0, playing: true, at: Date.now() }), 0);
   assert.equal(positionNow(null), 0);
+});
+
+test('only keeps a resume snapshot with a well-formed video id', () => {
+  const r = sanitizeResume({ videoId: 'YdYqwJxA-ro', list: 'RDTMAK5uy_k', title: '  Song  ', position: 42, duration: 119, playing: true });
+  assert.equal(r.videoId, 'YdYqwJxA-ro');
+  assert.equal(r.list, 'RDTMAK5uy_k');
+  assert.equal(r.title, 'Song');
+  assert.equal(r.position, 42);
+  assert.equal(r.playing, true);
+});
+
+test('drops the whole snapshot when the id is not a real video id', () => {
+  assert.equal(sanitizeResume(null), null);
+  assert.equal(sanitizeResume({}), null);
+  assert.equal(sanitizeResume({ videoId: 'short' }), null);
+  assert.equal(sanitizeResume({ videoId: 'waytoolongforanid' }), null);
+  assert.equal(sanitizeResume({ videoId: 'bad/chars!!!' }), null);
+  assert.equal(sanitizeResume({ videoId: 42 }), null);
+});
+
+test('nulls a malformed list instead of carrying it into a url', () => {
+  const bad = (list) => sanitizeResume({ videoId: 'YdYqwJxA-ro', list }).list;
+  assert.equal(bad('has spaces'), null);
+  assert.equal(bad('x'), null);
+  assert.equal(bad('a'.repeat(65)), null);
+  assert.equal(bad(undefined), null);
 });

@@ -125,6 +125,43 @@
     }
   });
 
+  // Resume snapshot. The main process pulls this on a slow timer and at quit to
+  // remember which track to reopen. It needs a durable id, which mediaSession
+  // does not carry; #movie_player.getVideoData() does, and has since long before
+  // this Polymer layout. Everything is feature-detected so a renamed API just
+  // stops resume working, never breaks the read path above.
+  let lastSnap = null;
+  function adShowing(p) {
+    // ponytail: the only ad signal we have. Verified present as a class on
+    // #movie_player, but not verified to flip true during a Free-tier ad. If it
+    // never flips, capture during an ad falls back to lastSnap on the duration
+    // mismatch alone, which the restore side also guards.
+    return !!p && (p.classList.contains('ad-showing') || p.classList.contains('ad-interrupting'));
+  }
+  window.__ytmSnapshot = () => {
+    const p = document.getElementById('movie_player');
+    const base = read();
+    if (!p || typeof p.getVideoData !== 'function' || adShowing(p) || !base) return lastSnap;
+    let vd = null;
+    try {
+      vd = p.getVideoData();
+    } catch {
+      return lastSnap;
+    }
+    const videoId = vd && typeof vd.video_id === 'string' ? vd.video_id : '';
+    if (!videoId) return lastSnap;
+    lastSnap = {
+      videoId,
+      list: (vd && typeof vd.list === 'string' && vd.list) || null,
+      title: base.title,
+      position: base.position,
+      duration: base.duration,
+      playing: base.playing,
+      at: base.at,
+    };
+    return lastSnap;
+  };
+
   // Playback control. play/pause goes through the video element because that
   // always exists; skipping needs the app's own buttons, there is no API for it.
   window.nowPlaying.onCommand((cmd) => {

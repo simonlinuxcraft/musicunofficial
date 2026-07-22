@@ -3,7 +3,7 @@
 const { app, BrowserWindow, Tray, Menu, shell, session, nativeImage, ipcMain, screen } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { isInternal, keyAction, sanitizeTrack } = require('./utils/pure');
+const { isInternal, keyAction, sanitizeTrack, positionNow, sanitizeResume } = require('./utils/pure');
 const { createPresence } = require('./utils/discord');
 
 const APP_TITLE = 'MusicUnofficial';
@@ -13,6 +13,12 @@ const MINI_SIZE = { width: 344, height: 104 };
 const INJECT_CSS = fs.readFileSync(path.join(__dirname, 'inject', 'style.css'), 'utf8');
 const INJECT_JS = fs.readFileSync(path.join(__dirname, 'inject', 'controls.js'), 'utf8');
 const INJECT_NOWPLAYING = fs.readFileSync(path.join(__dirname, 'inject', 'nowplaying.js'), 'utf8');
+const INJECT_RESUME = fs.readFileSync(path.join(__dirname, 'inject', 'resume.js'), 'utf8');
+
+// How stale a saved track may be and still be reopened on launch. A week keeps
+// "quit today, back tomorrow" working without resuming something from a
+// different listening session weeks ago.
+const MAX_RESUME_AGE = 7 * 24 * 3600 * 1000;
 
 // Discord application id. Client ids are public by design, this is not a
 // secret. The override lets a fork point at its own application without
@@ -27,6 +33,9 @@ let quitting = false;
 let hasTray = false;
 let track = null;
 let presence = null;
+// Last track+position seen this session, and the one to reopen at launch.
+let lastResume = null;
+let pendingResume = null;
 
 // Pin the profile directory instead of letting Electron derive it from the app
 // name. Otherwise every rename moves userData and silently signs the user out.
@@ -99,6 +108,29 @@ function scheduleSaveBounds() {
   saveTimer = setTimeout(saveBounds, 400);
 }
 
+function watchUrl(r) {
+  // videoId and list are already validated to [A-Za-z0-9_-] by sanitizeResume;
+  // encode anyway so a future format change cannot inject query parameters.
+  let u = 'https://music.youtube.com/watch?v=' + encodeURIComponent(r.videoId);
+  if (r.list) u += '&list=' + encodeURIComponent(r.list);
+  return u;
+}
+
+// Pulls a resume snapshot straight from the injected player helper. Independent
+// of the now-playing IPC pipeline, which is idle whenever neither the mini
+// player nor Discord is on, so this is the only path that sees the track in the
+// common case. Held as last-known-good for before-quit to persist.
+function captureResume() {
+  if (!win || win.isDestroyed()) return;
+  win.webContents
+    .executeJavaScript('window.__ytmSnapshot && window.__ytmSnapshot()')
+    .then((snap) => {
+      const r = sanitizeResume(snap);
+      if (r) lastResume = r;
+    })
+    .catch(() => {});
+}
+
 function createWindow() {
   const s = loadBounds();
 
@@ -144,7 +176,16 @@ function createWindow() {
     win.setTitle(APP_TITLE);
   });
 
-  win.loadURL(START_URL);
+  // Muted so a pre-roll ad or an autoplay start cannot blast sound before the
+  // resume settles; unmuted once resume.js finishes or gives up. Loading the
+  // watch URL pins the exact track by id, which is what keeps resume off the
+  // wrong song.
+  if (pendingResume) {
+    win.webContents.setAudioMuted(true);
+    win.loadURL(watchUrl(pendingResume));
+  } else {
+    win.loadURL(START_URL);
+  }
 
   // dom-ready, not did-finish-load: this lands the stylesheet and arms the
   // observer before Polymer builds the nav bar, which keeps the original logo
@@ -159,6 +200,20 @@ function createWindow() {
       .executeJavaScript(INJECT_NOWPLAYING)
       .then(syncPolling)
       .catch((e) => console.log('[inject] nowplaying: ' + e.message));
+    // Resume runs once, on the first load. Cleared immediately so an SPA
+    // navigation firing dom-ready again cannot re-arm it, and unmute always
+    // runs even if the seek path throws.
+    if (pendingResume) {
+      const data = pendingResume;
+      pendingResume = null;
+      const js = INJECT_RESUME.replaceAll('__RESUME_DATA__', () => JSON.stringify(data));
+      win.webContents
+        .executeJavaScript(js)
+        .catch((e) => console.log('[resume] ' + e.message))
+        .finally(() => {
+          if (win && !win.isDestroyed()) win.webContents.setAudioMuted(false);
+        });
+    }
   });
 
   // A reload throws away the injected poller and its last known track. Without
@@ -462,10 +517,43 @@ app.on('before-quit', () => {
   quitting = true;
   saveBounds();
   if (presence) presence.setEnabled(false);
+  // Persist the last-known track so the next launch can reopen it. positionNow
+  // projects the up-to-12s-stale sample forward to this instant. Written
+  // synchronously here, not awaited from the renderer, which would risk hanging
+  // quit on a stuck page (the reason destroy() below exists).
+  if (lastResume) {
+    settings.resume = {
+      videoId: lastResume.videoId,
+      list: lastResume.list,
+      title: lastResume.title,
+      position: positionNow(lastResume),
+      duration: lastResume.duration,
+      savedAt: Date.now(),
+    };
+    saveSettings();
+  }
+  // YouTube Music installs a beforeunload handler while a track plays, which
+  // vetoes win.close() and leaves app.quit() hanging with the window still up.
+  // destroy() tears the windows down without asking the page, so quitting works
+  // mid-playback.
+  if (mini && !mini.isDestroyed()) mini.destroy();
+  if (win && !win.isDestroyed()) win.destroy();
 });
 
 app.whenReady().then(() => {
   loadSettings();
+
+  // Decide up front whether to reopen a track, then consume the record at once
+  // (drop + save) so a launch that fails on resume cannot loop on the same bad
+  // record. sanitizeResume drops anything without a valid videoId.
+  const saved = settings.resume;
+  if (saved && typeof saved.savedAt === 'number' && Date.now() - saved.savedAt < MAX_RESUME_AGE) {
+    pendingResume = sanitizeResume(saved);
+  }
+  if (settings.resume) {
+    delete settings.resume;
+    saveSettings();
+  }
 
   // On the session, not on a single webContents: the login flow opens popups,
   // and those would otherwise carry the Electron token that Google rejects.
@@ -489,6 +577,10 @@ app.whenReady().then(() => {
   }
 
   createWindow();
+  // Sample the player on a slow timer; before-quit persists the last sample as
+  // the resume record. Interval only, no event, keeps it cheap and off the hot
+  // path.
+  setInterval(captureResume, 12000);
   try {
     createTray();
   } catch (e) {
