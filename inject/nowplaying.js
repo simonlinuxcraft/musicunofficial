@@ -19,6 +19,30 @@
     );
   }
 
+  // Not video.currentTime/duration. When a track ends and the next one starts
+  // by itself, YouTube Music appends it to the same MediaSource, so the
+  // element's timeline keeps counting across the whole session: measured at
+  // 280 s of 379 s while the player bar read 1:11 of 3:29. The player API stays
+  // track relative. getDuration() is not the length either, it reports how much
+  // has buffered and grows while the track plays; seekableEnd is the length.
+  function times(v) {
+    const p = document.getElementById('movie_player');
+    if (p && typeof p.getProgressState === 'function') {
+      try {
+        const g = p.getProgressState();
+        if (g && Number.isFinite(g.current) && g.seekableEnd > 0) {
+          return { position: g.current, duration: g.seekableEnd };
+        }
+      } catch {}
+    }
+    // Only correct until the first automatic track change, but it is all there
+    // is if the API ever goes away.
+    return {
+      position: Number.isFinite(v.currentTime) ? v.currentTime : 0,
+      duration: Number.isFinite(v.duration) ? v.duration : 0,
+    };
+  }
+
   function read() {
     const v = video();
     const m = navigator.mediaSession && navigator.mediaSession.metadata;
@@ -38,6 +62,8 @@
       }
     }
 
+    const t = times(v);
+
     return {
       title: m.title || '',
       artist: m.artist || '',
@@ -45,8 +71,8 @@
       art,
       // video.paused is the truth. playbackState lags behind it on seek.
       playing: !v.paused && !v.ended,
-      position: Number.isFinite(v.currentTime) ? v.currentTime : 0,
-      duration: Number.isFinite(v.duration) ? v.duration : 0,
+      position: t.position,
+      duration: t.duration,
       // When position was read. Everything downstream is asynchronous: the IPC
       // hop, the mini player's own redraw, Discord's rate limit. Without this
       // each consumer treats a stale position as current and ends up behind by

@@ -34,13 +34,21 @@
       // Foreign id before the target ever showed is most likely a pre-roll ad
       // without the class marker; keep waiting for the real track to load.
       else return;
-      const v = [...document.querySelectorAll('video')].find((x) => x.duration > 0);
-      if (!v || !Number.isFinite(v.duration)) return;
+      // Length from the player API, like nowplaying.js: the video element's own
+      // duration covers everything the session has appended to the MediaSource,
+      // so after a pre-roll ad it is the ad plus the track and never matches.
+      let g = null;
+      try {
+        g = typeof p.getProgressState === 'function' ? p.getProgressState() : null;
+      } catch {
+        return;
+      }
+      const len = g && g.seekableEnd > 0 ? g.seekableEnd : 0;
+      if (!len) return;
       // Guard against seeking a stream that is not the saved track (or not
       // loaded yet). Skipped when no duration was captured.
-      if (D.duration > 0 && Math.abs(v.duration - D.duration) > 3) return;
-      if (!(v.seekable && v.seekable.length)) return;
-      const target = Math.min(Math.max(D.position, 0), Math.max(0, v.duration - 5));
+      if (D.duration > 0 && Math.abs(len - D.duration) > 3) return;
+      const target = Math.min(Math.max(D.position, 0), Math.max(0, len - 5));
       try {
         p.seekTo(target, true);
         p.pauseVideo();
