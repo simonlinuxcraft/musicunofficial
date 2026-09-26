@@ -50,7 +50,7 @@ app.whenReady().then(() => {
   session.defaultSession.setUserAgent(ua);
 
   player.init({ mainWc: mainWindow.webContents, miniWc: mini.webContents, onDiscordOff: tray.rebuild });
-  mainWindow.create({ resume, openMini: mini.open, isMiniOpen: mini.isOpen, canHide: tray.exists });
+  mainWindow.create({ resume, openMini: mini.open, canHide: tray.exists });
   try {
     tray.create({ toggle, openMini: mini.open });
   } catch (e) {

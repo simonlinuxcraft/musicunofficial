@@ -10,6 +10,8 @@ const { APP_TITLE, isInternal, keyAction } = require('./pure');
 const ROOT = path.join(__dirname, '..');
 const START_URL = 'https://music.youtube.com/';
 const DEFAULT_BOUNDS = { width: 1280, height: 860 };
+// YouTube Music's own page background, so the window does not flash while it loads.
+const DARK = '#030303';
 const inject = (name) => fs.readFileSync(path.join(ROOT, 'inject', name), 'utf8');
 const CSS = inject('style.css');
 const CONTROLS = inject('controls.js');
@@ -52,15 +54,18 @@ function watchUrl(r) {
   return u;
 }
 
+// Through mainFrame: webContents.executeJavaScript holds the code back until the
+// page has finished loading, which left the window without controls for 10 s.
 function injectAll(wc, resume) {
   const log = (what) => (e) => console.log('[inject] ' + what + ': ' + e.message);
+  const run = (code) => wc.mainFrame.executeJavaScript(code);
   wc.insertCSS(CSS).catch(log('css'));
-  wc.executeJavaScript(CONTROLS)
-    .then(() => wc.send('window:maximized', win.isMaximized()))
+  run(CONTROLS)
+    .then(() => alive() && wc.send('window:maximized', win.isMaximized()))
     .catch(log('controls'));
-  wc.executeJavaScript(NOWPLAYING).then(player.sync).catch(log('nowplaying'));
+  run(NOWPLAYING).then(player.sync).catch(log('nowplaying'));
   if (resume) {
-    wc.executeJavaScript(RESUME.replaceAll('__RESUME_DATA__', () => JSON.stringify(resume)))
+    run(RESUME.replaceAll('__RESUME_DATA__', () => JSON.stringify(resume)))
       .catch(log('resume'))
       .finally(() => alive() && wc.setAudioMuted(false));
   }
@@ -79,7 +84,7 @@ function onKey(e, input, openMini) {
   else if (action === 'zoom-reset') wc.setZoomLevel(0);
 }
 
-function create({ resume, openMini, isMiniOpen, canHide }) {
+function create({ resume, openMini, canHide }) {
   const s = loadBounds();
   win = new BrowserWindow({
     x: s.x,
@@ -88,7 +93,7 @@ function create({ resume, openMini, isMiniOpen, canHide }) {
     height: s.height,
     minWidth: 480,
     minHeight: 400,
-    // No dark backgroundColor: Google's consent page sets no body background and turns unreadable.
+    backgroundColor: DARK,
     show: false,
     // Controls live in the page's nav bar (inject/controls.js); titleBarOverlay looked like a pasted-on black box.
     frame: false,
@@ -103,10 +108,8 @@ function create({ resume, openMini, isMiniOpen, canHide }) {
   const wc = win.webContents;
 
   if (s.maximized) win.maximize();
-  // The mini player can already be up by now, showing this window would undo that.
-  win.once('ready-to-show', () => {
-    if (!isMiniOpen()) win.show();
-  });
+  // At once, not on ready-to-show, which waits for YouTube's first paint.
+  win.show();
   win.setMenuBarVisibility(false);
 
   // The page retitles itself on every navigation, which would churn the task bar.
@@ -133,6 +136,11 @@ function create({ resume, openMini, isMiniOpen, canHide }) {
     if (isMainFrame && !isInPlace) player.setTrack(null);
   });
   wc.on('did-stop-loading', player.sync);
+
+  // Google's consent page sets no background of its own and would show dark text on DARK.
+  wc.on('did-navigate', (e, url) => {
+    win.setBackgroundColor(new URL(url).hostname === 'music.youtube.com' ? DARK : '#ffffff');
+  });
 
   wc.setWindowOpenHandler(({ url }) => {
     if (isInternal(url)) return { action: 'allow' };

@@ -42,7 +42,8 @@ function sync() {
 function capture() {
   const wc = mainWc();
   if (!wc) return;
-  wc.executeJavaScript('window.__ytmSnapshot && window.__ytmSnapshot()')
+  wc.mainFrame
+    .executeJavaScript('window.__ytmSnapshot && window.__ytmSnapshot()')
     .then((snap) => {
       const r = sanitizeResume(snap);
       if (r) lastResume = r;
