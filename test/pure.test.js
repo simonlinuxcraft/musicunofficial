@@ -109,10 +109,9 @@ test('handles tracks with no duration', () => {
 });
 
 test('only keeps a resume snapshot with a well-formed video id', () => {
-  const r = sanitizeResume({ videoId: 'YdYqwJxA-ro', list: 'RDTMAK5uy_k', title: '  Song  ', position: 42, duration: 119, playing: true });
+  const r = sanitizeResume({ videoId: 'YdYqwJxA-ro', list: 'RDTMAK5uy_k', position: 42, duration: 119, playing: true });
   assert.equal(r.videoId, 'YdYqwJxA-ro');
   assert.equal(r.list, 'RDTMAK5uy_k');
-  assert.equal(r.title, 'Song');
   assert.equal(r.position, 42);
   assert.equal(r.playing, true);
 });

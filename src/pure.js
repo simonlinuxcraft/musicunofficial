@@ -106,7 +106,6 @@ function sanitizeResume(raw) {
   return {
     videoId,
     list: typeof raw.list === 'string' && LIST_ID.test(raw.list) ? raw.list : null,
-    title: typeof raw.title === 'string' ? raw.title.trim().slice(0, 256) : '',
     position: num(raw.position),
     duration: num(raw.duration),
     playing: raw.playing === true,

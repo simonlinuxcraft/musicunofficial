@@ -179,7 +179,6 @@
     lastSnap = {
       videoId,
       list: (vd && typeof vd.list === 'string' && vd.list) || null,
-      title: base.title,
       position: base.position,
       duration: base.duration,
       playing: base.playing,

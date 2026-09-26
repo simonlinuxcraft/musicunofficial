@@ -67,7 +67,6 @@ function saveResume() {
   store.settings.resume = {
     videoId: lastResume.videoId,
     list: lastResume.list,
-    title: lastResume.title,
     position: positionNow(lastResume),
     duration: lastResume.duration,
     savedAt: Date.now(),
