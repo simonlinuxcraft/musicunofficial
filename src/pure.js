@@ -1,5 +1,7 @@
 'use strict';
 
+const APP_TITLE = 'MusicUnofficial';
+
 // Google's login flow bounces across accounts.google.com and back, so those
 // hosts have to stay in-app. Everything else is a real outbound link.
 const INTERNAL_HOSTS = ['youtube.com', 'google.com', 'ytimg.com', 'ggpht.com'];
@@ -112,4 +114,4 @@ function sanitizeResume(raw) {
   };
 }
 
-module.exports = { isInternal, INTERNAL_HOSTS, keyAction, sanitizeTrack, positionNow, sanitizeResume };
+module.exports = { APP_TITLE, isInternal, INTERNAL_HOSTS, keyAction, sanitizeTrack, positionNow, sanitizeResume };

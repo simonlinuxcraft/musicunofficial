@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { isInternal, keyAction, sanitizeTrack, positionNow, sanitizeResume } = require('../utils/pure');
+const { isInternal, keyAction, sanitizeTrack, positionNow, sanitizeResume } = require('../src/pure');
 
 test('keeps YouTube Music and the Google login flow in-app', () => {
   assert.ok(isInternal('https://music.youtube.com/'));

@@ -45,10 +45,8 @@
     "files": [
       "main.js",
       "preload.js",
-      "miniplayer.html",
-      "miniplayer.js",
-      "miniplayer-preload.js",
-      "utils/**/*",
+      "src/**/*",
+      "mini/**/*",
       "inject/**/*",
       "icon.png",
       "icon-tray.png",

@@ -2,7 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { encodeFrame, decodeFrames, socketPaths } = require('../utils/discord');
+const { encodeFrame, decodeFrames, socketPaths } = require('../src/discord');
 
 test('round-trips a frame', () => {
   const buf = encodeFrame(0, { v: 1, client_id: '123' });
