@@ -100,8 +100,6 @@ function create({ resume, openMini, canHide }) {
     title: APP_TITLE,
     icon: path.join(ROOT, 'icon.png'),
     webPreferences: {
-      // Throttled timers stall playback once the window is minimised or in the tray.
-      backgroundThrottling: false,
       preload: path.join(ROOT, 'preload.js'),
     },
   });
