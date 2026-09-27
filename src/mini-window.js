@@ -61,7 +61,6 @@ function open() {
     title: APP_TITLE,
     icon: path.join(ROOT, 'icon.png'),
     webPreferences: {
-      backgroundThrottling: false,
       preload: path.join(ROOT, 'mini', 'preload.js'),
     },
   });
