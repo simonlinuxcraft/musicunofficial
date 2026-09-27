@@ -95,7 +95,7 @@ function create({ resume, openMini, canHide }) {
     minHeight: 400,
     backgroundColor: DARK,
     show: false,
-    // Controls live in the page's nav bar (inject/controls.js); titleBarOverlay looked like a pasted-on black box.
+    // Controls are injected into the page (inject/controls.js); titleBarOverlay looked like a pasted-on black box.
     frame: false,
     title: APP_TITLE,
     icon: path.join(ROOT, 'icon.png'),

@@ -55,8 +55,6 @@ ytmusic-nav-bar #right-content {
 
 /* Window controls, injected by inject/controls.js. */
 .ytm-winctl-host {
-  /* Pinned to the window, not to the nav bar: the nav bar carries its own
-     right padding, which pushed the controls away from the corner. */
   position: fixed;
   top: 0;
   right: 0;
@@ -108,6 +106,29 @@ ytmusic-nav-bar #right-content {
   color: #fff;
 }
 
+/* Consent and login pages have no nav bar, so the controls get a strip of their own above the page. */
+html.ytm-light .ytm-winctl-host {
+  height: 40px;
+}
+
+html.ytm-light body {
+  padding-top: 40px !important;
+}
+
+html.ytm-light .ytm-winctl {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+html.ytm-light .ytm-winctl:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: #000;
+}
+
+html.ytm-light .ytm-winctl-close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
 .ytm-winctl-mini::after {
   -webkit-mask-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgdmlld0JveD0iMCAwIDEwIDEwIj48cmVjdCB4PSIwLjYiIHk9IjAuNiIgd2lkdGg9IjguOCIgaGVpZ2h0PSI4LjgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMS4yIi8+PHJlY3QgeD0iNC4yIiB5PSI0LjgiIHdpZHRoPSI1LjIiIGhlaWdodD0iNC42IiBmaWxsPSJibGFjayIvPjwvc3ZnPg==");
 }
@@ -124,8 +145,7 @@ ytmusic-nav-bar #right-content {
   -webkit-mask-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgdmlld0JveD0iMCAwIDEwIDEwIj48cGF0aCBkPSJNMCAwbDEwIDEwTTEwIDBMMCAxMCIgc3Ryb2tlPSJibGFjayIgc3Ryb2tlLXdpZHRoPSIxLjIiLz48L3N2Zz4=");
 }
 
-/* Restore glyph while maximised. The class is set on <html> by
-   inject/controls.js from the main process window state. */
+/* Restore glyph while maximised, class set by inject/controls.js. */
 html.ytm-maximized .ytm-winctl-maximize::after {
   -webkit-mask-image: url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMCIgaGVpZ2h0PSIxMCIgdmlld0JveD0iMCAwIDEwIDEwIj48cmVjdCB4PSIwLjYiIHk9IjIuNiIgd2lkdGg9IjYuOCIgaGVpZ2h0PSI2LjgiIGZpbGw9Im5vbmUiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMS4yIi8+PHBhdGggZD0iTTIuNiAyLjZWMC42aDYuOHY2LjhoLTIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iYmxhY2siIHN0cm9rZS13aWR0aD0iMS4yIi8+PC9zdmc+");
 }
