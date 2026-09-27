@@ -22,19 +22,12 @@ ytmusic-logo a {
 }
 
 ytmusic-logo a::after {
-  content: 'MusicUnofficial';
+  content: 'Music';
 }
 
 /* display:none, not visibility:hidden, so the original mark frees its space. */
 ytmusic-logo a > * {
   display: none;
-}
-
-/* The logo is wider than YouTube's own mark, and #left-content is flex:0 0 auto
-   so it does not grow with it. Without a floor the mark overruns its container
-   and collides with the search box once the sidebar is collapsed. */
-ytmusic-nav-bar #left-content {
-  min-width: 214px;
 }
 
 /* The window is frameless, so the nav bar has to double as the drag handle.

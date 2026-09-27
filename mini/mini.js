@@ -29,7 +29,7 @@ window.mini.onTrack((t) => {
 
   $('title').textContent = has ? t.title : 'Nothing playing';
   $('artist').textContent = has ? t.artist || '' : '';
-  document.title = has ? t.title + (t.artist ? ' - ' + t.artist : '') : 'MusicUnofficial';
+  document.title = has ? t.title + (t.artist ? ' - ' + t.artist : '') : 'Music';
 
   const art = has ? t.art || '' : '';
   // Reassigning the same url makes the tile flicker.

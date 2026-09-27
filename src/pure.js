@@ -1,6 +1,6 @@
 'use strict';
 
-const APP_TITLE = 'MusicUnofficial';
+const APP_TITLE = 'Music';
 
 // Google's login flow bounces across accounts.google.com and back, so those
 // hosts have to stay in-app. Everything else is a real outbound link.
