@@ -1,9 +1,11 @@
 // Injected once at launch when a resume record exists. main loads the track
 // muted, splices the record into the placeholder and unmutes once this settles.
-// Leaves the track paused, so every failure stays silent.
+// Leaves the track paused; up to the deadline every failure stays silent.
 (() => {
   const D = __RESUME_DATA__;
-  const DEADLINE = 20000;
+  // Generous: on a slow network the player can take well over 20 s to start, and giving up
+  // unmutes a track that then plays from the top.
+  const DEADLINE = 60000;
   const start = Date.now();
   let sawTarget = false;
   return new Promise((resolve) => {
