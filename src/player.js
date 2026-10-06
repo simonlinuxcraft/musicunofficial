@@ -32,13 +32,13 @@ function setTrack(next) {
 function sync() {
   const wc = mainWc();
   if (!wc) return;
-  const needed = !!miniWc() || !!(presence && presence.enabled);
+  const needed = !!miniWc() || !!(presence && presence.ready);
   wc.send('nowplaying:active', needed);
   if (!needed) setTrack(null);
 }
 
 // Pulled on a timer instead of riding the now playing pipeline, which is idle
-// unless the mini player or Discord is on.
+// unless the mini player is open or Discord is connected.
 function capture() {
   const wc = mainWc();
   if (!wc) return;
@@ -88,7 +88,7 @@ function init(opts) {
   mainWc = opts.mainWc;
   miniWc = opts.miniWc;
   if (DISCORD_CLIENT_ID) {
-    presence = createPresence(DISCORD_CLIENT_ID, (m) => console.log('[discord] ' + m));
+    presence = createPresence(DISCORD_CLIENT_ID, (m) => console.log('[discord] ' + m), sync);
     presence.setEnabled(store.settings.richPresence);
   }
   setInterval(capture, 12000);

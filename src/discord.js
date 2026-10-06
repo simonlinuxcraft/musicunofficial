@@ -22,6 +22,8 @@ const OP_PONG = 4;
 // under that with room to spare while still switching tracks promptly.
 const MIN_UPDATE_MS = 5000;
 const RETRY_MS = 15000;
+// A struggling Discord was seen taking 15 s to answer the handshake.
+const HANDSHAKE_MS = 30000;
 
 // Discord rejects details, state and large_text under 2 characters, and a
 // rejected activity leaves the previous track on the profile. The zero width
@@ -74,13 +76,16 @@ function socketPaths(env = process.env) {
   return out;
 }
 
-function createPresence(clientId, log = () => {}, retryMs = RETRY_MS) {
+// onReadyChange fires when the connection becomes usable or stops being so.
+function createPresence(clientId, log = () => {}, onReadyChange = () => {}, retryMs = RETRY_MS) {
   let sock = null;
   let ready = false;
   let buf = Buffer.alloc(0);
   let enabled = false;
   let pending = null;
   let lastSent = 0;
+  let lastJson;
+  let lastNonce = null;
   let flushTimer = null;
   let retryTimer = null;
   // Bumped whenever the connection is torn down. A sweep that was already in
@@ -97,6 +102,10 @@ function createPresence(clientId, log = () => {}, retryMs = RETRY_MS) {
     }
   }
 
+  function clear() {
+    send(OP_FRAME, { cmd: 'SET_ACTIVITY', nonce: crypto.randomUUID(), args: { pid: process.pid } });
+  }
+
   // graceful uses end() rather than destroy(): writes are buffered, and
   // destroy() throws away whatever has not gone out yet, which would drop the
   // frame that clears the presence when the user switches the feature off.
@@ -104,12 +113,19 @@ function createPresence(clientId, log = () => {}, retryMs = RETRY_MS) {
     generation++;
     if (sock) {
       sock.removeAllListeners();
+      // end() into a socket Discord already closed reports EPIPE, which
+      // without a listener is an uncaught exception in the main process.
+      sock.on('error', () => {});
       if (graceful) sock.end();
       else sock.destroy();
     }
+    const wasReady = ready;
     sock = null;
     ready = false;
     buf = Buffer.alloc(0);
+    lastJson = undefined;
+    lastNonce = null;
+    if (wasReady) onReadyChange();
   }
 
   function scheduleRetry() {
@@ -149,6 +165,13 @@ function createPresence(clientId, log = () => {}, retryMs = RETRY_MS) {
       s.on('error', onDrop);
       s.on('close', onDrop);
       send(OP_HANDSHAKE, { v: 1, client_id: clientId });
+      // Discord can accept the socket and then never answer.
+      const t = setTimeout(() => {
+        if (sock !== s || ready) return;
+        log('no answer to handshake');
+        onDrop();
+      }, HANDSHAKE_MS);
+      if (t.unref) t.unref();
     });
   }
 
@@ -173,10 +196,14 @@ function createPresence(clientId, log = () => {}, retryMs = RETRY_MS) {
       } else if (f.op === OP_FRAME && f.data && f.data.evt === 'READY') {
         ready = true;
         log('connected');
-        flush(true);
+        onReadyChange();
+        if (pending) flush(true);
       } else if (f.op === OP_FRAME && f.data && f.data.evt === 'ERROR') {
-        // Only this one update was refused, the connection is fine.
+        // Only this one update was refused, the connection is fine. Nothing on
+        // the profile beats the previous track. Answering only our own
+        // activity frames means a refused clear cannot start a loop.
         log('rejected: ' + JSON.stringify(f.data.data || {}));
+        if (f.data.nonce && f.data.nonce === lastNonce) clear();
       }
     }
   }
@@ -227,7 +254,8 @@ function createPresence(clientId, log = () => {}, retryMs = RETRY_MS) {
       details: field(track.title),
       state: track.artist ? field(track.artist) : undefined,
     };
-    if (track.art) {
+    // A longer image url gets the whole activity rejected, not just the image.
+    if (track.art && track.art.length <= 256) {
       a.assets = { large_image: track.art, large_text: field(track.album || track.title) };
     }
     // position is clamped: the poller reads it every 500 ms and can catch a
@@ -249,17 +277,22 @@ function createPresence(clientId, log = () => {}, retryMs = RETRY_MS) {
       }
       return;
     }
+    const activity = activityFor(pending);
+    // The page reports every few seconds whether or not anything changed.
+    const json = JSON.stringify(activity);
+    if (json === lastJson) return;
+    lastJson = json;
     lastSent = Date.now();
-    send(OP_FRAME, {
-      cmd: 'SET_ACTIVITY',
-      nonce: crypto.randomUUID(),
-      args: { pid: process.pid, activity: activityFor(pending) },
-    });
+    lastNonce = crypto.randomUUID();
+    send(OP_FRAME, { cmd: 'SET_ACTIVITY', nonce: lastNonce, args: { pid: process.pid, activity } });
   }
 
   return {
     get enabled() {
       return enabled;
+    },
+    get ready() {
+      return ready;
     },
     setEnabled(value) {
       if (value === enabled) return;
@@ -270,7 +303,7 @@ function createPresence(clientId, log = () => {}, retryMs = RETRY_MS) {
         // Clear the presence before hanging up, otherwise the last song stays
         // on the profile until Discord itself notices the socket is gone.
         const wasReady = ready;
-        if (wasReady) send(OP_FRAME, { cmd: 'SET_ACTIVITY', nonce: crypto.randomUUID(), args: { pid: process.pid } });
+        if (wasReady) clear();
         clearTimeout(flushTimer);
         clearTimeout(retryTimer);
         flushTimer = null;

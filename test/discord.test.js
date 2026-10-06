@@ -62,7 +62,7 @@ test('looks in the flatpak and snap locations too', () => {
   assert.ok(paths.includes('/run/user/1000/discord-ipc-9'));
 });
 
-test('keeps reconnecting after a refusal and survives a rejected activity', async () => {
+test('keeps reconnecting after a refusal and clears a rejected activity once', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ipc-'));
   process.env.XDG_RUNTIME_DIR = dir;
   const seen = [];
@@ -78,25 +78,30 @@ test('keeps reconnecting after a refusal and survives a rejected activity', asyn
         else if (f.op === 0) c.write(encodeFrame(1, { evt: 'READY' }));
         else if (f.data.cmd === 'SET_ACTIVITY') {
           seen.push(f.data.args.activity);
-          c.write(encodeFrame(1, { cmd: 'SET_ACTIVITY', evt: 'ERROR', data: { code: 4000 } }));
+          c.write(encodeFrame(1, { cmd: 'SET_ACTIVITY', evt: 'ERROR', nonce: f.data.nonce, data: { code: 4000 } }));
         }
       }
     });
   });
   await new Promise((r) => server.listen(path.join(dir, 'discord-ipc-0'), r));
 
-  const p = createPresence('1', () => {}, 50);
+  let readyChanges = 0;
+  const p = createPresence('1', () => {}, () => readyChanges++, 50);
   p.update({ title: 'A', artist: 'B', album: 'C', art: 'https://x/y.jpg', playing: true, position: 0, duration: 60, at: Date.now() });
   p.setEnabled(true);
   await new Promise((r) => setTimeout(r, 400));
 
   assert.equal(conns, 2);
-  assert.equal(p.enabled, true);
-  assert.equal(seen.length, 1);
+  assert.equal(p.ready, true);
+  assert.equal(readyChanges, 1);
+  // The rejected activity, then one clear, and the refused clear is left alone.
+  assert.equal(seen.length, 2);
+  assert.equal(seen[1], undefined);
   assert.equal(seen[0].details.length, 2);
   assert.equal(seen[0].assets.large_text.length, 2);
 
   p.setEnabled(false);
+  assert.equal(readyChanges, 2);
   await new Promise((r) => server.close(r));
   fs.rmdirSync(dir);
 });
