@@ -49,7 +49,7 @@ app.whenReady().then(() => {
   const ua = session.defaultSession.getUserAgent().replace(/ Electron\/[\d.]+/, '');
   session.defaultSession.setUserAgent(ua);
 
-  player.init({ mainWc: mainWindow.webContents, miniWc: mini.webContents, onDiscordOff: tray.rebuild });
+  player.init({ mainWc: mainWindow.webContents, miniWc: mini.webContents });
   mainWindow.create({ resume, openMini: mini.open, canHide: tray.exists });
   try {
     tray.create({ toggle, openMini: mini.open });

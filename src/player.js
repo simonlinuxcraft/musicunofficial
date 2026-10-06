@@ -75,11 +75,11 @@ function saveResume() {
 }
 
 function setDiscord(on) {
-  store.settings.discord = !!on && !!DISCORD_CLIENT_ID;
+  store.settings.richPresence = !!on && !!DISCORD_CLIENT_ID;
   store.saveSettings();
   if (presence) {
-    presence.setEnabled(store.settings.discord);
-    if (store.settings.discord) presence.update(track);
+    presence.setEnabled(store.settings.richPresence);
+    if (store.settings.richPresence) presence.update(track);
   }
   sync();
 }
@@ -88,18 +88,8 @@ function init(opts) {
   mainWc = opts.mainWc;
   miniWc = opts.miniWc;
   if (DISCORD_CLIENT_ID) {
-    presence = createPresence(
-      DISCORD_CLIENT_ID,
-      (m) => console.log('[discord] ' + m),
-      // Discord turned us away for good, so untick the box instead of showing a dead feature as on.
-      () => {
-        store.settings.discord = false;
-        store.saveSettings();
-        sync();
-        opts.onDiscordOff();
-      }
-    );
-    presence.setEnabled(store.settings.discord);
+    presence = createPresence(DISCORD_CLIENT_ID, (m) => console.log('[discord] ' + m));
+    presence.setEnabled(store.settings.richPresence);
   }
   setInterval(capture, 12000);
 }
@@ -131,5 +121,5 @@ module.exports = {
   takeResume,
   setDiscord,
   discordAvailable: !!DISCORD_CLIENT_ID,
-  discordEnabled: () => store.settings.discord,
+  discordEnabled: () => store.settings.richPresence,
 };

@@ -58,7 +58,7 @@ fewer things that break when YouTube changes its site.
 | Own window | Frameless, with window controls placed in the page's own navigation bar |
 | Mini player | A small always-on-top window with cover, title and playback controls |
 | Media keys | Play, pause and skip work through MPRIS, including the GNOME media widget and the lock screen |
-| Discord | Optional Rich Presence, off by default, switched on from the tray |
+| Discord | Rich Presence, on by default, switched off from the tray |
 | Tray | Closing the window keeps playback running; quit from the tray or with `Ctrl+Q` |
 | Remembers itself | Window size, position and maximised state are restored on the next start |
 | Stays signed in | The profile survives updates, so an update does not sign you out |
@@ -98,15 +98,15 @@ the mini player or Rich Presence is there to read the result.
 
 ## Discord Rich Presence
 
-Off by default. Switch it on under `Discord Rich Presence` in the tray menu and
-what you are listening to appears on your Discord profile.
+On by default: what you are listening to appears on your Discord profile.
+Untick `Discord Rich Presence` in the tray menu to switch it off.
 
 It talks to Discord's local socket directly, with no third-party library and no
 network access. Only title, artist, album and cover art are sent, and only
 while something is playing. Switching it off clears the presence immediately.
 
-If Discord is not running, nothing happens and the app retries quietly in the
-background.
+If Discord is not running, restarts or refuses the connection, the app retries
+quietly every 15 seconds until it gets through.
 
 > Under a strictly confined Snap this cannot work: Discord's local socket sits
 > outside the sandbox and AppArmor blocks the connection. The feature is

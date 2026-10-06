@@ -20,7 +20,8 @@ function write(name, value) {
   } catch {}
 }
 
-const settings = { discord: false, miniBounds: null };
+// richPresence replaces "discord", which an old bug switched off by itself.
+const settings = { richPresence: true, miniBounds: null };
 
 function loadSettings() {
   const s = read('settings.json');

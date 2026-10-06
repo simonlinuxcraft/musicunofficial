@@ -5,7 +5,7 @@
 // uuid for a protocol that is an 8 byte header plus JSON.
 //
 // No network access is involved: this is a unix socket in the user's runtime
-// directory. Nothing is sent anywhere unless the user turns it on.
+// directory. Nothing is sent while the user has it switched off.
 
 const net = require('net');
 const path = require('path');
@@ -18,16 +18,15 @@ const OP_CLOSE = 2;
 const OP_PING = 3;
 const OP_PONG = 4;
 
-// Discord answers a bad handshake with a CLOSE frame carrying one of these and
-// then hangs up. Retrying cannot fix any of them, so the feature switches
-// itself off instead of reconnecting every 30 seconds forever. 4002 (rate
-// limited) is deliberately not in here, that one is worth waiting out.
-const FATAL_CLOSE_CODES = new Set([4000, 4001, 4003, 4004, 4005]);
-
 // Discord rate limits SET_ACTIVITY to 5 requests per 20 seconds. 5 s stays
 // under that with room to spare while still switching tracks promptly.
 const MIN_UPDATE_MS = 5000;
-const RETRY_MS = 30000;
+const RETRY_MS = 15000;
+
+// Discord rejects details, state and large_text under 2 characters, and a
+// rejected activity leaves the previous track on the profile. The zero width
+// space survives a trim, a plain space might not.
+const field = (s) => String(s).slice(0, 128).padEnd(2, '​');
 
 function encodeFrame(op, payload) {
   const body = Buffer.from(JSON.stringify(payload), 'utf8');
@@ -75,7 +74,7 @@ function socketPaths(env = process.env) {
   return out;
 }
 
-function createPresence(clientId, log = () => {}, onFatal = () => {}) {
+function createPresence(clientId, log = () => {}, retryMs = RETRY_MS) {
   let sock = null;
   let ready = false;
   let buf = Buffer.alloc(0);
@@ -113,23 +112,12 @@ function createPresence(clientId, log = () => {}, onFatal = () => {}) {
     buf = Buffer.alloc(0);
   }
 
-  function giveUp(why) {
-    log(why);
-    enabled = false;
-    clearTimeout(flushTimer);
-    clearTimeout(retryTimer);
-    flushTimer = null;
-    retryTimer = null;
-    reset();
-    onFatal(why);
-  }
-
   function scheduleRetry() {
     if (!enabled || retryTimer) return;
     retryTimer = setTimeout(() => {
       retryTimer = null;
       connect();
-    }, RETRY_MS);
+    }, retryMs);
     if (retryTimer.unref) retryTimer.unref();
   }
 
@@ -177,20 +165,18 @@ function createPresence(clientId, log = () => {}, onFatal = () => {}) {
       if (f.op === OP_PING) {
         send(OP_PONG, f.data);
       } else if (f.op === OP_CLOSE) {
-        // An unknown client id arrives here, not as an ERROR frame: Discord
-        // sends CLOSE with code 4000 and hangs up.
-        const code = f.data && f.data.code;
-        const why = 'refused (' + code + ' ' + ((f.data && f.data.message) || '') + ')';
-        if (FATAL_CLOSE_CODES.has(code)) giveUp(why);
-        else log(why);
+        // Never final. Discord answers "4000 Invalid Client ID" for a valid id
+        // whenever its own connection to the API is struggling.
+        log('refused (' + (f.data && f.data.code) + ' ' + ((f.data && f.data.message) || '') + ')');
+        onDrop();
         return;
       } else if (f.op === OP_FRAME && f.data && f.data.evt === 'READY') {
         ready = true;
         log('connected');
         flush(true);
       } else if (f.op === OP_FRAME && f.data && f.data.evt === 'ERROR') {
-        giveUp('rejected: ' + JSON.stringify(f.data.data || {}));
-        return;
+        // Only this one update was refused, the connection is fine.
+        log('rejected: ' + JSON.stringify(f.data.data || {}));
       }
     }
   }
@@ -237,12 +223,12 @@ function createPresence(clientId, log = () => {}, onFatal = () => {}) {
       // naming the app. Discord only started honouring this field for RPC
       // clients recently; before that it was reserved for its own Spotify
       // integration. Falls back to the title when a track has no artist.
-      name: String(track.artist || track.title).slice(0, 128),
-      details: String(track.title).slice(0, 128),
-      state: track.artist ? String(track.artist).slice(0, 128) : undefined,
+      name: field(track.artist || track.title),
+      details: field(track.title),
+      state: track.artist ? field(track.artist) : undefined,
     };
     if (track.art) {
-      a.assets = { large_image: track.art, large_text: (track.album || track.title).slice(0, 128) };
+      a.assets = { large_image: track.art, large_text: field(track.album || track.title) };
     }
     // position is clamped: the poller reads it every 500 ms and can catch a
     // value just past duration, which would put the end in the past.
