@@ -69,5 +69,8 @@
     "electron": "^41.7.1",
     "electron-builder": "^26.15.2"
   },
-  "desktopName": "musicunofficial.desktop"
+  "desktopName": "musicunofficial.desktop",
+  "dependencies": {
+    "@homebridge/dbus-native": "0.7.9"
+  }
 }

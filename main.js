@@ -8,6 +8,7 @@ const mainWindow = require('./src/main-window');
 const mini = require('./src/mini-window');
 const tray = require('./src/tray');
 const hybrid = require('./src/hybrid-window');
+const mpris = require('./src/mpris');
 
 // --hybrid turns the own UI on for one run without changing the saved choice.
 const FORCE_HYBRID = process.argv.includes('--hybrid');
@@ -24,8 +25,14 @@ if (!app.requestSingleInstanceLock()) {
   return;
 }
 
+// Audio mixers list the stream under these instead of "Chromium". libpulse reads
+// it in the audio process, which starts later and inherits the environment.
+process.env.PULSE_PROP_OVERRIDE ??= "application.name='MusicUnofficial' application.icon_name='musicunofficial'";
+
 // Overlay scrollbars fade out instead of taking layout width.
 app.commandLine.appendSwitch('enable-features', 'OverlayScrollbar,FluentOverlayScrollbar');
+// Chromium's own MPRIS player, replaced by src/mpris.js.
+app.commandLine.appendSwitch('disable-features', 'HardwareMediaKeyHandling');
 
 function showMain() {
   mini.close();
@@ -83,9 +90,12 @@ app.whenReady().then(() => {
   player.init({
     mainWc: mainWindow.webContents,
     views: [mini.webContents, hybrid.webContents],
-    // The mini player counts while it exists, as before; the hybrid UI only while it is on screen.
-    wanted: () => mini.isOpen() || hybrid.isShown(),
+    // MPRIS needs every change. Otherwise the mini player counts while it exists,
+    // the hybrid UI only while it is on screen.
+    wanted: () => mpris.active() || mini.isOpen() || hybrid.isShown(),
+    onTrack: mpris.update,
   });
+  mpris.start({ raise: showMain, quit: () => app.quit(), command: player.command });
   // In hybrid mode closing the player window only hides it, or the music would stop.
   mainWindow.create({ resume, openMini: mini.open, canHide: () => hybridOn || tray.exists(), hidden: hybridOn });
   if (hybridOn) {

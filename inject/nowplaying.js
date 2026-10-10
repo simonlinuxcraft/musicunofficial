@@ -225,6 +225,15 @@
       else v.pause();
       return;
     }
+    // Separate from playpause for MPRIS, whose Play and Pause must not toggle.
+    if (cmd === 'play' && v) {
+      if (v.paused) v.play();
+      return;
+    }
+    if (cmd === 'pause' && v) {
+      if (!v.paused) v.pause();
+      return;
+    }
     const sel =
       cmd === 'next'
         ? 'ytmusic-player-bar .next-button'

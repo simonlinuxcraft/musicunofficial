@@ -12,13 +12,14 @@ const { createPresence } = require('./discord');
 const DISCORD_CLIENT_ID = process.env.MUSICUNOFFICIAL_DISCORD_ID || '1528803144937635890';
 // Keeps "quit today, back tomorrow" without reviving a session from weeks ago.
 const MAX_RESUME_AGE = 7 * 24 * 3600 * 1000;
-const COMMANDS = ['previous', 'playpause', 'next', 'seek'];
+const COMMANDS = ['previous', 'playpause', 'play', 'pause', 'next', 'seek'];
 
 let mainWc = () => null;
 // Our own windows that show the track and send commands: mini player, hybrid UI.
 let views = [];
-// Whether one of them is on screen and wants updates.
+// Whether one of them is on screen, or MPRIS is up, and wants updates.
 let wanted = () => false;
+let onTrack = () => {};
 let track = null;
 let presence = null;
 let lastResume = null;
@@ -32,6 +33,15 @@ function setTrack(next) {
     if (wc) wc.send('track:update', track);
   }
   if (presence) presence.update(track);
+  onTrack(track);
+}
+
+// From our views and from MPRIS; only the page can act on it.
+function command(cmd, arg) {
+  const wc = mainWc();
+  if (!wc || !COMMANDS.includes(cmd)) return;
+  if (cmd === 'seek' && !(typeof arg === 'number' && Number.isFinite(arg) && arg >= 0)) return;
+  wc.send('player:command', cmd, cmd === 'seek' ? arg : undefined);
 }
 
 // The page only polls while something consumes the result: polling regardless
@@ -95,6 +105,7 @@ function init(opts) {
   mainWc = opts.mainWc;
   views = opts.views;
   wanted = opts.wanted;
+  onTrack = opts.onTrack || onTrack;
   if (DISCORD_CLIENT_ID) {
     presence = createPresence(DISCORD_CLIENT_ID, (m) => console.log('[discord] ' + m), sync);
     presence.setEnabled(store.settings.richPresence);
@@ -117,10 +128,7 @@ ipcMain.on('track:request', (e) => {
 });
 
 ipcMain.on('track:command', (e, cmd, arg) => {
-  const wc = mainWc();
-  if (!wc || !isView(e.sender) || !COMMANDS.includes(cmd)) return;
-  if (cmd === 'seek' && !(typeof arg === 'number' && Number.isFinite(arg) && arg >= 0)) return;
-  wc.send('player:command', cmd, cmd === 'seek' ? arg : undefined);
+  if (isView(e.sender)) command(cmd, arg);
 });
 
 module.exports = {
@@ -128,6 +136,7 @@ module.exports = {
   stop,
   sync,
   setTrack,
+  command,
   takeResume,
   setDiscord,
   discordAvailable: !!DISCORD_CLIENT_ID,
