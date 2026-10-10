@@ -1,0 +1,148 @@
+'use strict';
+
+// Scrobbling to Last.fm. Last.fm hands out API keys per application, so key and
+// secret come from the user's own API account, entered on the settings page.
+
+const { net, shell, safeStorage } = require('electron');
+const store = require('./store');
+const page = require('./page');
+const { scrobbleDue, primaryArtist, lastfmSignature } = require('./pure');
+
+const API = 'https://ws.audioscrobbler.com/2.0/';
+const HEX32 = /^[0-9a-f]{32}$/i;
+
+// Waiting for the user to allow access in the browser.
+let token = null;
+// The track being listened to, with how long it has actually played.
+let cur = null;
+
+const cfg = () => store.settings.lastfm || {};
+// Secret and session key only ever reach the disk encrypted by the system keyring.
+const seal = (s) => safeStorage.encryptString(s).toString('base64');
+function unseal(b) {
+  try {
+    return b ? safeStorage.decryptString(Buffer.from(b, 'base64')) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function call(method, params, post) {
+  const c = cfg();
+  const secret = unseal(c.secret);
+  if (!c.key || !secret) throw new Error('LASTFM_NOT_SET_UP');
+  const all = { method, api_key: c.key };
+  for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') all[k] = String(v);
+  all.api_sig = lastfmSignature(all, secret);
+  all.format = 'json';
+  const body = new URLSearchParams(all).toString();
+  const res = post
+    ? await net.fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
+    : await net.fetch(API + '?' + body);
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok || json.error) throw new Error(json.message || 'Last.fm answered ' + res.status);
+  return json;
+}
+
+// Step one: a token, then the browser for the user to allow access.
+async function connect(key, secret) {
+  key = typeof key === 'string' ? key.trim().toLowerCase() : '';
+  secret = typeof secret === 'string' ? secret.trim().toLowerCase() : '';
+  // Codes, not sentences: the settings page words them in its own language.
+  if (!HEX32.test(key) || !HEX32.test(secret)) throw new Error('LASTFM_BAD_KEY');
+  if (!safeStorage.isEncryptionAvailable()) throw new Error('LASTFM_NO_KEYRING');
+  store.settings.lastfm = { key, secret: seal(secret) };
+  store.saveSettings();
+  token = (await call('auth.getToken', {}, false)).token;
+  await shell.openExternal('https://www.last.fm/api/auth/?api_key=' + encodeURIComponent(key) + '&token=' + encodeURIComponent(token));
+}
+
+// Step two, after the user allowed it: the session key that scrobbles from now on.
+async function finish() {
+  if (!token) throw new Error('LASTFM_NOT_SET_UP');
+  const { session } = await call('auth.getSession', { token }, false);
+  token = null;
+  store.settings.lastfm = { ...cfg(), session: seal(session.key), name: String(session.name).slice(0, 64) };
+  store.saveSettings();
+}
+
+function disconnect() {
+  token = null;
+  cur = null;
+  delete store.settings.lastfm;
+  store.saveSettings();
+}
+
+const connected = () => !!(cfg().key && cfg().session);
+
+function state() {
+  return { connected: connected(), name: connected() ? cfg().name : null, waiting: !!token };
+}
+
+function send(method, params) {
+  const sk = unseal(cfg().session);
+  if (sk) call(method, { ...params, sk }, true).catch((e) => console.log('[lastfm] ' + method + ': ' + e.message));
+}
+
+// The page's player bar links each artist; the mediaSession line joins them all.
+async function artistOf(line) {
+  try {
+    const hit = (await page.nowLinks()).find((l) => l.browseId.startsWith('UC') && line.includes(l.text));
+    if (hit) return hit.text;
+  } catch {}
+  return primaryArtist(line);
+}
+
+function announce(c) {
+  c.announced = true;
+  send('track.updateNowPlaying', { artist: c.artist, track: c.track, album: c.album, duration: Math.round(c.duration) });
+}
+
+function onTrack(t) {
+  if (!connected()) return;
+  const now = Date.now();
+  if (cur && cur.playing) cur.played += (now - cur.tick) / 1000;
+  if (cur) cur.tick = now;
+  // Ads and silence stop the clock but keep the track it belongs to.
+  const id = t && !t.ad ? t.videoId || t.title : null;
+  if (!id) {
+    if (cur) cur.playing = false;
+    return;
+  }
+  if (!cur || cur.id !== id) {
+    const c = (cur = {
+      id,
+      track: t.title,
+      album: t.album,
+      duration: t.duration,
+      artist: null,
+      startedAt: Math.floor(now / 1000),
+      played: 0,
+      tick: now,
+      playing: t.playing,
+      announced: false,
+      scrobbled: false,
+    });
+    // A moment later the page's player bar shows this track's links.
+    setTimeout(async () => {
+      c.artist = await artistOf(t.artist);
+      if (c === cur && c.playing && !c.announced) announce(c);
+    }, 1500);
+  }
+  cur.playing = t.playing;
+  if (t.duration > 0) cur.duration = t.duration;
+  if (!cur.artist) return;
+  if (!cur.announced && cur.playing) announce(cur);
+  if (!cur.scrobbled && scrobbleDue(cur.played, cur.duration)) {
+    cur.scrobbled = true;
+    send('track.scrobble', {
+      artist: cur.artist,
+      track: cur.track,
+      album: cur.album,
+      timestamp: cur.startedAt,
+      duration: Math.round(cur.duration),
+    });
+  }
+}
+
+module.exports = { connect, finish, disconnect, connected, state, onTrack };

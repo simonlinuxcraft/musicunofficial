@@ -4,6 +4,7 @@ const { app, Menu, Tray, nativeImage } = require('electron');
 const path = require('path');
 const player = require('./player');
 const { APP_TITLE } = require('./pure');
+const { uiLanguage } = require('./i18n');
 
 let tray = null;
 let actions = null;
@@ -29,7 +30,7 @@ const STRINGS = {
 
 function rebuild() {
   if (!tray) return;
-  const T = STRINGS[app.getLocale().split('-')[0]] || STRINGS.en;
+  const T = STRINGS[uiLanguage()];
   tray.setContextMenu(
     Menu.buildFromTemplate([
       { label: T.toggle, click: actions.toggle },

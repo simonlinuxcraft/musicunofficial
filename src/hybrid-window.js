@@ -2,22 +2,31 @@
 
 // Our own UI in front of the YouTube Music window, which stays hidden and only plays.
 
-const { app, BrowserWindow, ipcMain } = require('electron');
+const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
 const mainWindow = require('./main-window');
 const player = require('./player');
 const store = require('./store');
+const page = require('./page');
+const sleep = require('./sleep');
+const lastfm = require('./lastfm');
 const pure = require('./pure');
 
 const { APP_TITLE, keyAction, parseItems, BROWSE_ID } = pure;
 
 const ROOT = path.join(__dirname, '..');
 const DEFAULT_SIZE = { width: 1100, height: 760 };
+// What the UI may do through the player bar; MPRIS has its own set-to-state actions.
+const UI_ACTIONS = ['shuffle', 'repeat', 'mute', 'like', 'dislike', 'volume', 'avSong', 'avVideo', 'skipAd'];
+const SLEEP_CHOICES = ['off', 'track', 15, 30, 45, 60, 90];
 
 let win = null;
 let actions = null;
 let saveTimer = null;
 let playerWc = null;
+
+const alive = () => !!win && !win.isDestroyed();
+const fromUs = (e) => alive() && e.sender === win.webContents;
 
 // The player page finished loading YouTube Music itself, after a consent or
 // sign-in page for instance; a view that failed meanwhile can try again.
@@ -26,131 +35,6 @@ function onPlayerLoad() {
     win.webContents.send('hybrid:player-ready');
   }
 }
-
-const alive = () => !!win && !win.isDestroyed();
-const fromUs = (e) => alive() && e.sender === win.webContents;
-
-// The UI asks right at startup, while the hidden page is still loading.
-const READY =
-  'new Promise((ok, no) => { const t0 = Date.now(); (function poll() {' +
-  " const a = document.querySelector('ytmusic-app');" +
-  ' if (a && a.networkManager) return ok(a);' +
-  " if (Date.now() - t0 > 30000) return no(new Error('YouTube Music did not finish loading'));" +
-  ' setTimeout(poll, 200); })(); })';
-
-// A destroyed or navigating page can leave a script promise unsettled, and the UI on "Loading" for good.
-const giveUp = (ms) =>
-  new Promise((ok, no) => setTimeout(() => no(new Error('YouTube Music did not answer')), ms));
-
-// Whichever of the events comes first; the other listeners go with it.
-function firstOf(wc, events, ms) {
-  return new Promise((ok, no) => {
-    const done = (fn) => {
-      clearTimeout(timer);
-      for (const ev of events) wc.removeListener(ev, onEvent);
-      fn();
-    };
-    const onEvent = () => done(ok);
-    const timer = setTimeout(() => done(() => no(new Error('YouTube Music did not answer'))), ms);
-    for (const ev of events) wc.once(ev, onEvent);
-  });
-}
-
-// Runs in the hidden page, which already holds the login and the client config.
-// `code` sees the page's <ytmusic-app> as `app`.
-async function inPage(code) {
-  const wc = mainWindow.webContents();
-  if (!wc) throw new Error('player window is gone');
-  // A script sent into the document that is about to be replaced dies with it.
-  // dom-ready may already be past while the page still loads, so its end counts too.
-  if (wc.isLoadingMainFrame()) await firstOf(wc, ['dom-ready', 'did-stop-loading', 'destroyed'], 35000);
-  return Promise.race([wc.mainFrame.executeJavaScript(READY + '.then((app) => ' + code + ')'), giveUp(35000)]);
-}
-
-// The page's own network manager signs the request for the logged-in account.
-// ponytail: an internal of the page; a plain fetch to /youtubei/v1 with a SAPISIDHASH header if it goes away.
-const innertube = (endpoint, body) =>
-  inPage('app.networkManager.fetch(' + JSON.stringify(endpoint) + ', ' + JSON.stringify(body) + ')');
-
-// The SPA's own navigation event: switches track in place and builds the queue, no reload.
-const navigate = (endpoint) =>
-  inPage(
-    "app.dispatchEvent(new CustomEvent('yt-navigate', " +
-      '{ bubbles: true, composed: true, detail: { endpoint: ' +
-      JSON.stringify(endpoint) +
-      ' } }))'
-  ).then(() => undefined);
-
-// The player bar's own buttons and slider, so YouTube Music keeps its state
-// (shuffle order, repeat mode, the saved volume) exactly as if clicked there.
-// Classes, not aria labels, which follow the UI language.
-// ponytail: DOM of the page; breaks when YouTube renames these classes.
-const BAR = "document.querySelector('ytmusic-player-bar')";
-const CONTROLS =
-  '(() => { const bar = ' +
-  BAR +
-  "; const lk = bar.querySelector('#like-button-renderer');" +
-  ' return { shuffle: !!bar.shuffleOn, repeat: bar.repeatMode,' +
-  " like: lk && lk.getAttribute('like-status'), volume: bar.volume, muted: !!bar.isMuted }; })()";
-const ACTIONS = {
-  shuffle: "bar.querySelector('.shuffle').click()",
-  repeat: "bar.querySelector('.repeat').click()",
-  mute: "bar.querySelector('.volume').click()",
-  like: "bar.querySelectorAll('#like-button-renderer button')[0].click()",
-  dislike: "bar.querySelectorAll('#like-button-renderer button')[1].click()",
-  volume: (v) =>
-    "{ const s = bar.querySelector('#volume-slider'); s.value = " +
-    v +
-    "; s.dispatchEvent(new CustomEvent('change', { bubbles: true, composed: true })); }",
-};
-
-const readControls = () => inPage(CONTROLS).then(pure.sanitizeControls);
-
-// Artist and album links under the title in the page's own player bar.
-const NOW_LINKS =
-  "[...document.querySelectorAll('ytmusic-player-bar .byline a')]" +
-  ".map((a) => ({ text: a.textContent, href: a.getAttribute('href') }))";
-
-// Rows as the page shows them. A track with a music video sits in a wrapper with
-// both versions, and the one not chosen by the song/video switch is under [hidden].
-const ROWS =
-  "[...document.querySelectorAll('ytmusic-player-queue ytmusic-player-queue-item')]" +
-  ".filter((el) => !el.closest('ytmusic-playlist-panel-video-wrapper-renderer > [hidden]'))";
-
-// The queue as the page renders it; long queues load further rows as they play.
-const QUEUE =
-  ROWS +
-  '.map((el) => {' +
-  " const d = el.data || {}; const t = (x) => ((x && x.runs) || []).map((r) => r.text).join('');" +
-  ' const th = (d.thumbnail && d.thumbnail.thumbnails) || [];' +
-  ' const pic = th.find((x) => x.width >= 96) || th[th.length - 1];' +
-  ' return { videoId: d.videoId, title: t(d.title), artist: t(d.shortBylineText || d.longBylineText),' +
-  " length: t(d.lengthText), thumb: pic ? pic.url : '', selected: el.hasAttribute('selected') }; })";
-
-// "Play next" and "add to queue". The page's own command for this only shows a
-// toast in a hidden window and leaves the queue as it was, so the items are
-// fetched the way the page does and put into its queue store directly.
-// ponytail: internal store action of the page; breaks if YouTube renames ADD_ITEMS.
-const QUEUE_POSITIONS = ['INSERT_AFTER_CURRENT_VIDEO', 'INSERT_AT_END'];
-const queueAdd = (target, position) =>
-  '(async () => {' +
-  " const q = document.querySelector('ytmusic-player-queue'); const st = q.queue.store.getState().queue;" +
-  ' if (!st.items.length) return 0;' +
-  ' const res = await app.networkManager.fetch("/music/get_queue", Object.assign({ queueContextParams: st.queueContextParams,' +
-  ' queueInsertPosition: ' +
-  JSON.stringify(position) +
-  ' }, ' +
-  JSON.stringify(target.videoId ? { videoIds: [target.videoId] } : { playlistId: target.playlistId }) +
-  '));' +
-  ' const items = ((res && res.queueDatas) || []).map((d) => d.content).filter(Boolean);' +
-  ' const now = q.queue.store.getState().queue;' +
-  ' const pick = (it) => it.playlistPanelVideoRenderer || (it.playlistPanelVideoWrapperRenderer && it.playlistPanelVideoWrapperRenderer.primaryRenderer.playlistPanelVideoRenderer) || {};' +
-  ' const sel = now.items.findIndex((it) => pick(it).selected);' +
-  ' const index = ' +
-  JSON.stringify(position) +
-  " === 'INSERT_AFTER_CURRENT_VIDEO' && sel >= 0 ? sel + 1 : now.items.length;" +
-  " q.dispatch({ type: 'ADD_ITEMS', payload: { nextQueueItemId: now.nextQueueItemId, index, items, shuffleEnabled: false, shouldAssignIds: true } });" +
-  ' return items.length; })()';
 
 // Size and maximised state survive a restart. Wayland ignores the position, X11 restores it.
 function loadBounds() {
@@ -172,8 +56,8 @@ function scheduleSaveBounds() {
   saveTimer = setTimeout(saveBounds, 400);
 }
 
-function create({ openMini, canHide }) {
-  actions = { openMini };
+function create(opts) {
+  actions = opts;
   const b = loadBounds();
   win = new BrowserWindow({
     x: b.x,
@@ -202,7 +86,7 @@ function create({ openMini, canHide }) {
   win.webContents.on('before-input-event', (e, input) => {
     const action = keyAction(input);
     if (action === 'quit') app.quit();
-    else if (action === 'mini') openMini();
+    else if (action === 'mini') opts.openMini();
     else if (action === 'reload') win.webContents.reload();
     else return;
     e.preventDefault();
@@ -223,7 +107,7 @@ function create({ openMini, canHide }) {
   // Without a tray, hiding would leave the app running with both windows invisible.
   win.on('close', (e) => {
     saveBounds();
-    if (!canHide()) return app.quit();
+    if (!opts.canHide()) return app.quit();
     e.preventDefault();
     win.hide();
   });
@@ -248,104 +132,134 @@ function destroy() {
   win = null;
 }
 
+function settings() {
+  return {
+    language: store.settings.language || 'system',
+    notify: store.settings.notify === true,
+    richPresence: player.discordEnabled(),
+    discordAvailable: player.discordAvailable,
+    sleep: sleep.state(),
+    lastfm: lastfm.state(),
+  };
+}
+
 const EMPTY_PAGE = { items: [], sections: [], shuffle: null, next: null };
 
 ipcMain.handle('hybrid:browse', (e, id) => {
   if (!fromUs(e) || typeof id !== 'string' || !BROWSE_ID.test(id)) return EMPTY_PAGE;
-  return innertube('/browse', { browseId: id }).then(parseItems);
+  return page.innertube('/browse', { browseId: id }).then(parseItems);
 });
 
 ipcMain.handle('hybrid:search', (e, query) => {
   if (!fromUs(e) || typeof query !== 'string' || !query.trim()) return EMPTY_PAGE;
-  return innertube('/search', { query: query.trim().slice(0, 200) }).then(parseItems);
+  return page.innertube('/search', { query: query.trim().slice(0, 200) }).then(parseItems);
 });
 
 // The next page of a long list. Search continues on its own endpoint.
 ipcMain.handle('hybrid:more', (e, kind, token) => {
   if (!fromUs(e) || !['browse', 'search'].includes(kind)) return EMPTY_PAGE;
   if (typeof token !== 'string' || !pure.CONTINUATION.test(token)) return EMPTY_PAGE;
-  return innertube('/' + kind, { continuation: token }).then(parseItems);
+  return page.innertube('/' + kind, { continuation: token }).then(parseItems);
 });
 
 ipcMain.handle('hybrid:suggest', (e, input) => {
   if (!fromUs(e) || typeof input !== 'string' || !input.trim()) return [];
-  return innertube('/music/get_search_suggestions', { input: input.slice(0, 200) }).then(pure.parseSuggestions);
+  return page.innertube('/music/get_search_suggestions', { input: input.slice(0, 200) }).then(pure.parseSuggestions);
 });
 
 ipcMain.handle('hybrid:navigate', (e, raw) => {
   const endpoint = pure.sanitizeEndpoint(raw);
-  if (fromUs(e) && endpoint) return navigate(endpoint);
+  if (fromUs(e) && endpoint) return page.navigate(endpoint);
 });
 
 ipcMain.handle('hybrid:lyrics', async (e, videoId) => {
   if (!fromUs(e) || !pure.sanitizeWatch({ videoId })) return null;
-  const id = pure.lyricsBrowseId(await innertube('/next', { videoId }));
-  return id ? pure.parseLyrics(await innertube('/browse', { browseId: id })) : { text: '', source: '' };
+  const id = pure.lyricsBrowseId(await page.innertube('/next', { videoId }));
+  return id ? pure.parseLyrics(await page.innertube('/browse', { browseId: id })) : { text: '', source: '' };
 });
 
-// Resolves to how many items went in; with nothing playing yet the target just starts.
-ipcMain.handle('hybrid:queue-add', async (e, raw, position) => {
+ipcMain.handle('hybrid:queue-add', (e, raw, position) => {
   const target = pure.sanitizeQueueTarget(raw);
-  if (!fromUs(e) || !target || !QUEUE_POSITIONS.includes(position)) return 0;
-  const added = await inPage(queueAdd(target, position));
-  if (added) return added;
-  await navigate(
-    target.videoId ? { watchEndpoint: { videoId: target.videoId } } : { watchPlaylistEndpoint: { playlistId: target.playlistId } }
-  );
-  return -1;
+  if (!fromUs(e) || !target || !page.QUEUE_POSITIONS.includes(position)) return 0;
+  return page.queueAdd(target, position);
+});
+
+ipcMain.handle('hybrid:queue-remove', (e, itemId) => {
+  if (fromUs(e) && Number.isInteger(itemId) && itemId >= 0) return page.queueRemove(itemId);
+});
+
+ipcMain.handle('hybrid:queue-move', (e, from, to) => {
+  if (fromUs(e) && [from, to].every((n) => Number.isInteger(n) && n >= 0)) return page.queueMove(from, to);
 });
 
 // Needs a signed-in account; YouTube answers with an error otherwise.
 ipcMain.handle('hybrid:playlists', (e, videoId) => {
   if (!fromUs(e) || !pure.sanitizeWatch({ videoId })) return [];
-  return innertube('/playlist/get_add_to_playlist', { videoIds: [videoId] }).then(pure.parsePlaylistOptions);
+  return page.innertube('/playlist/get_add_to_playlist', { videoIds: [videoId] }).then(pure.parsePlaylistOptions);
 });
 
 ipcMain.handle('hybrid:playlist-add', async (e, playlistId, videoId) => {
   const target = pure.sanitizeQueueTarget({ playlistId });
   if (!fromUs(e) || !target || !pure.sanitizeWatch({ videoId })) return false;
-  const res = await innertube('/browse/edit_playlist', {
+  const res = await page.innertube('/browse/edit_playlist', {
     playlistId: target.playlistId,
     actions: [{ action: 'ACTION_ADD_VIDEO', addedVideoId: videoId }],
   });
   return !!res && res.status === 'STATUS_SUCCEEDED';
 });
 
-ipcMain.handle('hybrid:now-links', (e) => (fromUs(e) ? inPage(NOW_LINKS).then(pure.sanitizeLinks) : []));
+ipcMain.handle('hybrid:now-links', (e) => (fromUs(e) ? page.nowLinks() : []));
 
-ipcMain.handle('hybrid:controls', (e) => (fromUs(e) ? readControls() : null));
+ipcMain.handle('hybrid:controls', (e) => (fromUs(e) ? page.readControls() : null));
 
-ipcMain.handle('hybrid:control', async (e, action, arg) => {
-  if (!fromUs(e) || !Object.hasOwn(ACTIONS, action)) return null;
-  let code = ACTIONS[action];
-  if (action === 'volume') {
-    if (typeof arg !== 'number' || !Number.isFinite(arg)) return null;
-    code = code(Math.min(100, Math.max(0, Math.round(arg))));
-  }
-  await inPage('{ const bar = ' + BAR + '; ' + code + '; }');
-  // The bar updates its own state a tick after the click.
-  await new Promise((ok) => setTimeout(ok, 250));
-  return readControls();
+ipcMain.handle('hybrid:control', (e, action, arg) => {
+  if (fromUs(e) && UI_ACTIONS.includes(action)) return page.control(action, arg);
+  return null;
 });
 
-ipcMain.handle('hybrid:queue', (e) => (fromUs(e) ? inPage(QUEUE).then(pure.sanitizeQueue) : []));
+ipcMain.handle('hybrid:queue', (e) => (fromUs(e) ? page.queue() : []));
 
-// The row's own play button jumps inside the current queue and keeps its order,
-// which a fresh navigation to the track would rebuild.
 ipcMain.handle('hybrid:queue-play', (e, index, videoId) => {
   if (!fromUs(e) || !Number.isInteger(index) || index < 0 || !pure.sanitizeWatch({ videoId })) return;
-  return inPage(
-    '(() => { const rows = ' +
-      ROWS +
-      ';' +
-      ' const id = ' +
-      JSON.stringify(videoId) +
-      '; let row = rows[' +
-      index +
-      '];' +
-      ' if (!row || !row.data || row.data.videoId !== id) row = rows.find((r) => r.data && r.data.videoId === id);' +
-      " if (row) row.querySelector('#play-button').click(); })()"
-  ).then(() => undefined);
+  return page.queuePlay(index, videoId);
+});
+
+ipcMain.handle('hybrid:settings', (e) => (fromUs(e) ? settings() : null));
+
+ipcMain.handle('hybrid:setting', (e, key, value) => {
+  if (!fromUs(e)) return null;
+  if (key === 'language' && ['system', 'de', 'en'].includes(value)) actions.setLanguage(value);
+  else if (key === 'notify' && typeof value === 'boolean') {
+    store.settings.notify = value;
+    store.saveSettings();
+    player.sync();
+  } else if (key === 'richPresence' && typeof value === 'boolean') player.setDiscord(value);
+  else if (key === 'hybrid' && value === false) setImmediate(() => actions.setHybrid(false));
+  else if (key === 'sleep' && SLEEP_CHOICES.includes(value)) sleep.set(value);
+  return settings();
+});
+
+ipcMain.handle('hybrid:lastfm-connect', async (e, key, secret) => {
+  if (!fromUs(e)) return null;
+  await lastfm.connect(key, secret);
+  return settings();
+});
+
+ipcMain.handle('hybrid:lastfm-finish', async (e) => {
+  if (!fromUs(e)) return null;
+  await lastfm.finish();
+  return settings();
+});
+
+ipcMain.handle('hybrid:lastfm-disconnect', (e) => {
+  if (!fromUs(e)) return null;
+  lastfm.disconnect();
+  return settings();
+});
+
+// Fixed address; the page never hands main a URL to open.
+ipcMain.on('hybrid:lastfm-account', (e) => {
+  if (fromUs(e)) shell.openExternal('https://www.last.fm/api/account/create');
 });
 
 ipcMain.on('hybrid:window', (e, action) => {
@@ -370,6 +284,8 @@ module.exports = {
   hide,
   destroy,
   saveBounds,
+  reload: () => alive() && win.webContents.reload(),
   isShown: () => alive() && win.isVisible() && !win.isMinimized(),
+  isFocused: () => alive() && win.isFocused(),
   webContents: () => (alive() ? win.webContents : null),
 };

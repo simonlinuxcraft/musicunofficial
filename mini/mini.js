@@ -21,7 +21,7 @@ const STRINGS = {
     quit: 'Music beenden',
   },
 };
-const T = STRINGS[navigator.language.split('-')[0]] || STRINGS.en;
+const T = STRINGS[window.mini.language] || STRINGS.en;
 for (const id of ['previous', 'playpause', 'next', 'restore', 'quit']) $(id).title = T[id];
 $('title').textContent = T.nothing;
 let lastArt = null;

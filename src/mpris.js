@@ -51,7 +51,9 @@ const PLAYER_IFACE = {
   },
   properties: {
     PlaybackStatus: 's',
+    LoopStatus: 's',
     Rate: 'd',
+    Shuffle: 'b',
     Metadata: 'a{sv}',
     Volume: 'd',
     Position: 'x',
@@ -102,23 +104,58 @@ const root = {
   Quit: () => actions.quit(),
 };
 
-// Properties are read straight off this object on every Get.
+// MPRIS names for the player bar's repeat modes.
+const LOOP = { NONE: 'None', ALL: 'Playlist', ONE: 'Track' };
+
+// Properties are read straight off this object on every Get, and the writable
+// ones are set through it; both go through the current track.
 const player = {
-  PlaybackStatus: 'Stopped',
-  Rate: 1,
-  Metadata: metadata(null),
-  // ponytail: fixed, the page's own volume is not mirrored; add it when a client needs it.
-  Volume: 1,
+  get PlaybackStatus() {
+    return !track ? 'Stopped' : track.playing ? 'Playing' : 'Paused';
+  },
+  get Metadata() {
+    return metadata(track);
+  },
   get Position() {
     return track ? Math.round(positionNow(track) * US) : 0;
   },
+  get Volume() {
+    return !track ? 1 : track.muted ? 0 : track.volume / 100;
+  },
+  set Volume(v) {
+    if (typeof v === 'number' && Number.isFinite(v)) actions.control('volume', Math.round(Math.min(1, Math.max(0, v)) * 100));
+  },
+  get LoopStatus() {
+    return LOOP[track ? track.repeat : 'NONE'];
+  },
+  set LoopStatus(v) {
+    const mode = Object.keys(LOOP).find((k) => LOOP[k] === v);
+    if (mode) actions.control('repeatTo', mode);
+  },
+  get Shuffle() {
+    return !!(track && track.shuffle);
+  },
+  set Shuffle(v) {
+    if (typeof v === 'boolean') actions.control('shuffleTo', v);
+  },
+  get CanGoNext() {
+    return !!track;
+  },
+  get CanGoPrevious() {
+    return !!track;
+  },
+  get CanPlay() {
+    return !!track;
+  },
+  get CanPause() {
+    return !!track;
+  },
+  get CanSeek() {
+    return !!track;
+  },
+  Rate: 1,
   MinimumRate: 1,
   MaximumRate: 1,
-  CanGoNext: false,
-  CanGoPrevious: false,
-  CanPlay: false,
-  CanPause: false,
-  CanSeek: false,
   CanControl: true,
   Next: () => actions.command('next'),
   Previous: () => actions.command('previous'),
@@ -134,19 +171,32 @@ const player = {
   emit: () => {},
 };
 
+// What clients were last told, so only real changes go out.
+const told = {};
+const WATCHED = {
+  PlaybackStatus: 's',
+  Metadata: 'a{sv}',
+  Volume: 'd',
+  LoopStatus: 's',
+  Shuffle: 'b',
+  CanGoNext: 'b',
+  CanGoPrevious: 'b',
+  CanPlay: 'b',
+  CanPause: 'b',
+  CanSeek: 'b',
+};
+
 function update(next) {
   const prev = track;
   track = next;
   if (!bus) return;
   const changed = [];
-  const set = (key, sig, value) => {
-    if (JSON.stringify(player[key]) === JSON.stringify(value)) return;
-    player[key] = value;
+  for (const [key, sig] of Object.entries(WATCHED)) {
+    const value = player[key];
+    if (JSON.stringify(told[key]) === JSON.stringify(value)) continue;
+    told[key] = value;
     changed.push([key, [sig, value]]);
-  };
-  set('PlaybackStatus', 's', !next ? 'Stopped' : next.playing ? 'Playing' : 'Paused');
-  set('Metadata', 'a{sv}', metadata(next));
-  for (const key of ['CanGoNext', 'CanGoPrevious', 'CanPlay', 'CanPause', 'CanSeek']) set(key, 'b', !!next);
+  }
   if (changed.length) {
     bus.sendSignal(PATH, 'org.freedesktop.DBus.Properties', 'PropertiesChanged', 'sa{sv}as', [PLAYER, changed, []]);
   }

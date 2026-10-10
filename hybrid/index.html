@@ -84,6 +84,41 @@
       #suggest [role='option'] b { color: var(--fg); font-weight: 600; }
       #suggest [role='option']:hover, #suggest [aria-selected='true'] { background: #2e2e2e; }
       #open-player { white-space: nowrap; }
+      #open-settings { display: grid; place-items: center; padding: 7px; border-radius: 50%; }
+
+      /* Library and explore pages switch between their parts here. */
+      #tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 8px 20px; }
+      #tabs button { padding: 6px 14px; border-radius: 16px; background: var(--raise); color: var(--dim); }
+      #tabs button:hover { color: var(--fg); background: #262626; }
+      #tabs button[aria-selected='true'] { background: var(--fg); color: #000; }
+
+      .settings { max-width: 680px; margin: 0 8px; }
+      .settings h2 { font-size: 17px; font-weight: 700; margin: 26px 0 6px; }
+      .settings h2:first-child { margin-top: 4px; }
+      .set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+      .set-row label { flex: 1; cursor: pointer; }
+      .set-row .note, .settings .note { color: var(--dim); font-size: 13px; margin-top: 2px; }
+      .settings select, .settings input[type='text'], .settings input[type='password'] {
+        min-width: 220px;
+        padding: 7px 10px;
+        border: 1px solid #333;
+        border-radius: 8px;
+        background: var(--raise);
+        color: var(--fg);
+        font: inherit;
+      }
+      .settings input[type='checkbox'] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+      .settings .btn { padding: 7px 16px; border-radius: 18px; background: var(--raise); }
+      .settings .btn:hover { background: #262626; }
+      .settings .btn.primary { background: var(--fg); color: #000; }
+      .settings .actions { display: flex; gap: 8px; align-items: center; padding: 12px 0; }
+      .settings .link { color: var(--fg); text-decoration: underline; }
+
+      #skip-ad { padding: 6px 14px; border-radius: 16px; background: rgba(255, 255, 255, 0.14); white-space: nowrap; }
+      #skip-ad:hover { background: rgba(255, 255, 255, 0.24); }
+      #av { display: flex; flex: 0 0 auto; margin: 0 4px; border: 1px solid #3a3a3a; border-radius: 14px; overflow: hidden; }
+      #av button { padding: 4px 10px; font-size: 12px; color: var(--dim); }
+      #av button[aria-pressed='true'] { background: var(--fg); color: #000; }
       #winctl { display: flex; gap: 2px; margin-left: 8px; }
       #winctl button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; }
       #winctl svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.2; }
@@ -241,7 +276,7 @@
       #queue-empty { color: var(--dim); padding: 0 20px; }
       .qrow {
         display: grid;
-        grid-template-columns: 40px 1fr auto;
+        grid-template-columns: 40px 1fr auto 28px;
         align-items: center;
         gap: 12px;
         width: 100%;
@@ -249,7 +284,15 @@
         border-radius: 8px;
         text-align: left;
       }
-      .qrow:hover { background: var(--raise); }
+      .qrow:hover, .qrow:focus-visible { background: var(--raise); }
+      .qrow { cursor: pointer; }
+      .qrow .drop { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--dim); opacity: 0; }
+      .qrow:hover .drop, .qrow:focus-within .drop { opacity: 1; }
+      .qrow .drop:hover { background: #2c2c2c; color: var(--fg); }
+      .qrow .drop svg { width: 16px; height: 16px; }
+      .qrow.dragging { opacity: 0.4; }
+      .qrow.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+      .qrow.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
       .qrow .cover { width: 40px; height: 40px; }
       .qrow .len { color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; }
       .qrow[aria-current='true'] { background: var(--raise); }
@@ -381,7 +424,7 @@
       }
 
       @media (max-width: 760px) {
-        #open-player, #time, #volume, #like, #dislike { display: none; }
+        #open-player, #time, #volume, #like, #dislike, #av { display: none; }
         #shuffle, #repeat { display: none; }
       }
       @media (prefers-reduced-motion: reduce) {
@@ -396,7 +439,8 @@
       </button>
       <nav>
         <button data-browse="FEmusic_home" data-t="home"></button>
-        <button data-browse="FEmusic_liked_playlists" data-t="library"></button>
+        <button data-browse="FEmusic_explore" data-tabs="explore" data-t="explore"></button>
+        <button data-browse="FEmusic_liked_playlists" data-tabs="library" data-t="library"></button>
         <button data-browse="VLLM" data-t="liked"></button>
       </nav>
       <form id="search" role="search">
@@ -419,6 +463,9 @@
         <div id="suggest" role="listbox" hidden></div>
       </form>
       <button id="open-player" data-t="openPlayer" data-title="openPlayerTip"></button>
+      <button id="open-settings" data-tip="settings">
+        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.48.48 0 0 0-.12-.61zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z" /></svg>
+      </button>
       <div id="winctl">
         <button id="win-mini" data-tip="mini">
           <svg viewBox="0 0 10 10"><rect x="0.6" y="0.6" width="8.8" height="8.8" /><rect class="solid" x="4.2" y="4.8" width="5.2" height="4.6" /></svg>
@@ -440,6 +487,7 @@
       <main>
         <div id="inner">
           <h1 id="heading"></h1>
+          <div id="tabs" role="tablist" hidden></div>
           <div id="actions" hidden>
             <button id="play-all">
               <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg><span data-t="playAll"></span>
@@ -499,6 +547,11 @@
           <svg class="off" viewBox="0 0 24 24"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.58-6.59c.37-.36.59-.86.59-1.41V5c0-1.1-.9-2-2-2zm0 12-4.34 4.34L11.77 14H3v-2l3-7h9zm4-12h4v12h-4z" /></svg>
           <svg class="on" viewBox="0 0 24 24"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3z" /></svg>
         </button>
+        <button id="skip-ad" data-t="skipAd" hidden></button>
+        <div id="av" role="group" data-title="avTip" hidden>
+          <button id="av-song" data-t="avSong" aria-pressed="true"></button>
+          <button id="av-video" data-t="avVideo" aria-pressed="false"></button>
+        </div>
         <button id="like" class="icon-btn" data-tip="like" aria-pressed="false">
           <svg class="off" viewBox="0 0 24 24"><path d="M21 8h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2c0-1.1-.9-2-2-2zm0 4-3 7H9V9l4.34-4.34L12.23 10H21zM1 9h4v12H1z" /></svg>
           <svg class="on" viewBox="0 0 24 24"><path d="M1 21h4V9H1zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73z" /></svg>
@@ -534,6 +587,14 @@
         </button>
       </div>
     </footer>
-    <script src="hybrid.js"></script>
+    <!-- Classic scripts sharing one global scope, in dependency order; app.js wires them up last. -->
+    <script src="base.js"></script>
+    <script src="strings.js"></script>
+    <script src="lists.js"></script>
+    <script src="search.js"></script>
+    <script src="player.js"></script>
+    <script src="panel.js"></script>
+    <script src="settings.js"></script>
+    <script src="app.js"></script>
   </body>
 </html>

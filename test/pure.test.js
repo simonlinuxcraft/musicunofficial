@@ -18,6 +18,9 @@ const {
   parseSuggestions,
   parsePlaylistOptions,
   sanitizeLinks,
+  scrobbleDue,
+  primaryArtist,
+  lastfmSignature,
 } = require('../src/pure');
 
 test('keeps YouTube Music and the Google login flow in-app', () => {
@@ -74,6 +77,9 @@ test('accepts a normal track and clamps the strings', () => {
   assert.equal(sanitizeTrack({ title: 'x', like: 'LOVE' }).like, null);
   assert.equal(sanitizeTrack({ title: 'x', videoId: 'iNjGNNoUjkk' }).videoId, 'iNjGNNoUjkk');
   assert.equal(sanitizeTrack({ title: 'x', videoId: '"><img>' }).videoId, null);
+  const c = sanitizeTrack({ title: 'x', shuffle: 'yes', repeat: 'ONE', volume: 140.6, muted: true, avMode: 'OMV_PREFERRED', avAvailable: true });
+  assert.deepEqual([c.shuffle, c.repeat, c.volume, c.muted, c.avMode, c.avAvailable, c.adSkip], [false, 'ONE', 100, true, 'OMV_PREFERRED', true, false]);
+  assert.equal(sanitizeTrack({ title: 'x', repeat: 'SOMETIMES', avMode: 'X' }).repeat, 'NONE');
 });
 
 test('drops artwork that is not an https url', () => {
@@ -327,7 +333,33 @@ test('retypes player bar state and queue rows from the page', () => {
     null,
   ]);
   assert.deepEqual(q, [
-    { videoId: 'iNjGNNoUjkk', title: 'Within', artist: 'Daft Punk', length: '3:48', thumb: '', selected: true },
+    { videoId: 'iNjGNNoUjkk', title: 'Within', artist: 'Daft Punk', length: '3:48', thumb: '', selected: true, top: -1, itemId: null },
   ]);
+  const [row] = sanitizeQueue([{ videoId: 'iNjGNNoUjkk', top: 3, itemId: 7 }]);
+  assert.deepEqual([row.top, row.itemId], [3, 7]);
+  assert.deepEqual(sanitizeQueue([{ videoId: 'iNjGNNoUjkk', top: '3); x(', itemId: -2 }]).map((r) => [r.top, r.itemId]), [[-1, null]]);
   assert.deepEqual(sanitizeQueue('not a list'), []);
+});
+
+test('scrobbles after half the track or four minutes, never short tracks', () => {
+  assert.equal(scrobbleDue(100, 200), true);
+  assert.equal(scrobbleDue(99, 200), false);
+  assert.equal(scrobbleDue(240, 1200), true);
+  assert.equal(scrobbleDue(25, 28), false);
+});
+
+test('takes the first artist of a joined line', () => {
+  assert.equal(primaryArtist('ZXKAI und slxughter'), 'ZXKAI');
+  assert.equal(primaryArtist('Travis Scott & Grand Theft Auto VI'), 'Travis Scott');
+  assert.equal(primaryArtist('HUNTR/X, EJAE, AUDREY NUNA'), 'HUNTR/X');
+  assert.equal(primaryArtist('Daft Punk feat. Pharrell Williams'), 'Daft Punk');
+  assert.equal(primaryArtist('Nysa'), 'Nysa');
+});
+
+test('signs Last.fm calls over the sorted parameters', () => {
+  const crypto = require('crypto');
+  const md5 = (s) => crypto.createHash('md5').update(s, 'utf8').digest('hex');
+  const params = { method: 'auth.getSession', token: 'T', api_key: 'K', format: 'json' };
+  // format stays out, the rest sorted by name: api_key, method, token.
+  assert.equal(lastfmSignature(params, 'S'), md5('api_keyKmethodauth.getSessiontokenTS'));
 });

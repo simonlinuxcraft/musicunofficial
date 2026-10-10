@@ -3,6 +3,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('hybrid', {
+  language: ipcRenderer.sendSync('ui:language'),
   browse: (id) => ipcRenderer.invoke('hybrid:browse', id),
   search: (query) => ipcRenderer.invoke('hybrid:search', query),
   more: (kind, token) => ipcRenderer.invoke('hybrid:more', kind, token),
@@ -17,6 +18,14 @@ contextBridge.exposeInMainWorld('hybrid', {
   control: (action, arg) => ipcRenderer.invoke('hybrid:control', action, arg),
   queue: () => ipcRenderer.invoke('hybrid:queue'),
   queuePlay: (index, videoId) => ipcRenderer.invoke('hybrid:queue-play', index, videoId),
+  queueRemove: (itemId) => ipcRenderer.invoke('hybrid:queue-remove', itemId),
+  queueMove: (from, to) => ipcRenderer.invoke('hybrid:queue-move', from, to),
+  settings: () => ipcRenderer.invoke('hybrid:settings'),
+  setting: (key, value) => ipcRenderer.invoke('hybrid:setting', key, value),
+  lastfmConnect: (key, secret) => ipcRenderer.invoke('hybrid:lastfm-connect', key, secret),
+  lastfmFinish: () => ipcRenderer.invoke('hybrid:lastfm-finish'),
+  lastfmDisconnect: () => ipcRenderer.invoke('hybrid:lastfm-disconnect'),
+  openLastfmAccount: () => ipcRenderer.send('hybrid:lastfm-account'),
   showPlayer: () => ipcRenderer.send('hybrid:show-player'),
   onTrack: (cb) => ipcRenderer.on('track:update', (_e, track) => cb(track)),
   request: () => ipcRenderer.send('track:request'),

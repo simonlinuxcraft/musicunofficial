@@ -223,5 +223,6 @@ module.exports = {
   destroy,
   saveBounds,
   isShown: () => alive() && win.isVisible() && !win.isMinimized(),
+  isFocused: () => alive() && win.isFocused(),
   webContents: () => (alive() ? win.webContents : null),
 };

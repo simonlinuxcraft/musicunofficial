@@ -1,5 +1,7 @@
 'use strict';
 
+const crypto = require('crypto');
+
 const APP_TITLE = 'Music';
 
 // Google's login flow bounces across accounts.google.com and back, so those
@@ -79,6 +81,13 @@ function sanitizeTrack(raw) {
     ad: raw.ad === true,
     like: ['LIKE', 'DISLIKE', 'INDIFFERENT'].includes(raw.like) ? raw.like : null,
     videoId: typeof raw.videoId === 'string' && VIDEO_ID.test(raw.videoId) ? raw.videoId : null,
+    shuffle: raw.shuffle === true,
+    repeat: ['NONE', 'ALL', 'ONE'].includes(raw.repeat) ? raw.repeat : 'NONE',
+    volume: Number.isFinite(raw.volume) ? Math.min(100, Math.max(0, Math.round(raw.volume))) : 100,
+    muted: raw.muted === true,
+    avMode: ['ATV_PREFERRED', 'OMV_PREFERRED'].includes(raw.avMode) ? raw.avMode : null,
+    avAvailable: raw.avAvailable === true,
+    adSkip: raw.adSkip === true,
     position: num(raw.position),
     duration: num(raw.duration),
     at,
@@ -339,6 +348,30 @@ function sanitizeLinks(raw) {
   return out;
 }
 
+// Last.fm counts a play once half the track, or four minutes of it, have been
+// heard, and only for tracks longer than 30 seconds.
+function scrobbleDue(playedSeconds, durationSeconds) {
+  return durationSeconds > 30 && (playedSeconds >= durationSeconds / 2 || playedSeconds >= 240);
+}
+
+// The first name of a joined artist line ("A und B", "A & B", "A, B", "A feat. B").
+// Only a fallback: a duo called "A & B" is split too, the player bar's links are not.
+function primaryArtist(line) {
+  const s = typeof line === 'string' ? line.trim() : '';
+  return s.split(/\s+(?:und|and|&|feat\.?|ft\.?|x)\s+|,\s*/i)[0].trim() || s;
+}
+
+// api_sig as Last.fm defines it: parameter names and values sorted by name and
+// joined without separators, the shared secret appended, md5 of that in hex.
+function lastfmSignature(params, secret) {
+  const base = Object.keys(params)
+    .filter((k) => k !== 'format' && k !== 'callback')
+    .sort()
+    .map((k) => k + params[k])
+    .join('');
+  return crypto.createHash('md5').update(base + secret, 'utf8').digest('hex');
+}
+
 // Player bar state read out of the hidden page.
 function sanitizeControls(raw) {
   if (!raw || typeof raw !== 'object') return null;
@@ -367,6 +400,9 @@ function sanitizeQueue(raw) {
       length: str(q.length).slice(0, 12),
       thumb: httpsUrl(q.thumb),
       selected: q.selected === true,
+      // Place in the reorderable list, -1 for autoplay suggestions.
+      top: Number.isInteger(q.top) && q.top >= -1 ? q.top : -1,
+      itemId: Number.isInteger(q.itemId) && q.itemId >= 0 ? q.itemId : null,
     });
   }
   return out;
@@ -392,6 +428,9 @@ module.exports = {
   parseSuggestions,
   parsePlaylistOptions,
   sanitizeLinks,
+  scrobbleDue,
+  primaryArtist,
+  lastfmSignature,
   CONTINUATION,
   BROWSE_ID,
 };

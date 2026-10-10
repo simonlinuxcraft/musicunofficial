@@ -59,6 +59,24 @@
     return el ? el.getAttribute('like-status') : null;
   }
 
+  // The player bar's own state, so the hybrid UI and MPRIS show what the page does.
+  function controls() {
+    const bar = document.querySelector('ytmusic-player-bar');
+    const av = document.querySelector('ytmusic-av-toggle');
+    const skip = document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button');
+    return {
+      shuffle: !!(bar && bar.shuffleOn),
+      repeat: bar ? bar.repeatMode : null,
+      volume: bar ? bar.volume : null,
+      muted: !!(bar && bar.isMuted),
+      // Song or music video, for tracks that come in both versions.
+      avMode: av ? av.getAttribute('playback-mode') : null,
+      avAvailable: !!av && !av.hasAttribute('toggle-disabled'),
+      // YouTube's own skip button, only there once an ad allows skipping.
+      adSkip: !!(skip && skip.offsetParent !== null),
+    };
+  }
+
   function read() {
     const v = video();
     const m = navigator.mediaSession && navigator.mediaSession.metadata;
@@ -92,6 +110,7 @@
       // Polled with the rest because the bar sets it a moment after the track changes.
       like: likeStatus(),
       videoId: videoId(),
+      ...controls(),
       position: t.position,
       duration: t.duration,
       // When position was read. Everything downstream is asynchronous: the IPC
@@ -116,6 +135,13 @@
       a.ad !== b.ad ||
       a.like !== b.like ||
       a.videoId !== b.videoId ||
+      a.shuffle !== b.shuffle ||
+      a.repeat !== b.repeat ||
+      a.volume !== b.volume ||
+      a.muted !== b.muted ||
+      a.avMode !== b.avMode ||
+      a.avAvailable !== b.avAvailable ||
+      a.adSkip !== b.adSkip ||
       Math.round(a.duration) !== Math.round(b.duration)
     );
   }

@@ -106,6 +106,7 @@ module.exports = {
   destroy,
   saveBounds,
   isOpen: alive,
+  reload: () => alive() && mini.webContents.reload(),
   setFront: (f) => {
     front = f;
   },
