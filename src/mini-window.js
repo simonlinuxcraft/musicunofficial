@@ -12,6 +12,8 @@ const SIZE = { width: 344, height: 104 };
 
 let mini = null;
 let saveTimer = null;
+// The window the mini player stands in for: the YouTube Music window, or the hybrid UI.
+let front = mainWindow;
 
 const alive = () => !!mini && !mini.isDestroyed();
 
@@ -68,7 +70,7 @@ function open() {
   mini.loadFile(path.join(ROOT, 'mini', 'index.html'));
   mini.once('ready-to-show', () => {
     mini.show();
-    mainWindow.hide();
+    front.hide();
   });
   player.sync();
 
@@ -79,7 +81,7 @@ function open() {
   mini.on('closed', () => {
     mini = null;
     player.sync();
-    mainWindow.show();
+    front.show();
   });
 }
 
@@ -93,7 +95,7 @@ function destroy() {
 
 ipcMain.on('mini:open', open);
 ipcMain.on('mini:restore', () => {
-  mainWindow.show();
+  front.show();
   close();
 });
 ipcMain.on('mini:quit', () => app.quit());
@@ -104,5 +106,8 @@ module.exports = {
   destroy,
   saveBounds,
   isOpen: alive,
+  setFront: (f) => {
+    front = f;
+  },
   webContents: () => (alive() ? mini.webContents : null),
 };

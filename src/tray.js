@@ -8,15 +8,36 @@ const { APP_TITLE } = require('./pure');
 let tray = null;
 let actions = null;
 
+const STRINGS = {
+  en: {
+    toggle: 'Show / Hide',
+    mini: 'Mini player',
+    hybrid: 'Own interface',
+    discord: 'Discord Rich Presence',
+    discordOff: 'Discord Rich Presence (not configured)',
+    quit: 'Quit',
+  },
+  de: {
+    toggle: 'Anzeigen / Verbergen',
+    mini: 'Miniplayer',
+    hybrid: 'Eigene Oberfläche',
+    discord: 'Discord Rich Presence',
+    discordOff: 'Discord Rich Presence (nicht eingerichtet)',
+    quit: 'Beenden',
+  },
+};
+
 function rebuild() {
   if (!tray) return;
+  const T = STRINGS[app.getLocale().split('-')[0]] || STRINGS.en;
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'Show / Hide', click: actions.toggle },
-      { label: 'Mini player', accelerator: 'CommandOrControl+M', click: actions.openMini },
+      { label: T.toggle, click: actions.toggle },
+      { label: T.mini, accelerator: 'CommandOrControl+M', click: actions.openMini },
+      { label: T.hybrid, type: 'checkbox', checked: actions.hybrid(), click: (item) => actions.setHybrid(item.checked) },
       { type: 'separator' },
       {
-        label: player.discordAvailable ? 'Discord Rich Presence' : 'Discord Rich Presence (not configured)',
+        label: player.discordAvailable ? T.discord : T.discordOff,
         type: 'checkbox',
         enabled: player.discordAvailable,
         checked: player.discordEnabled(),
@@ -26,7 +47,7 @@ function rebuild() {
         },
       },
       { type: 'separator' },
-      { label: 'Quit', accelerator: 'CommandOrControl+Q', click: () => app.quit() },
+      { label: T.quit, accelerator: 'CommandOrControl+Q', click: () => app.quit() },
     ])
   );
 }

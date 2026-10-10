@@ -7,6 +7,13 @@ const player = require('./src/player');
 const mainWindow = require('./src/main-window');
 const mini = require('./src/mini-window');
 const tray = require('./src/tray');
+const hybrid = require('./src/hybrid-window');
+
+// --hybrid turns the own UI on for one run without changing the saved choice.
+const FORCE_HYBRID = process.argv.includes('--hybrid');
+let hybridOn = false;
+// The window that tray, second start and mini player bring back.
+const front = () => (hybridOn ? hybrid : mainWindow);
 
 // Pinned so a rename cannot move the profile and sign the user out. Must run
 // before requestSingleInstanceLock, which keeps its lock there.
@@ -22,37 +29,71 @@ app.commandLine.appendSwitch('enable-features', 'OverlayScrollbar,FluentOverlayS
 
 function showMain() {
   mini.close();
-  mainWindow.show();
+  front().show();
 }
 
 function toggle() {
-  if (mainWindow.isShown()) mainWindow.hide();
+  if (front().isShown()) front().hide();
   else showMain();
+}
+
+// Live, without a restart: the player page keeps playing either way, only the
+// window in front of it changes.
+function setHybrid(on) {
+  if (!!on === hybridOn) return;
+  hybridOn = !!on;
+  store.settings.hybrid = hybridOn;
+  store.saveSettings();
+  mini.setFront(front());
+  mainWindow.setPersist(!hybridOn);
+  if (hybridOn) {
+    mainWindow.hide();
+    hybrid.create({ openMini: mini.open, canHide: tray.exists });
+  } else {
+    hybrid.saveBounds();
+    hybrid.destroy();
+    mainWindow.reveal();
+  }
+  player.sync();
+  tray.rebuild();
 }
 
 app.on('second-instance', showMain);
 
 app.on('before-quit', () => {
   mainWindow.saveBounds();
+  hybrid.saveBounds();
   mini.saveBounds();
   player.stop();
-  // Main window first, so the mini player's closed handler finds nothing to bring back.
+  // Main and hybrid window first, so the mini player's closed handler finds nothing to bring back.
   mainWindow.destroy();
+  hybrid.destroy();
   mini.destroy();
 });
 
 app.whenReady().then(() => {
   store.loadSettings();
+  hybridOn = FORCE_HYBRID || store.settings.hybrid === true;
   const resume = player.takeResume();
 
   // On the session, not the window: login popups would otherwise carry the Electron token Google rejects.
   const ua = session.defaultSession.getUserAgent().replace(/ Electron\/[\d.]+/, '');
   session.defaultSession.setUserAgent(ua);
 
-  player.init({ mainWc: mainWindow.webContents, miniWc: mini.webContents });
-  mainWindow.create({ resume, openMini: mini.open, canHide: tray.exists });
+  player.init({
+    mainWc: mainWindow.webContents,
+    views: [mini.webContents, hybrid.webContents],
+    // The mini player counts while it exists, as before; the hybrid UI only while it is on screen.
+    wanted: () => mini.isOpen() || hybrid.isShown(),
+  });
+  // In hybrid mode closing the player window only hides it, or the music would stop.
+  mainWindow.create({ resume, openMini: mini.open, canHide: () => hybridOn || tray.exists(), hidden: hybridOn });
+  if (hybridOn) {
+    mini.setFront(hybrid);
+    hybrid.create({ openMini: mini.open, canHide: tray.exists });
+  }
   try {
-    tray.create({ toggle, openMini: mini.open });
+    tray.create({ toggle, openMini: mini.open, hybrid: () => hybridOn, setHybrid });
   } catch (e) {
     console.log('[tray] unavailable: ' + e.message);
   }

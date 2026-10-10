@@ -12,18 +12,25 @@ const { createPresence } = require('./discord');
 const DISCORD_CLIENT_ID = process.env.MUSICUNOFFICIAL_DISCORD_ID || '1528803144937635890';
 // Keeps "quit today, back tomorrow" without reviving a session from weeks ago.
 const MAX_RESUME_AGE = 7 * 24 * 3600 * 1000;
-const COMMANDS = ['previous', 'playpause', 'next'];
+const COMMANDS = ['previous', 'playpause', 'next', 'seek'];
 
 let mainWc = () => null;
-let miniWc = () => null;
+// Our own windows that show the track and send commands: mini player, hybrid UI.
+let views = [];
+// Whether one of them is on screen and wants updates.
+let wanted = () => false;
 let track = null;
 let presence = null;
 let lastResume = null;
 
+const isView = (wc) => views.some((v) => v() === wc);
+
 function setTrack(next) {
   track = next;
-  const mini = miniWc();
-  if (mini) mini.send('mini:track', track);
+  for (const v of views) {
+    const wc = v();
+    if (wc) wc.send('track:update', track);
+  }
   if (presence) presence.update(track);
 }
 
@@ -32,7 +39,7 @@ function setTrack(next) {
 function sync() {
   const wc = mainWc();
   if (!wc) return;
-  const needed = !!miniWc() || !!(presence && presence.ready);
+  const needed = wanted() || !!(presence && presence.ready);
   wc.send('nowplaying:active', needed);
   if (!needed) setTrack(null);
 }
@@ -86,7 +93,8 @@ function setDiscord(on) {
 
 function init(opts) {
   mainWc = opts.mainWc;
-  miniWc = opts.miniWc;
+  views = opts.views;
+  wanted = opts.wanted;
   if (DISCORD_CLIENT_ID) {
     presence = createPresence(DISCORD_CLIENT_ID, (m) => console.log('[discord] ' + m), sync);
     presence.setEnabled(store.settings.richPresence);
@@ -99,18 +107,20 @@ function stop() {
   saveResume();
 }
 
-// Only the main window reports playback and only the mini player sends commands.
+// Only the main window reports playback and only our own views send commands.
 ipcMain.on('nowplaying:update', (e, raw) => {
   if (e.sender === mainWc()) setTrack(sanitizeTrack(raw));
 });
 
-ipcMain.on('mini:request', (e) => {
-  if (e.sender === miniWc()) e.sender.send('mini:track', track);
+ipcMain.on('track:request', (e) => {
+  if (isView(e.sender)) e.sender.send('track:update', track);
 });
 
-ipcMain.on('mini:command', (e, cmd) => {
+ipcMain.on('track:command', (e, cmd, arg) => {
   const wc = mainWc();
-  if (wc && e.sender === miniWc() && COMMANDS.includes(cmd)) wc.send('player:command', cmd);
+  if (!wc || !isView(e.sender) || !COMMANDS.includes(cmd)) return;
+  if (cmd === 'seek' && !(typeof arg === 'number' && Number.isFinite(arg) && arg >= 0)) return;
+  wc.send('player:command', cmd, cmd === 'seek' ? arg : undefined);
 });
 
 module.exports = {

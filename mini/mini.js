@@ -1,6 +1,29 @@
 'use strict';
 
 const $ = (id) => document.getElementById(id);
+
+// UI strings follow the system language, like the hybrid window.
+const STRINGS = {
+  en: {
+    nothing: 'Nothing playing',
+    previous: 'Previous',
+    playpause: 'Play / Pause',
+    next: 'Next',
+    restore: 'Back to the full window',
+    quit: 'Quit Music',
+  },
+  de: {
+    nothing: 'Es läuft nichts',
+    previous: 'Vorheriger Titel',
+    playpause: 'Wiedergabe / Pause',
+    next: 'Nächster Titel',
+    restore: 'Zurück zum großen Fenster',
+    quit: 'Music beenden',
+  },
+};
+const T = STRINGS[navigator.language.split('-')[0]] || STRINGS.en;
+for (const id of ['previous', 'playpause', 'next', 'restore', 'quit']) $(id).title = T[id];
+$('title').textContent = T.nothing;
 let lastArt = null;
 let lastWidth = null;
 let track = null;
@@ -27,7 +50,7 @@ window.mini.onTrack((t) => {
   document.body.classList.toggle('has-track', has);
   document.body.classList.toggle('playing', has && !!t.playing);
 
-  $('title').textContent = has ? t.title : 'Nothing playing';
+  $('title').textContent = has ? t.title : T.nothing;
   $('artist').textContent = has ? t.artist || '' : '';
   document.title = has ? t.title + (t.artist ? ' - ' + t.artist : '') : 'Music';
 

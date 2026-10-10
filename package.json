@@ -47,6 +47,7 @@
       "preload.js",
       "src/**/*",
       "mini/**/*",
+      "hybrid/**/*",
       "inject/**/*",
       "icon.png",
       "icon-tray.png",
