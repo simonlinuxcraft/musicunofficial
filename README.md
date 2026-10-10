@@ -56,14 +56,14 @@ fewer things that break when YouTube changes its site.
 | | |
 |---|---|
 | Own window | Frameless, with window controls placed in the page's own navigation bar |
-| Mini player | A small always-on-top window with cover, title and playback controls |
+| Mini player | A small window with cover, title and playback controls, on top of other windows |
 | Media keys | Play, pause and skip work through MPRIS, including the GNOME media widget and the lock screen |
 | Discord | Rich Presence, on by default, switched off from the tray |
 | Tray | Closing the window keeps playback running; quit from the tray or with `Ctrl+Q` |
 | Remembers itself | Window size, position and maximised state are restored on the next start |
 | Stays signed in | The profile survives updates, so an update does not sign you out |
 | Runs anywhere | No `libfuse2` required, works on distributions that stopped shipping it |
-| No dependencies | Zero runtime dependencies beyond Electron itself |
+| Dependencies | Electron plus one small pure JavaScript D-Bus library for the media keys |
 
 ## Mini player
 
@@ -79,7 +79,7 @@ fewer things that break when YouTube changes its site.
 to a small window that stays above every other window. It shows the cover art,
 the track, the artist, a progress bar and play, previous and next.
 
-Drag it anywhere by its background; it comes back where you left it. The two
+Drag it anywhere by its background; on X11 it comes back where you left it. The two
 buttons on the right go back to the full window and quit the application. There
 is no third button that only closes the mini player: with the main window
 hidden behind it, that would leave no way out on a desktop whose tray does not
@@ -91,10 +91,16 @@ from that instant instead of from whenever the message happened to arrive.
 Seeking is picked up from the player's own events, so the bar jumps with the
 track rather than catching up a second later.
 
+On a Wayland session GNOME decides where a window opens and does not let an
+application keep itself on top. Press `Alt` `Space` on the mini player and pick
+"Always on Top" to pin it there. The app runs on native Wayland because XWayland
+reports a wrong refresh rate for high refresh rate monitors and everything then
+draws at 20 frames per second.
+
 Track information comes from the page's own `mediaSession` data, the same
 source the media keys and the desktop's media widget use, so it does not depend
-on the site's markup staying the way it is today. The page is only polled while
-the mini player or Rich Presence is there to read the result.
+on the site's markup staying the way it is today. The page reads the player once
+a second and reports only what changed, which costs about 0.2 % of one core.
 
 ## Discord Rich Presence
 
