@@ -10,7 +10,7 @@
   },
   "scripts": {
     "start": "electron .",
-    "dev": "unset ELECTRON_RUN_AS_NODE GIO_MODULE_DIR; electron . --no-sandbox --ozone-platform=x11",
+    "dev": "unset ELECTRON_RUN_AS_NODE GIO_MODULE_DIR; electron . --no-sandbox --ozone-platform-hint=auto",
     "test": "node --test",
     "build": "electron-builder --linux && node scripts/swap-runtime.js",
     "build-appimage": "electron-builder --linux AppImage && node scripts/swap-runtime.js",

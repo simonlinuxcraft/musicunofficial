@@ -24,13 +24,14 @@ DIR="$(dirname "$(readlink -f "$0")")"
 # Modulpfad und muss stehen bleiben, sonst faellt genau dort TLS aus.
 [ -z "$SNAP" ] && unset GIO_MODULE_DIR
 
-# Wayland-Bypass: BrowserWindow x/y ist unter nativem Wayland no-op,
-# Pop-ups landen zufaellig. Loesung: ueber XWayland rendern. Switch
-# muss VOR Electron-Init am argv stehen, deshalb hier im Wrapper.
-# VS Code, Discord, Signal, Obsidian machen es genauso.
+# Nativ Wayland statt XWayland: XWayland meldet bei Monitoren mit hoher
+# Bildrate eine falsche Rate (gemessen 20,08 Hz an 320-Hz-Panels), Chromium
+# zeichnet dann nur 20 Bilder/s. Preis: unter GNOME-Wayland setzt die App
+# keine Fensterpositionen und kein "immer im Vordergrund" (Mini-Player).
+# Switch muss VOR Electron-Init am argv stehen, deshalb hier im Wrapper.
 WL_ARGS=()
 if [ -n "$WAYLAND_DISPLAY" ] && [ "$XDG_SESSION_TYPE" = "wayland" ]; then
-  WL_ARGS=(--ozone-platform=x11)
+  WL_ARGS=(--ozone-platform=wayland)
 fi
 
 case " $* " in
