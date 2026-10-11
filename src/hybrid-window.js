@@ -85,9 +85,13 @@ function create(opts) {
 
   win.webContents.on('before-input-event', (e, input) => {
     const action = keyAction(input);
+    const wc = win.webContents;
     if (action === 'quit') app.quit();
     else if (action === 'mini') opts.openMini();
-    else if (action === 'reload') win.webContents.reload();
+    else if (action === 'reload') wc.reload();
+    else if (action === 'zoom-in') wc.setZoomLevel(Math.min(wc.getZoomLevel() + 0.5, 5));
+    else if (action === 'zoom-out') wc.setZoomLevel(Math.max(wc.getZoomLevel() - 0.5, -5));
+    else if (action === 'zoom-reset') wc.setZoomLevel(0);
     else return;
     e.preventDefault();
   });
@@ -234,7 +238,6 @@ ipcMain.handle('hybrid:setting', (e, key, value) => {
     store.saveSettings();
     player.sync();
   } else if (key === 'richPresence' && typeof value === 'boolean') player.setDiscord(value);
-  else if (key === 'hybrid' && value === false) setImmediate(() => actions.setHybrid(false));
   else if (key === 'sleep' && SLEEP_CHOICES.includes(value)) sleep.set(value);
   return settings();
 });

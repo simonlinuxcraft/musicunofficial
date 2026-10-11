@@ -21,11 +21,6 @@ const RESUME = inject('resume.js');
 let win = null;
 let lastBounds = null;
 let saveTimer = null;
-// Off in hybrid mode: shown only now and then and never maximised there, it
-// would overwrite the size the normal mode restores.
-let persist = true;
-// Started hidden behind the hybrid UI: the saved maximised state waits for reveal().
-let pendingMaximize = false;
 
 const alive = () => !!win && !win.isDestroyed();
 
@@ -39,7 +34,7 @@ function loadBounds() {
 // last good sample still gets written when quitting from the tray.
 function saveBounds() {
   clearTimeout(saveTimer);
-  if (!alive() || !persist) return;
+  if (!alive()) return;
   if (win.isVisible() && !win.isMinimized()) {
     lastBounds = { ...win.getNormalBounds(), maximized: win.isMaximized() };
   }
@@ -89,10 +84,9 @@ function onKey(e, input, openMini) {
   else if (action === 'zoom-reset') wc.setZoomLevel(0);
 }
 
-function create({ resume, openMini, canHide, hidden }) {
-  persist = !hidden;
+// Starts hidden: the own interface is in front, this window only plays.
+function create({ resume, openMini }) {
   const s = loadBounds();
-  pendingMaximize = !!hidden && !!s.maximized;
   win = new BrowserWindow({
     x: s.x,
     y: s.y,
@@ -112,12 +106,6 @@ function create({ resume, openMini, canHide, hidden }) {
   });
   const wc = win.webContents;
 
-  // Hidden in hybrid mode, where this window is only the player. maximize() would show it.
-  if (!hidden) {
-    if (s.maximized) win.maximize();
-    // At once, not on ready-to-show, which waits for YouTube's first paint.
-    win.show();
-  }
   win.setMenuBarVisibility(false);
 
   // The page retitles itself on every navigation, which would churn the task bar.
@@ -164,14 +152,11 @@ function create({ resume, openMini, canHide, hidden }) {
 
   wc.on('before-input-event', (e, input) => onKey(e, input, openMini));
 
-  // A created Tray does not prove the desktop draws it (GNOME dropped GtkStatusIcon),
-  // so without one closing really closes and Ctrl+Q stays the way out.
+  // Closing only hides it: the music plays in this window.
   win.on('close', (e) => {
     saveBounds();
-    if (canHide()) {
-      e.preventDefault();
-      win.hide();
-    }
+    e.preventDefault();
+    win.hide();
   });
 
   const sendMaxState = () => alive() && wc.send('window:maximized', win.isMaximized());
@@ -191,14 +176,6 @@ function hide() {
   if (alive()) win.hide();
 }
 
-// Back to the normal mode: shown the way it was last used there.
-function reveal() {
-  if (!alive()) return;
-  if (pendingMaximize) win.maximize();
-  pendingMaximize = false;
-  show();
-}
-
 // The page's beforeunload handler vetoes close() during playback; destroy() cannot be vetoed.
 function destroy() {
   if (alive()) win.destroy();
@@ -216,10 +193,6 @@ module.exports = {
   create,
   show,
   hide,
-  reveal,
-  setPersist: (on) => {
-    persist = !!on;
-  },
   destroy,
   saveBounds,
   isShown: () => alive() && win.isVisible() && !win.isMinimized(),

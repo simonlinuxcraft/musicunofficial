@@ -15,12 +15,6 @@ const notify = require('./src/notify');
 const lastfm = require('./src/lastfm');
 require('./src/i18n');
 
-// --hybrid turns the own UI on for one run without changing the saved choice.
-const FORCE_HYBRID = process.argv.includes('--hybrid');
-let hybridOn = false;
-// The window that tray, second start and mini player bring back.
-const front = () => (hybridOn ? hybrid : mainWindow);
-
 // Pinned so a rename cannot move the profile and sign the user out. Must run
 // before requestSingleInstanceLock, which keeps its lock there.
 app.setPath('userData', path.join(app.getPath('appData'), 'musicunofficial'));
@@ -39,35 +33,16 @@ app.commandLine.appendSwitch('enable-features', 'OverlayScrollbar,FluentOverlayS
 // Chromium's own MPRIS player, replaced by src/mpris.js.
 app.commandLine.appendSwitch('disable-features', 'HardwareMediaKeyHandling');
 
+// The own interface is the app; the YouTube Music window behind it only plays
+// and comes forward for sign-in, consent and whatever the interface lacks.
 function showMain() {
   mini.close();
-  front().show();
+  hybrid.show();
 }
 
 function toggle() {
-  if (front().isShown()) front().hide();
+  if (hybrid.isShown()) hybrid.hide();
   else showMain();
-}
-
-// Live, without a restart: the player page keeps playing either way, only the
-// window in front of it changes.
-function setHybrid(on) {
-  if (!!on === hybridOn) return;
-  hybridOn = !!on;
-  store.settings.hybrid = hybridOn;
-  store.saveSettings();
-  mini.setFront(front());
-  mainWindow.setPersist(!hybridOn);
-  if (hybridOn) {
-    mainWindow.hide();
-    hybrid.create(hybridOptions());
-  } else {
-    hybrid.saveBounds();
-    hybrid.destroy();
-    mainWindow.reveal();
-  }
-  player.sync();
-  tray.rebuild();
 }
 
 // Every window that shows text picks the new language up on its next load.
@@ -78,8 +53,6 @@ function setLanguage(value) {
   mini.reload();
   tray.rebuild();
 }
-
-const hybridOptions = () => ({ openMini: mini.open, canHide: tray.exists, setHybrid, setLanguage });
 
 app.on('second-instance', showMain);
 
@@ -96,7 +69,6 @@ app.on('before-quit', () => {
 
 app.whenReady().then(() => {
   store.loadSettings();
-  hybridOn = FORCE_HYBRID || store.settings.hybrid === true;
   const resume = player.takeResume();
 
   // On the session, not the window: login popups would otherwise carry the Electron token Google rejects.
@@ -121,14 +93,10 @@ app.whenReady().then(() => {
   // No notification for a track the user is looking at anyway.
   notify.init(() => mainWindow.isFocused() || hybrid.isFocused() || mini.isOpen());
   mpris.start({ raise: showMain, quit: () => app.quit(), command: player.command, control: page.control });
-  // In hybrid mode closing the player window only hides it, or the music would stop.
-  mainWindow.create({ resume, openMini: mini.open, canHide: () => hybridOn || tray.exists(), hidden: hybridOn });
-  if (hybridOn) {
-    mini.setFront(hybrid);
-    hybrid.create(hybridOptions());
-  }
+  mainWindow.create({ resume, openMini: mini.open });
+  hybrid.create({ openMini: mini.open, canHide: tray.exists, setLanguage });
   try {
-    tray.create({ toggle, openMini: mini.open, hybrid: () => hybridOn, setHybrid });
+    tray.create({ toggle, openMini: mini.open });
   } catch (e) {
     console.log('[tray] unavailable: ' + e.message);
   }

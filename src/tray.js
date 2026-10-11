@@ -13,7 +13,6 @@ const STRINGS = {
   en: {
     toggle: 'Show / Hide',
     mini: 'Mini player',
-    hybrid: 'Own interface',
     discord: 'Discord Rich Presence',
     discordOff: 'Discord Rich Presence (not configured)',
     quit: 'Quit',
@@ -21,7 +20,6 @@ const STRINGS = {
   de: {
     toggle: 'Anzeigen / Verbergen',
     mini: 'Miniplayer',
-    hybrid: 'Eigene Oberfläche',
     discord: 'Discord Rich Presence',
     discordOff: 'Discord Rich Presence (nicht eingerichtet)',
     quit: 'Beenden',
@@ -35,7 +33,6 @@ function rebuild() {
     Menu.buildFromTemplate([
       { label: T.toggle, click: actions.toggle },
       { label: T.mini, accelerator: 'CommandOrControl+M', click: actions.openMini },
-      { label: T.hybrid, type: 'checkbox', checked: actions.hybrid(), click: (item) => actions.setHybrid(item.checked) },
       { type: 'separator' },
       {
         label: player.discordAvailable ? T.discord : T.discordOff,

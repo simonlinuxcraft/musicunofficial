@@ -4,7 +4,8 @@ const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const store = require('./store');
 const player = require('./player');
-const mainWindow = require('./main-window');
+// The own interface, which the mini player stands in for.
+const front = require('./hybrid-window');
 const { APP_TITLE } = require('./pure');
 
 const ROOT = path.join(__dirname, '..');
@@ -12,8 +13,6 @@ const SIZE = { width: 344, height: 104 };
 
 let mini = null;
 let saveTimer = null;
-// The window the mini player stands in for: the YouTube Music window, or the hybrid UI.
-let front = mainWindow;
 
 const alive = () => !!mini && !mini.isDestroyed();
 
@@ -107,8 +106,5 @@ module.exports = {
   saveBounds,
   isOpen: alive,
   reload: () => alive() && mini.webContents.reload(),
-  setFront: (f) => {
-    front = f;
-  },
   webContents: () => (alive() ? mini.webContents : null),
 };

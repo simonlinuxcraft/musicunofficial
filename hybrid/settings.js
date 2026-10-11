@@ -103,7 +103,6 @@ function renderSettings(s) {
       checkbox('set-discord', s.richPresence, (v) => set('richPresence', v), !s.discordAvailable),
       s.discordAvailable ? '' : T.setDiscordOff
     ),
-    field(T.setHybrid, checkbox('set-hybrid', true, (v) => !v && set('hybrid', false)), T.setHybridHint),
     heading(T.setSleep),
     field(
       T.sleepLabel,

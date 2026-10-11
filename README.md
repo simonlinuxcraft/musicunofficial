@@ -4,7 +4,7 @@
 
 # MusicUnofficial
 
-**An unofficial desktop wrapper for the YouTube Music player on Linux.**
+**An unofficial desktop app for the YouTube Music player on Linux.**
 
 </div>
 
@@ -22,10 +22,11 @@
 > are referenced here only to describe what this application is for.
 >
 > The application does not host, store, distribute or modify any music or video
-> content. It loads the public YouTube Music website in a browser window, exactly
-> as any web browser would. Your account, your subscription and everything you
-> play remain entirely between you and YouTube. Advertising is displayed as
-> served, nothing is blocked or bypassed.
+> content. It loads the public YouTube Music website in a hidden browser window
+> and plays from there, exactly as any web browser would; its own interface
+> shows that page's content and drives its player. Your account, your
+> subscription and everything you play remain entirely between you and YouTube.
+> Advertising plays as served, nothing is blocked or bypassed.
 >
 > **For anything concerning your account, your subscription, billing or content
 > availability, contact YouTube support. This project cannot help with those and
@@ -43,24 +44,30 @@
 
 ## What it is
 
-A thin desktop shell around `music.youtube.com`. It exists so that music does not
-have to live in a browser tab: it gets its own window, its own icon, a tray
-entry, and it answers to the media keys on your keyboard like a native player.
+A desktop interface in front of `music.youtube.com`. The site plays in a hidden
+window; the app shows home, explore, your library, search, playlists, the queue
+and lyrics in a window of its own and drives the site's player. Sign-in,
+Premium, recommendations and the queue stay YouTube's, because everything goes
+through the site itself. `Open YouTube Music` in the header brings the site
+forward for signing in and for anything the interface does not cover.
 
 It deliberately does not try to be a music suite. There are no plugins, no
-themes, no downloader, no ad blocker and no telemetry. Fewer moving parts means
-fewer things that break when YouTube changes its site.
+themes, no downloader, no ad blocker and no telemetry. The interface relies on
+internals of the site, so a YouTube update can break a part of it until the app
+catches up.
 
 ## Features
 
 | | |
 |---|---|
-| Own window | Frameless, with window controls placed in the page's own navigation bar |
+| Own interface | Home, explore, library, search with suggestions, playlists, an editable queue and lyrics, in German or English |
+| Player bar | Seek, shuffle, repeat, like, volume and the song or video switch, all mirrored from the site's own bar |
 | Mini player | A small window with cover, title and playback controls, on top of other windows |
-| Media keys | Play, pause and skip work through MPRIS, including the GNOME media widget and the lock screen |
-| Discord | Rich Presence, on by default, switched off from the tray |
+| Media keys | Registered with MPRIS as MusicUnofficial, including the GNOME media widget and the lock screen |
+| Discord | Rich Presence, on by default, switched off in the settings or from the tray |
+| Extras | Sleep timer, a notification on a new track, Last.fm scrobbling with an API account of your own |
 | Tray | Closing the window keeps playback running; quit from the tray or with `Ctrl+Q` |
-| Remembers itself | Window size, position and maximised state are restored on the next start |
+| Remembers itself | Window size and maximised state are restored on the next start, the position too on X11 |
 | Stays signed in | The profile survives updates, so an update does not sign you out |
 | Runs anywhere | No `libfuse2` required, works on distributions that stopped shipping it |
 | Dependencies | Electron plus one small pure JavaScript D-Bus library for the media keys |
@@ -105,7 +112,8 @@ a second and reports only what changed, which costs about 0.2 % of one core.
 ## Discord Rich Presence
 
 On by default: what you are listening to appears on your Discord profile.
-Untick `Discord Rich Presence` in the tray menu to switch it off.
+Untick it in the settings or `Discord Rich Presence` in the tray menu to switch
+it off.
 
 It talks to Discord's local socket directly, with no third-party library and no
 network access. Only title, artist, album and cover art are sent, and only
@@ -124,7 +132,8 @@ quietly every 15 seconds until it gets through.
 |---|---|
 | `Ctrl` `Q` | Quit |
 | `Ctrl` `M` | Mini player |
-| `Ctrl` `R` | Reload the page |
+| `Ctrl` `R` | Reload the window |
+| `Space` | Play or pause, except while typing in the search field |
 | `Ctrl` `+` / `Ctrl` `-` | Zoom in and out |
 | `Ctrl` `0` | Reset zoom |
 

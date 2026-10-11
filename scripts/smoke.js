@@ -2,7 +2,7 @@
 
 // End-to-end check of a dev build: npm run smoke
 //
-// Starts the app in hybrid mode with a profile of its own under the temp
+// Starts the app with a profile of its own under the temp
 // directory, so the installed app and its sign-in stay untouched, and drives it
 // over the DevTools protocol and D-Bus: the UI loads, MPRIS registers, a track
 // plays (muted), MPRIS pauses it, the queue fills, and the app quits.
@@ -93,7 +93,7 @@ async function main() {
   const env = { ...process.env, XDG_CONFIG_HOME: PROFILE };
   delete env.ELECTRON_RUN_AS_NODE;
   const electron = require(path.join(ROOT, 'node_modules', 'electron'));
-  const app = spawn(electron, ['.', '--no-sandbox', '--ozone-platform-hint=auto', '--hybrid', '--remote-debugging-port=' + PORT], {
+  const app = spawn(electron, ['.', '--no-sandbox', '--ozone-platform-hint=auto', '--remote-debugging-port=' + PORT], {
     cwd: ROOT,
     env,
     stdio: 'ignore',
