@@ -33,8 +33,7 @@ app.commandLine.appendSwitch('enable-features', 'OverlayScrollbar,FluentOverlayS
 // Chromium's own MPRIS player, replaced by src/mpris.js.
 app.commandLine.appendSwitch('disable-features', 'HardwareMediaKeyHandling');
 
-// The own interface is the app; the YouTube Music window behind it only plays
-// and comes forward for sign-in, consent and whatever the interface lacks.
+// The own interface is the app; the YouTube Music page plays inside it.
 function showMain() {
   mini.close();
   hybrid.show();
@@ -57,11 +56,10 @@ function setLanguage(value) {
 app.on('second-instance', showMain);
 
 app.on('before-quit', () => {
-  mainWindow.saveBounds();
   hybrid.saveBounds();
   mini.saveBounds();
   player.stop();
-  // Main and hybrid window first, so the mini player's closed handler finds nothing to bring back.
+  // Player and hybrid window first, so the mini player's closed handler finds nothing to bring back.
   mainWindow.destroy();
   hybrid.destroy();
   mini.destroy();

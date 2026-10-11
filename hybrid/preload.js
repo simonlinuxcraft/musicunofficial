@@ -26,7 +26,7 @@ contextBridge.exposeInMainWorld('hybrid', {
   lastfmFinish: () => ipcRenderer.invoke('hybrid:lastfm-finish'),
   lastfmDisconnect: () => ipcRenderer.invoke('hybrid:lastfm-disconnect'),
   openLastfmAccount: () => ipcRenderer.send('hybrid:lastfm-account'),
-  showPlayer: () => ipcRenderer.send('hybrid:show-player'),
+  playerView: (kind, rect) => ipcRenderer.send('hybrid:player-view', kind, rect),
   onTrack: (cb) => ipcRenderer.on('track:update', (_e, track) => cb(track)),
   request: () => ipcRenderer.send('track:request'),
   command: (cmd, arg) => ipcRenderer.send('track:command', cmd, arg),

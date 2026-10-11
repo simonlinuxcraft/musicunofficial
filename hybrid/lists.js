@@ -126,6 +126,7 @@ async function show(next) {
   if (view) view.scroll = main.scrollTop;
   view = next;
   closeMenu();
+  setSlot(null);
   $('back').hidden = !stack.length;
   for (const b of document.querySelectorAll('nav button')) b.setAttribute('aria-current', String(b.dataset.browse === next.root));
   $('heading').textContent = next.title;
@@ -220,7 +221,7 @@ for (const b of document.querySelectorAll('nav button')) {
   b.addEventListener('click', () => root(b.dataset.browse, b.textContent, b.dataset.tabs));
 }
 $('back').addEventListener('click', () => stack.length && show(stack.pop()));
-$('open-player').addEventListener('click', api.showPlayer);
+$('open-player').addEventListener('click', () => setSlot(slot === 'page' ? null : 'page'));
 for (const action of ['mini', 'minimize', 'maximize', 'close']) {
   $('win-' + action).addEventListener('click', () => api.window(action));
 }

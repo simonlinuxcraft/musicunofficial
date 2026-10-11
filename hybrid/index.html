@@ -48,7 +48,7 @@
       header button, header input { -webkit-app-region: no-drag; }
       header button { padding: 7px 12px; border-radius: 18px; color: var(--dim); }
       header button:hover { color: var(--fg); background: var(--raise); }
-      header button[aria-current='true'] { color: var(--fg); background: var(--raise); }
+      header button[aria-current='true'], header button[aria-pressed='true'] { color: var(--fg); background: var(--raise); }
       #back { padding: 7px; }
       #search { position: relative; flex: 1 1 160px; max-width: 420px; margin-left: auto; -webkit-app-region: no-drag; }
       #search > svg { position: absolute; left: 12px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--dim); }
@@ -129,6 +129,8 @@
 
       #middle { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 0; }
       main { overflow-y: auto; padding: 28px 16px 24px; }
+      /* Under the player view, which main places over it. */
+      #stage { background: #000; }
       #inner { max-width: 960px; margin: 0 auto; }
       h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; margin: 0 8px 14px; }
       #actions { display: flex; gap: 8px; margin: 0 8px 18px; }
@@ -501,6 +503,7 @@
           <div id="more"></div>
         </div>
       </main>
+      <div id="stage" hidden></div>
       <aside id="queue" hidden>
         <div id="queue-head" role="tablist">
           <button id="tab-queue" role="tab" aria-selected="true" data-t="queue"></button>

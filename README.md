@@ -22,9 +22,9 @@
 > are referenced here only to describe what this application is for.
 >
 > The application does not host, store, distribute or modify any music or video
-> content. It loads the public YouTube Music website in a hidden browser window
-> and plays from there, exactly as any web browser would; its own interface
-> shows that page's content and drives its player. Your account, your
+> content. It loads the public YouTube Music website in a browser view inside its
+> window and plays from there, exactly as any web browser would; its own
+> interface shows that page's content and drives its player. Your account, your
 > subscription and everything you play remain entirely between you and YouTube.
 > Advertising plays as served, nothing is blocked or bypassed.
 >
@@ -44,12 +44,14 @@
 
 ## What it is
 
-A desktop interface in front of `music.youtube.com`. The site plays in a hidden
-window; the app shows home, explore, your library, search, playlists, the queue
-and lyrics in a window of its own and drives the site's player. Sign-in,
-Premium, recommendations and the queue stay YouTube's, because everything goes
-through the site itself. `Open YouTube Music` in the header brings the site
-forward for signing in and for anything the interface does not cover.
+A desktop interface in front of `music.youtube.com`. The site plays out of sight
+inside the app's window; the app shows home, explore, your library, search,
+playlists, the queue and lyrics and drives the site's player. Clicking the cover
+opens the now-playing view with the site's own player, the cover or the music
+video. Sign-in, Premium, recommendations and the queue stay YouTube's, because
+everything goes through the site itself. `Open YouTube Music` in the header shows
+the whole site in the same window, for signing in and for anything the interface
+does not cover.
 
 It deliberately does not try to be a music suite. There are no plugins, no
 themes, no downloader, no ad blocker and no telemetry. The interface relies on

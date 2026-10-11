@@ -92,7 +92,6 @@ function destroy() {
   if (alive()) mini.destroy();
 }
 
-ipcMain.on('mini:open', open);
 ipcMain.on('mini:restore', () => {
   front.show();
   close();

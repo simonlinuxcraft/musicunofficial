@@ -1,0 +1,24 @@
+/* The now-playing view of the own interface shows only the page's player, cover
+   or video as the page picks it. The player page's transform would otherwise
+   pin the fixed player inside it, below the nav bar. */
+ytmusic-player-page#player-page {
+  transform: none !important;
+  will-change: auto !important;
+  z-index: 2147483647 !important;
+}
+
+ytmusic-player#player {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  max-height: none !important;
+  margin: 0 !important;
+  background: #000 !important;
+}
+
+/* A square cover in a wide stage: whole, not cropped. */
+ytmusic-player#player #song-image img {
+  object-fit: contain !important;
+}

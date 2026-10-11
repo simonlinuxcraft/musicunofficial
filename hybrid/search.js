@@ -87,6 +87,8 @@ input.addEventListener('keydown', (e) => {
   }
 });
 input.addEventListener('focus', () => {
+  // The list drops into the slot, under the player view.
+  setSlot(null);
   if (options().length && input.value.trim()) {
     $('suggest').hidden = false;
     input.setAttribute('aria-expanded', 'true');

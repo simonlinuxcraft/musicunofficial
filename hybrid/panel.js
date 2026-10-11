@@ -121,8 +121,38 @@ function toggleQueue(open = $('queue').hidden) {
   if (open) showTab(panelTab);
 }
 
-$('art-btn').addEventListener('click', () => toggleQueue());
-$('title').addEventListener('click', () => toggleQueue());
+// The playing page itself, inside this window: its player as the stage of the
+// now-playing view, or the whole page for sign-in and what this UI lacks. Main
+// lays it over the slot, so whatever is drawn there here stays underneath.
+let slot = null;
+
+function placePlayer() {
+  const el = slot === 'stage' ? $('stage') : slot === 'page' ? $('middle') : null;
+  const r = el && el.getBoundingClientRect();
+  api.playerView(r ? slot : null, r && { x: r.x, y: r.y, width: r.width, height: r.height });
+}
+
+function setSlot(next) {
+  if (next === slot) return;
+  slot = next;
+  main.hidden = slot === 'stage';
+  $('stage').hidden = slot !== 'stage';
+  $('open-player').setAttribute('aria-pressed', String(slot === 'page'));
+  placePlayer();
+}
+
+// Like YouTube Music's player page: the player big, up next beside it.
+function toggleStage(open = slot !== 'stage') {
+  setSlot(open ? 'stage' : null);
+  toggleQueue(open);
+}
+
+const slotWatch = new ResizeObserver(placePlayer);
+slotWatch.observe($('stage'));
+slotWatch.observe($('middle'));
+
+$('art-btn').addEventListener('click', () => toggleStage());
+$('title').addEventListener('click', () => toggleStage());
 $('queue-toggle').addEventListener('click', () => toggleQueue());
 $('queue-close').addEventListener('click', () => toggleQueue(false));
 $('tab-queue').addEventListener('click', () => showTab('queue'));

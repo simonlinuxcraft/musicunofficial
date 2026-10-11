@@ -1,6 +1,6 @@
 'use strict';
 
-// Our own UI in front of the YouTube Music window, which stays hidden and only plays.
+// Our own UI. The YouTube Music page plays in a view inside this window (src/main-window.js).
 
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('path');
@@ -105,6 +105,7 @@ function create(opts) {
   // The page only reports the track while this window can show it.
   for (const ev of ['show', 'hide', 'minimize', 'restore']) win.on(ev, () => player.sync());
 
+  mainWindow.attach(win);
   playerWc = mainWindow.webContents();
   if (playerWc) playerWc.on('dom-ready', onPlayerLoad);
 
@@ -123,10 +124,8 @@ function show() {
   win.focus();
 }
 
-// The player window goes too, in case "Open YouTube Music" left it out.
 function hide() {
   if (alive()) win.hide();
-  mainWindow.hide();
 }
 
 function destroy() {
@@ -276,9 +275,13 @@ ipcMain.on('hybrid:window', (e, action) => {
   }
 });
 
-// Sign-in, consent and anything the UI does not cover yet happen in the real page.
-ipcMain.on('hybrid:show-player', (e) => {
-  if (fromUs(e)) mainWindow.show();
+// Where the page measured a slot for the player view, in CSS pixels of its own zoom.
+ipcMain.on('hybrid:player-view', (e, kind, r) => {
+  if (!fromUs(e)) return;
+  const ok = ['stage', 'page'].includes(kind) && r && ['x', 'y', 'width', 'height'].every((k) => Number.isFinite(r[k]));
+  const z = win.webContents.getZoomFactor();
+  const px = (v) => Math.max(0, Math.round(v * z));
+  mainWindow.place(ok ? kind : null, ok ? { x: px(r.x), y: px(r.y), width: px(r.width), height: px(r.height) } : null);
 });
 
 module.exports = {

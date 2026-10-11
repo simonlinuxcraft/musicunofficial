@@ -58,7 +58,7 @@ function status(text, withButton) {
   if (withButton) {
     const b = document.createElement('button');
     b.textContent = T.openPlayer;
-    b.addEventListener('click', api.showPlayer);
+    b.addEventListener('click', () => setSlot('page'));
     s.append(' ', b);
   }
 }
