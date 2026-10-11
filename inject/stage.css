@@ -18,6 +18,17 @@ ytmusic-player#player {
   background: #000 !important;
 }
 
+/* The interface brings its own up next and song/video switch. On a wide stage the
+   page would show its side panel over the player; the page's mini player button
+   would take the player off the stage. Hidden, not removed: the interface still
+   clicks the switch. */
+ytmusic-player-page #side-panel,
+ytmusic-player-page ytmusic-av-toggle,
+ytmusic-player .player-minimize-button,
+ytmusic-player .fullscreen-button {
+  visibility: hidden !important;
+}
+
 /* A square cover in a wide stage: whole, not cropped. */
 ytmusic-player#player #song-image img {
   object-fit: contain !important;
