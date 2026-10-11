@@ -49,9 +49,9 @@ inside the app's window; the app shows home, explore, your library, search,
 playlists, the queue and lyrics and drives the site's player. Clicking the cover
 opens the now-playing view with the site's own player, the cover or the music
 video. Sign-in, Premium, recommendations and the queue stay YouTube's, because
-everything goes through the site itself. `Open YouTube Music` in the header shows
-the whole site in the same window, for signing in and for anything the interface
-does not cover.
+everything goes through the site itself. Google's consent page and the sign-in
+open in the same window when they are needed; `Sign in` in the header is there
+while no account is signed in.
 
 It deliberately does not try to be a music suite. There are no plugins, no
 themes, no downloader, no ad blocker and no telemetry. The interface relies on

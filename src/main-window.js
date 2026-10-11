@@ -135,6 +135,10 @@ function create({ resume, openMini }) {
 // 'stage', 'page' or null for out of sight; bounds in the window's coordinates.
 function place(kind, bounds) {
   if (!live()) return;
+  // Left halfway through a consent or sign-in page: back to the site, which asks again if it must.
+  if (where === 'page' && !kind && new URL(view.webContents.getURL()).hostname !== 'music.youtube.com') {
+    view.webContents.loadURL(START_URL);
+  }
   where = kind;
   setStage(kind === 'stage');
   view.setBounds(kind ? bounds : OUT_OF_SIGHT);

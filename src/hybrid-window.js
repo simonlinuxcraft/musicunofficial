@@ -28,12 +28,22 @@ let playerWc = null;
 const alive = () => !!win && !win.isDestroyed();
 const fromUs = (e) => alive() && e.sender === win.webContents;
 
-// The player page finished loading YouTube Music itself, after a consent or
-// sign-in page for instance; a view that failed meanwhile can try again.
+// YouTube Music's own sign-in link, which comes back to its start page.
+const SIGN_IN =
+  'https://accounts.google.com/ServiceLogin?ltmpl=music&service=youtube&uilel=3&passive=true&continue=' +
+  encodeURIComponent('https://www.youtube.com/signin?action_handle_signin=true&app=desktop&next=https%3A%2F%2Fmusic.youtube.com%2F');
+
+// On a consent or sign-in page instead of YouTube Music: the UI shows it until the site is back.
+let playerAway = false;
+
+function onPlayerNavigate(e, url) {
+  playerAway = new URL(url).hostname !== 'music.youtube.com';
+  if (playerAway && alive()) win.webContents.send('hybrid:player-away');
+}
+
+// The player page finished loading YouTube Music itself; a view that failed meanwhile can try again.
 function onPlayerLoad() {
-  if (alive() && playerWc && new URL(playerWc.getURL()).hostname === 'music.youtube.com') {
-    win.webContents.send('hybrid:player-ready');
-  }
+  if (alive() && !playerAway) win.webContents.send('hybrid:player-ready');
 }
 
 // Size and maximised state survive a restart. Wayland ignores the position, X11 restores it.
@@ -100,6 +110,8 @@ function create(opts) {
   win.on('maximize', sendMax);
   win.on('unmaximize', sendMax);
   win.webContents.on('did-finish-load', sendMax);
+  // The page may have reached a consent page before this UI finished loading.
+  win.webContents.on('did-finish-load', () => playerAway && win.webContents.send('hybrid:player-away'));
   for (const ev of ['resize', 'move', 'maximize', 'unmaximize']) win.on(ev, scheduleSaveBounds);
 
   // The page only reports the track while this window can show it.
@@ -107,7 +119,10 @@ function create(opts) {
 
   mainWindow.attach(win);
   playerWc = mainWindow.webContents();
-  if (playerWc) playerWc.on('dom-ready', onPlayerLoad);
+  if (playerWc) {
+    playerWc.on('dom-ready', onPlayerLoad);
+    playerWc.on('did-navigate', onPlayerNavigate);
+  }
 
   // Without a tray, hiding would leave the app running with both windows invisible.
   win.on('close', (e) => {
@@ -129,7 +144,10 @@ function hide() {
 }
 
 function destroy() {
-  if (playerWc && !playerWc.isDestroyed()) playerWc.removeListener('dom-ready', onPlayerLoad);
+  if (playerWc && !playerWc.isDestroyed()) {
+    playerWc.removeListener('dom-ready', onPlayerLoad);
+    playerWc.removeListener('did-navigate', onPlayerNavigate);
+  }
   playerWc = null;
   if (alive()) win.destroy();
   win = null;
@@ -273,6 +291,17 @@ ipcMain.on('hybrid:window', (e, action) => {
     if (win.isMaximized()) win.unmaximize();
     else win.maximize();
   }
+});
+
+// null while the page cannot tell, so the UI shows no sign-in button by mistake.
+ipcMain.handle('hybrid:signed-in', async (e) => {
+  if (!fromUs(e) || playerAway) return null;
+  const v = await page.inPage("ytcfg.get('LOGGED_IN')");
+  return typeof v === 'boolean' ? v : null;
+});
+
+ipcMain.on('hybrid:sign-in', (e) => {
+  if (fromUs(e) && playerWc && !playerWc.isDestroyed()) playerWc.loadURL(SIGN_IN);
 });
 
 // Where the page measured a slot for the player view, in CSS pixels of its own zoom.

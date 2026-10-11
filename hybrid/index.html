@@ -48,7 +48,7 @@
       header button, header input { -webkit-app-region: no-drag; }
       header button { padding: 7px 12px; border-radius: 18px; color: var(--dim); }
       header button:hover { color: var(--fg); background: var(--raise); }
-      header button[aria-current='true'], header button[aria-pressed='true'] { color: var(--fg); background: var(--raise); }
+      header button[aria-current='true'] { color: var(--fg); background: var(--raise); }
       #back { padding: 7px; }
       #search { position: relative; flex: 1 1 160px; max-width: 420px; margin-left: auto; -webkit-app-region: no-drag; }
       #search > svg { position: absolute; left: 12px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--dim); }
@@ -83,7 +83,8 @@
       #suggest [role='option'] span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       #suggest [role='option'] b { color: var(--fg); font-weight: 600; }
       #suggest [role='option']:hover, #suggest [aria-selected='true'] { background: #2e2e2e; }
-      #open-player { white-space: nowrap; }
+      #sign-in { white-space: nowrap; color: #000; background: var(--fg); font-weight: 600; }
+      #sign-in:hover { color: #000; background: #d9d9d9; }
       #open-settings { display: grid; place-items: center; padding: 7px; border-radius: 50%; }
 
       /* Library and explore pages switch between their parts here. */
@@ -426,7 +427,7 @@
       }
 
       @media (max-width: 760px) {
-        #open-player, #time, #volume, #like, #dislike, #av { display: none; }
+        #time, #volume, #like, #dislike, #av { display: none; }
         #shuffle, #repeat { display: none; }
       }
       @media (prefers-reduced-motion: reduce) {
@@ -464,7 +465,7 @@
         </button>
         <div id="suggest" role="listbox" hidden></div>
       </form>
-      <button id="open-player" data-t="openPlayer" data-title="openPlayerTip"></button>
+      <button id="sign-in" data-t="signIn" hidden></button>
       <button id="open-settings" data-tip="settings">
         <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.48.48 0 0 0-.12-.61zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z" /></svg>
       </button>

@@ -161,7 +161,7 @@ async function show(next) {
     main.scrollTop = next.scroll || 0;
     return;
   }
-  status(page.items.length ? '' : T.empty, !page.items.length);
+  status(page.items.length ? '' : T.empty);
   // Play and shuffle only where the page is a list of its own (playlist, album), which the shuffle entry marks.
   const first = page.items.find((i) => i.watch);
   $('actions').hidden = !(page.shuffle && first);
@@ -221,14 +221,34 @@ for (const b of document.querySelectorAll('nav button')) {
   b.addEventListener('click', () => root(b.dataset.browse, b.textContent, b.dataset.tabs));
 }
 $('back').addEventListener('click', () => stack.length && show(stack.pop()));
-$('open-player').addEventListener('click', () => setSlot(slot === 'page' ? null : 'page'));
 for (const action of ['mini', 'minimize', 'maximize', 'close']) {
   $('win-' + action).addEventListener('click', () => api.window(action));
 }
 api.onMaximized((on) => document.documentElement.classList.toggle('maximized', !!on));
-// After a consent or sign-in page the player is back: a view that failed, or is
-// still waiting on the old page, loads again right away.
-api.onPlayerReady(() => view && !view.page && (view.failed || view.loading) && show(view));
+
+// Shown only while signed out; it goes once the page is back with an account.
+async function checkAccount() {
+  let signedIn = null;
+  try {
+    signedIn = await api.signedIn();
+  } catch {}
+  $('sign-in').hidden = signedIn !== false;
+}
+$('sign-in').addEventListener('click', api.signIn);
+checkAccount();
+
+// Consent and sign-in pages need the user, so the page shows itself for them.
+api.onPlayerAway(() => setSlot('page'));
+// Back from such a page, what was on screen loads again, now for the account.
+// A view that failed or still waits on the old page does so too.
+api.onPlayerReady(() => {
+  checkAccount();
+  const back = slot === 'page';
+  if (back) setSlot(null);
+  if (!view || !(back || (!view.page && (view.failed || view.loading)))) return;
+  view.page = null;
+  show(view);
+});
 
 // Long lists continue as they scroll into view, like on YouTube Music.
 

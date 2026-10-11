@@ -137,7 +137,6 @@ function setSlot(next) {
   slot = next;
   main.hidden = slot === 'stage';
   $('stage').hidden = slot !== 'stage';
-  $('open-player').setAttribute('aria-pressed', String(slot === 'page'));
   placePlayer();
 }
 

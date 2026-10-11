@@ -27,10 +27,13 @@ contextBridge.exposeInMainWorld('hybrid', {
   lastfmDisconnect: () => ipcRenderer.invoke('hybrid:lastfm-disconnect'),
   openLastfmAccount: () => ipcRenderer.send('hybrid:lastfm-account'),
   playerView: (kind, rect) => ipcRenderer.send('hybrid:player-view', kind, rect),
+  signedIn: () => ipcRenderer.invoke('hybrid:signed-in'),
+  signIn: () => ipcRenderer.send('hybrid:sign-in'),
   onTrack: (cb) => ipcRenderer.on('track:update', (_e, track) => cb(track)),
   request: () => ipcRenderer.send('track:request'),
   command: (cmd, arg) => ipcRenderer.send('track:command', cmd, arg),
   window: (action) => ipcRenderer.send('hybrid:window', action),
   onMaximized: (cb) => ipcRenderer.on('hybrid:maximized', (_e, value) => cb(value)),
   onPlayerReady: (cb) => ipcRenderer.on('hybrid:player-ready', () => cb()),
+  onPlayerAway: (cb) => ipcRenderer.on('hybrid:player-away', () => cb()),
 });
