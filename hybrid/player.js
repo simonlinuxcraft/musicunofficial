@@ -23,21 +23,25 @@ let scrubbing = false;
 
 const duration = () => (track && track.duration > 0 ? track.duration : 0);
 
-// Puts fill and knob at p (0..1) and, while playing, lets both run to the end on
-// their own. Restarted on every track update, which also absorbs any drift.
+function moveBar(p) {
+  $('fill').style.transform = $('glide').style.transform = 'translateX(' + (Math.min(1, Math.max(0, p)) - 1) * 100 + '%)';
+}
+
+// Puts fill and knob at p (0..1) and, while playing, moves both on one device
+// pixel at a time. A linear transition looks the same but draws a frame on every
+// refresh, a third of a core at 320 Hz. Restarted on every track update.
+let barTimer = 0;
 function placeBar(p, secondsLeft) {
-  const parts = [$('fill'), $('glide')];
-  for (const el of parts) {
-    el.style.transition = 'none';
-    el.style.transform = 'translateX(' + (Math.min(1, Math.max(0, p)) - 1) * 100 + '%)';
-  }
+  clearInterval(barTimer);
+  moveBar(p);
   if (!(secondsLeft > 0)) return;
-  // Commits the start position, or the browser merges both writes and skips the jump.
-  void parts[0].offsetWidth;
-  for (const el of parts) {
-    el.style.transition = 'transform ' + secondsLeft + 's linear';
-    el.style.transform = 'translateX(0%)';
-  }
+  const px = (1 - p) * $('seekbar').clientWidth * devicePixelRatio;
+  // 20 Hz at most: a short ad on a wide bar would otherwise tick at 100 Hz and more.
+  barTimer = setInterval(() => {
+    const q = positionNow() / duration();
+    moveBar(q);
+    if (!(q < 1)) clearInterval(barTimer);
+  }, Math.max(50, (secondsLeft * 1000) / px));
 }
 
 function syncBar() {
@@ -47,7 +51,7 @@ function syncBar() {
   placeBar(dur ? pos / dur : 0, dur && track.playing ? dur - pos : 0);
 }
 
-// Text and the range's own value only; the bar itself moves by transition.
+// Text and the range's own value only; the bar itself moves in placeBar.
 function drawProgress() {
   const seek = $('seek');
   const dur = duration();

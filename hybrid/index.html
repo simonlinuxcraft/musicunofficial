@@ -374,8 +374,7 @@
 
       /* Drawn by #rail/#fill/#glide, driven by an invisible native range on top:
          that one brings dragging and arrow-key steps of a second. The fill and the
-         knob run as one linear transition to the end of the track, so they glide
-         on the compositor instead of stepping with a timer. */
+         knob sit on a layer of their own, so each pixel step is composited, not repainted. */
       #seekbar { position: absolute; left: 0; right: 0; top: -7px; height: 14px; z-index: 2; }
       #rail { position: absolute; left: 0; right: 0; top: 6px; height: 2px; overflow: hidden; background: #3a3a3a; transition: top 120ms, height 120ms; }
       #fill, #glide { position: absolute; inset: 0; transform: translateX(-100%); will-change: transform; }
