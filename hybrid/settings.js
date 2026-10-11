@@ -1,0 +1,140 @@
+'use strict';
+
+// Settings, as a page of its own in the list area.
+
+function openSettings() {
+  stack.length = 0;
+  show({ root: 'settings', title: T.settings, load: () => api.settings(), render: renderSettings });
+}
+
+function heading(text) {
+  const h = document.createElement('h2');
+  h.textContent = text;
+  return h;
+}
+
+function field(label, control, note) {
+  const row = div('set-row');
+  const text = document.createElement('label');
+  text.textContent = label;
+  text.htmlFor = control.id;
+  if (note) text.append(div('note', note));
+  row.append(text, control);
+  return row;
+}
+
+function select(id, options, value, onChange) {
+  const s = document.createElement('select');
+  s.id = id;
+  for (const [v, label] of options) {
+    const o = document.createElement('option');
+    o.value = String(v);
+    o.textContent = label;
+    s.append(o);
+  }
+  s.value = String(value);
+  s.addEventListener('change', () => onChange(s.value));
+  return s;
+}
+
+function checkbox(id, checked, onChange, disabled) {
+  const c = document.createElement('input');
+  c.type = 'checkbox';
+  c.id = id;
+  c.checked = checked;
+  c.disabled = !!disabled;
+  c.addEventListener('change', () => onChange(c.checked));
+  return c;
+}
+
+function textInput(id, type, placeholder) {
+  const i = document.createElement('input');
+  i.type = type;
+  i.id = id;
+  i.placeholder = placeholder;
+  i.spellcheck = false;
+  i.autocomplete = 'off';
+  return i;
+}
+
+function button(label, onClick, primary) {
+  const b = document.createElement('button');
+  b.className = 'btn' + (primary ? ' primary' : '');
+  b.textContent = label;
+  b.addEventListener('click', onClick);
+  return b;
+}
+
+// Every change comes back as the full new state and the page is drawn from it.
+const set = (key, value) =>
+  api
+    .setting(key, value)
+    .then((s) => s && view && view.root === 'settings' && renderSettings(s))
+    .catch((e) => toast(errorText(e)));
+
+function lastfmStep(step, ...args) {
+  return step(...args)
+    .then((s) => s && renderSettings(s))
+    .catch((e) => toast(T.lastfmFailed + errorText(e)));
+}
+
+function sleepNote(s) {
+  if (s.sleep.mode === 'track') return T.sleepAfter;
+  if (s.sleep.mode === 'time') return T.sleepLeft.replace('{m}', Math.max(1, Math.round((s.sleep.endsAt - Date.now()) / 60000)));
+  return '';
+}
+
+function renderSettings(s) {
+  const box = div('settings');
+  const sleepChoices = [['off', T.sleepOff], ['track', T.sleepTrack], ...[15, 30, 45, 60, 90].map((m) => [m, m + T.sleepMinutes])];
+  box.append(
+    heading(T.setGeneral),
+    field(
+      T.setLanguage,
+      select('set-language', [['system', T.langSystem], ['de', 'Deutsch'], ['en', 'English']], s.language, (v) => {
+        // The window reloads in the new language and comes back to this page.
+        sessionStorage.setItem('reopen', 'settings');
+        set('language', v);
+      })
+    ),
+    field(T.setNotify, checkbox('set-notify', s.notify, (v) => set('notify', v)), T.setNotifyHint),
+    field(
+      T.setDiscord,
+      checkbox('set-discord', s.richPresence, (v) => set('richPresence', v), !s.discordAvailable),
+      s.discordAvailable ? '' : T.setDiscordOff
+    ),
+    heading(T.setSleep),
+    field(
+      T.sleepLabel,
+      select('set-sleep', sleepChoices, s.sleep.mode === 'time' ? s.sleep.minutes : s.sleep.mode, (v) =>
+        set('sleep', /^\d+$/.test(v) ? Number(v) : v)
+      ),
+      sleepNote(s)
+    ),
+    heading('Last.fm')
+  );
+  if (s.lastfm.connected) {
+    const row = div('actions');
+    row.append(div('', T.lastfmConnected + s.lastfm.name), button(T.lastfmDisconnect, () => lastfmStep(api.lastfmDisconnect)));
+    box.append(row);
+  } else if (s.lastfm.waiting) {
+    const row = div('actions');
+    row.append(button(T.lastfmFinish, () => lastfmStep(api.lastfmFinish), true));
+    box.append(div('note', T.lastfmWaiting), row);
+  } else {
+    const intro = div('note', T.lastfmIntro + ' ');
+    const create = document.createElement('span');
+    create.className = 'link';
+    create.textContent = T.lastfmCreate;
+    create.addEventListener('click', api.openLastfmAccount);
+    intro.append(create);
+    const key = textInput('lastfm-key', 'text', T.lastfmKey);
+    const secret = textInput('lastfm-secret', 'password', T.lastfmSecret);
+    const row = div('actions');
+    row.append(button(T.lastfmConnect, () => lastfmStep(api.lastfmConnect, key.value, secret.value), true));
+    box.append(intro, field(T.lastfmKey, key), field(T.lastfmSecret, secret), row);
+  }
+  $('list').replaceChildren(box);
+}
+
+$('open-settings').addEventListener('click', openSettings);

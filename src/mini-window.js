@@ -4,7 +4,8 @@ const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const store = require('./store');
 const player = require('./player');
-const mainWindow = require('./main-window');
+// The own interface, which the mini player stands in for.
+const front = require('./hybrid-window');
 const { APP_TITLE } = require('./pure');
 
 const ROOT = path.join(__dirname, '..');
@@ -68,7 +69,7 @@ function open() {
   mini.loadFile(path.join(ROOT, 'mini', 'index.html'));
   mini.once('ready-to-show', () => {
     mini.show();
-    mainWindow.hide();
+    front.hide();
   });
   player.sync();
 
@@ -79,7 +80,7 @@ function open() {
   mini.on('closed', () => {
     mini = null;
     player.sync();
-    mainWindow.show();
+    front.show();
   });
 }
 
@@ -91,9 +92,8 @@ function destroy() {
   if (alive()) mini.destroy();
 }
 
-ipcMain.on('mini:open', open);
 ipcMain.on('mini:restore', () => {
-  mainWindow.show();
+  front.show();
   close();
 });
 ipcMain.on('mini:quit', () => app.quit());
@@ -104,5 +104,6 @@ module.exports = {
   destroy,
   saveBounds,
   isOpen: alive,
+  reload: () => alive() && mini.webContents.reload(),
   webContents: () => (alive() ? mini.webContents : null),
 };

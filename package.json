@@ -10,8 +10,9 @@
   },
   "scripts": {
     "start": "electron .",
-    "dev": "unset ELECTRON_RUN_AS_NODE GIO_MODULE_DIR; electron . --no-sandbox --ozone-platform=x11",
+    "dev": "unset ELECTRON_RUN_AS_NODE GIO_MODULE_DIR; electron . --no-sandbox --ozone-platform-hint=auto",
     "test": "node --test",
+    "smoke": "node scripts/smoke.js",
     "build": "electron-builder --linux && node scripts/swap-runtime.js",
     "build-appimage": "electron-builder --linux AppImage && node scripts/swap-runtime.js",
     "build-deb": "electron-builder --linux deb",
@@ -47,6 +48,7 @@
       "preload.js",
       "src/**/*",
       "mini/**/*",
+      "hybrid/**/*",
       "inject/**/*",
       "icon.png",
       "icon-tray.png",
@@ -68,5 +70,8 @@
     "electron": "^41.7.1",
     "electron-builder": "^26.15.2"
   },
-  "desktopName": "musicunofficial.desktop"
+  "desktopName": "musicunofficial.desktop",
+  "dependencies": {
+    "@homebridge/dbus-native": "0.7.9"
+  }
 }

@@ -1,0 +1,603 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src https: data:;"
+    />
+    <title>Music</title>
+    <style>
+      :root {
+        --bg: #030303;
+        --raise: #181818;
+        --line: #232323;
+        --fg: #f1f1f1;
+        --dim: #9a9a9a;
+        --accent: #ff0033;
+        --font: 'Adwaita Sans', Cantarell, Inter, Ubuntu, system-ui, sans-serif;
+        /* Native parts (suggestion list, scrollbars, dialog) in dark too. */
+        color-scheme: dark;
+      }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        display: grid;
+        grid-template-rows: auto 1fr auto;
+        background: var(--bg);
+        color: var(--fg);
+        font: 14px/1.4 var(--font);
+        user-select: none;
+        overflow: hidden;
+      }
+      button, input { font: inherit; color: inherit; }
+      button { border: 0; background: none; cursor: pointer; }
+      :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+      svg { width: 20px; height: 20px; fill: currentColor; pointer-events: none; }
+      [hidden] { display: none !important; }
+
+      /* Frameless window: the header is the drag handle, everything clickable opts out. */
+      header {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        padding: 10px 8px 10px 16px;
+        border-bottom: 1px solid var(--line);
+        -webkit-app-region: drag;
+      }
+      header button, header input { -webkit-app-region: no-drag; }
+      header button { padding: 7px 12px; border-radius: 18px; color: var(--dim); }
+      header button:hover { color: var(--fg); background: var(--raise); }
+      header button[aria-current='true'] { color: var(--fg); background: var(--raise); }
+      #back { padding: 7px; }
+      #search { position: relative; flex: 1 1 160px; max-width: 420px; margin-left: auto; -webkit-app-region: no-drag; }
+      #search > svg { position: absolute; left: 12px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--dim); }
+      input[type='search'] {
+        width: 100%;
+        padding: 8px 36px 8px 38px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: var(--raise);
+        outline: none;
+      }
+      input[type='search']:focus { border-color: #4a4a4a; background: #1e1e1e; }
+      input[type='search']::-webkit-search-cancel-button { -webkit-appearance: none; display: none; }
+      #search-clear { position: absolute; right: 6px; top: 50%; display: grid; place-items: center; width: 26px; height: 26px; padding: 0; transform: translateY(-50%); border-radius: 50%; color: var(--dim); }
+      #search-clear:hover { background: #2c2c2c; color: var(--fg); }
+      #search-clear svg { width: 16px; height: 16px; }
+      /* Own list instead of the native datalist popup, which ignores the app's look. */
+      #suggest {
+        position: absolute;
+        top: calc(100% + 6px);
+        left: 0;
+        right: 0;
+        z-index: 40;
+        padding: 6px 0;
+        border: 1px solid #333;
+        border-radius: 12px;
+        background: #212121;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+      }
+      #suggest [role='option'] { display: flex; align-items: center; gap: 12px; padding: 8px 14px; cursor: pointer; color: var(--dim); }
+      #suggest [role='option'] svg { flex: 0 0 auto; width: 18px; height: 18px; }
+      #suggest [role='option'] span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #suggest [role='option'] b { color: var(--fg); font-weight: 600; }
+      #suggest [role='option']:hover, #suggest [aria-selected='true'] { background: #2e2e2e; }
+      #sign-in { white-space: nowrap; color: #000; background: var(--fg); font-weight: 600; }
+      #sign-in:hover { color: #000; background: #d9d9d9; }
+      #open-settings { display: grid; place-items: center; padding: 7px; border-radius: 50%; }
+
+      /* Library and explore pages switch between their parts here. */
+      #tabs { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 8px 20px; }
+      #tabs button { padding: 6px 14px; border-radius: 16px; background: var(--raise); color: var(--dim); }
+      #tabs button:hover { color: var(--fg); background: #262626; }
+      #tabs button[aria-selected='true'] { background: var(--fg); color: #000; }
+
+      .settings { max-width: 680px; margin: 0 8px; }
+      .settings h2 { font-size: 17px; font-weight: 700; margin: 26px 0 6px; }
+      .settings h2:first-child { margin-top: 4px; }
+      .set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+      .set-row label { flex: 1; cursor: pointer; }
+      .set-row .note, .settings .note { color: var(--dim); font-size: 13px; margin-top: 2px; }
+      .settings select, .settings input[type='text'], .settings input[type='password'] {
+        min-width: 220px;
+        padding: 7px 10px;
+        border: 1px solid #333;
+        border-radius: 8px;
+        background: var(--raise);
+        color: var(--fg);
+        font: inherit;
+      }
+      .settings input[type='checkbox'] { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+      .settings .btn { padding: 7px 16px; border-radius: 18px; background: var(--raise); }
+      .settings .btn:hover { background: #262626; }
+      .settings .btn.primary { background: var(--fg); color: #000; }
+      .settings .actions { display: flex; gap: 8px; align-items: center; padding: 12px 0; }
+      .settings .link { color: var(--fg); text-decoration: underline; }
+
+      #skip-ad { padding: 6px 14px; border-radius: 16px; background: rgba(255, 255, 255, 0.14); white-space: nowrap; }
+      #skip-ad:hover { background: rgba(255, 255, 255, 0.24); }
+      #av { display: flex; flex: 0 0 auto; margin: 0 4px; border: 1px solid #3a3a3a; border-radius: 14px; overflow: hidden; }
+      #av button { padding: 4px 10px; font-size: 12px; color: var(--dim); }
+      #av button[aria-pressed='true'] { background: var(--fg); color: #000; }
+      #winctl { display: flex; gap: 2px; margin-left: 8px; }
+      #winctl button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; }
+      #winctl svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.2; }
+      #winctl #win-mini svg .solid { fill: currentColor; stroke: none; }
+      #win-close:hover { background: #e81123; color: #fff; }
+      .when-max, html.maximized .when-normal { display: none; }
+      html.maximized .when-max { display: block; }
+
+      #middle { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 0; }
+      main { overflow-y: auto; padding: 28px 16px 24px; }
+      /* Under the player view, which main places over it. */
+      #stage { background: #000; }
+      #inner { max-width: 960px; margin: 0 auto; }
+      h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; margin: 0 8px 14px; }
+      #actions { display: flex; gap: 8px; margin: 0 8px 18px; }
+      #actions button {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px 8px 12px;
+        border-radius: 18px;
+        background: var(--raise);
+      }
+      #actions button:hover { background: #262626; }
+      #play-all { background: var(--fg) !important; color: #000; }
+      #status { color: var(--dim); margin: 0 8px 12px; max-width: 60ch; user-select: text; }
+      #status:empty { display: none; }
+      #status button { color: var(--fg); text-decoration: underline; }
+
+      section + section { margin-top: 26px; }
+      h2.shelf { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin: 0 8px 12px; }
+
+      .item {
+        display: grid;
+        grid-template-columns: 48px 1fr 32px 24px;
+        align-items: center;
+        gap: 14px;
+        width: 100%;
+        padding: 6px 8px;
+        border-radius: 8px;
+        cursor: pointer;
+        /* Rows far off screen skip layout and paint, which keeps long lists light to scroll. */
+        content-visibility: auto;
+        contain-intrinsic-size: auto 60px;
+      }
+      .item:hover, .item:focus-visible { background: var(--raise); }
+      .item.current .title, .tile.current .title { color: var(--accent); font-weight: 600; }
+      .thumb { display: block; width: 100%; height: 100%; border-radius: 4px; object-fit: cover; background: var(--raise); }
+      .cover { position: relative; width: 48px; height: 48px; }
+      .text { min-width: 0; }
+      .title, .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .sub { color: var(--dim); font-size: 13px; }
+      .link { cursor: pointer; }
+      .link:hover { color: var(--fg); text-decoration: underline; }
+      /* The trailing glyph says what a click does: play here, or open a list. */
+      .hint { color: var(--dim); opacity: 0; }
+      .item:hover .hint, .item:focus-visible .hint, .item.opens .hint { opacity: 1; }
+      .more { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--dim); opacity: 0; }
+      .item:hover .more, .item:focus-within .more, .tile:hover .more { opacity: 1; }
+      .more:hover { background: #2c2c2c; color: var(--fg); }
+      /* Play a playlist or album straight from its cover, without opening it. */
+      .cover-play {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.55);
+        color: #fff;
+        opacity: 0;
+        transition: opacity 120ms;
+      }
+      .item:hover .cover-play, .tile:hover .cover-play, .cover-play:focus-visible { opacity: 1; }
+
+      .tiles {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 168px;
+        gap: 16px;
+        overflow-x: auto;
+        padding: 2px 8px 12px;
+        scroll-snap-type: x proximity;
+      }
+      .tile { position: relative; min-width: 0; cursor: pointer; scroll-snap-align: start; border-radius: 8px; }
+      .tile .cover { width: 168px; height: 168px; }
+      .tile .thumb { border-radius: 6px; }
+      .tile .title { margin-top: 8px; font-weight: 500; }
+      .tile .sub { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+      .tile .cover-play svg { width: 44px; height: 44px; padding: 10px; border-radius: 50%; background: rgba(0, 0, 0, 0.6); box-sizing: content-box; }
+      .tile .more { position: absolute; top: 6px; right: 6px; background: rgba(0, 0, 0, 0.6); color: #fff; }
+
+      #menu {
+        position: fixed;
+        z-index: 50;
+        min-width: 230px;
+        padding: 6px 0;
+        border: 1px solid #333;
+        border-radius: 8px;
+        background: #212121;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+      }
+      #menu button { display: block; width: 100%; padding: 9px 16px; text-align: left; }
+      #menu button:hover, #menu button:focus-visible { background: #2e2e2e; outline: none; border-radius: 0; }
+
+      dialog {
+        margin: auto;
+        width: min(420px, 90vw);
+        max-height: 70vh;
+        padding: 20px 12px 12px;
+        border: 1px solid #333;
+        border-radius: 12px;
+        background: #1c1c1c;
+        color: var(--fg);
+      }
+      dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+      dialog h2 { font-size: 18px; margin: 0 8px 12px; }
+      #pl-status { color: var(--dim); margin: 0 8px 12px; }
+      #pl-status:empty { display: none; }
+      #pl-list { max-height: 50vh; overflow-y: auto; }
+      #pl-list button { display: block; width: 100%; padding: 9px 8px; border-radius: 6px; text-align: left; }
+      #pl-list button:hover { background: #2a2a2a; }
+      #pl-cancel { display: block; margin: 12px 8px 0 auto; padding: 7px 14px; border-radius: 18px; background: var(--raise); }
+
+      #toast {
+        position: fixed;
+        left: 50%;
+        bottom: 112px;
+        z-index: 60;
+        transform: translateX(-50%);
+        padding: 10px 16px;
+        border-radius: 8px;
+        background: #2a2a2a;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+        pointer-events: none;
+      }
+
+      /* Up next, beside the list; over it on narrow windows. */
+      #queue {
+        width: 380px;
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        border-left: 1px solid var(--line);
+        background: var(--bg);
+      }
+      #queue-head { display: flex; align-items: center; gap: 4px; padding: 14px 12px 10px 14px; }
+      #queue-head [role='tab'] { padding: 7px 12px; border-radius: 18px; color: var(--dim); font-weight: 600; }
+      #queue-head [role='tab']:hover { color: var(--fg); }
+      #queue-head [role='tab'][aria-selected='true'] { color: var(--fg); background: var(--raise); }
+      #queue-close { display: grid; place-items: center; width: 32px; height: 32px; margin-left: auto; border-radius: 50%; color: var(--dim); }
+      #queue-close:hover { background: var(--raise); color: var(--fg); }
+      #queue-pane { display: flex; flex-direction: column; min-height: 0; }
+      #queue-list { overflow-y: auto; padding: 0 8px 16px; }
+      #lyrics-pane { overflow-y: auto; padding: 6px 22px 28px; user-select: text; }
+      #lyrics { white-space: pre-line; font-size: 16px; line-height: 1.75; }
+      #lyrics-source { color: var(--dim); font-size: 12px; margin-top: 18px; }
+      #queue-empty { color: var(--dim); padding: 0 20px; }
+      .qrow {
+        display: grid;
+        grid-template-columns: 40px 1fr auto 28px;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 6px 12px 6px 8px;
+        border-radius: 8px;
+        text-align: left;
+      }
+      .qrow:hover, .qrow:focus-visible { background: var(--raise); }
+      .qrow { cursor: pointer; }
+      .qrow .drop { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--dim); opacity: 0; }
+      .qrow:hover .drop, .qrow:focus-within .drop { opacity: 1; }
+      .qrow .drop:hover { background: #2c2c2c; color: var(--fg); }
+      .qrow .drop svg { width: 16px; height: 16px; }
+      .qrow.dragging { opacity: 0.4; }
+      .qrow.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+      .qrow.drop-after { box-shadow: inset 0 -2px 0 var(--accent); }
+      .qrow .cover { width: 40px; height: 40px; }
+      .qrow .len { color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; }
+      .qrow[aria-current='true'] { background: var(--raise); }
+      .qrow[aria-current='true'] .title { color: var(--accent); font-weight: 600; }
+      @media (max-width: 760px) {
+        #queue { position: absolute; inset: 0; width: auto; border-left: 0; }
+      }
+
+      /* Registered so the tint can fade between tracks; a plain custom property would snap. */
+      @property --cover {
+        syntax: '<color>';
+        inherits: false;
+        initial-value: #0b0b0b;
+      }
+      /* The one loud thing: the cover's own colour runs out of it into the bar. */
+      footer {
+        --cover: #0b0b0b;
+        position: relative;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+        align-items: center;
+        gap: 16px;
+        padding: 14px 16px;
+        border-top: 1px solid var(--line);
+        background:
+          linear-gradient(
+            90deg,
+            color-mix(in srgb, var(--cover) 42%, transparent),
+            color-mix(in srgb, var(--cover) 12%, transparent) 40%,
+            transparent 72%
+          ),
+          #0b0b0b;
+        transition: --cover 600ms;
+      }
+      #left { display: flex; align-items: center; gap: 4px; min-width: 0; }
+      #now { display: flex; align-items: center; gap: 12px; min-width: 0; padding-right: 8px; }
+      #art-btn { flex: 0 0 auto; padding: 0; border-radius: 4px; }
+      #art-btn:hover #art { filter: brightness(1.15); }
+      #title { cursor: pointer; }
+      #art {
+        flex: 0 0 auto;
+        width: 56px;
+        height: 56px;
+        border-radius: 4px;
+        background: var(--raise) center / cover no-repeat;
+      }
+      #meta { min-width: 0; }
+      #title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      /* A notch lighter than --dim: it sits on the strongest part of the tint. */
+      #artist { color: #b0b0b0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      body:not(.has-track) #title { color: var(--dim); font-weight: 400; }
+
+      .icon-btn { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; color: var(--dim); flex: 0 0 auto; }
+      .icon-btn:hover { background: rgba(255, 255, 255, 0.1); color: var(--fg); }
+      .icon-btn[aria-pressed='true'] { color: var(--accent); }
+      /* Thumbs as in YouTube Music: outlined until rated, filled once rated. */
+      .icon-btn .on, .icon-btn[aria-pressed='true'] .off { display: none; }
+      .icon-btn[aria-pressed='true'] .on { display: block; }
+      #controls { display: flex; align-items: center; gap: 6px; }
+      #controls .main { color: var(--fg); }
+      #playpause { width: 46px; height: 46px; background: var(--fg) !important; color: #000 !important; }
+      #playpause svg { width: 24px; height: 24px; }
+      body:not(.has-track) #controls button,
+      body:not(.has-track) #like,
+      body:not(.has-track) #dislike,
+      body.ad #like,
+      body.ad #dislike { opacity: 0.35; pointer-events: none; }
+      .when-paused, body.playing .when-playing { display: block; }
+      .when-playing, body.playing .when-paused { display: none; }
+      .when-muted, .muted .when-muted ~ .when-loud { display: none; }
+      .muted .when-muted { display: block; }
+
+      #right { display: flex; align-items: center; justify-content: flex-end; gap: 4px; min-width: 0; }
+      #time { color: var(--dim); font-size: 13px; font-variant-numeric: tabular-nums; margin-right: 8px; white-space: nowrap; }
+      #volume { width: 96px; accent-color: var(--fg); cursor: pointer; }
+
+      /* Drawn by #rail/#fill/#glide, driven by an invisible native range on top:
+         that one brings dragging and arrow-key steps of a second. The fill and the
+         knob sit on a layer of their own, so each pixel step is composited, not repainted. */
+      #seekbar { position: absolute; left: 0; right: 0; top: -7px; height: 14px; z-index: 2; }
+      #rail { position: absolute; left: 0; right: 0; top: 6px; height: 2px; overflow: hidden; background: #3a3a3a; transition: top 120ms, height 120ms; }
+      #fill, #glide { position: absolute; inset: 0; transform: translateX(-100%); will-change: transform; }
+      #fill { background: var(--accent); }
+      #glide { pointer-events: none; }
+      #glide::after {
+        content: '';
+        position: absolute;
+        right: -6px;
+        top: 1px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--accent);
+        transform: scale(0);
+        transition: transform 120ms;
+      }
+      #seekbar:hover #rail, #seekbar.scrubbing #rail { top: 5px; height: 4px; }
+      #seekbar:hover #glide::after, #seekbar.scrubbing #glide::after, #seekbar:has(#seek:focus-visible) #glide::after { transform: scale(1); }
+      #seek {
+        -webkit-appearance: none;
+        appearance: none;
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        background: transparent;
+        cursor: pointer;
+      }
+      #seek:focus-visible { outline: none; }
+      #seek::-webkit-slider-runnable-track { height: 100%; background: transparent; }
+      /* 1 px wide, so a click lands where it points and not half a knob off. */
+      #seek::-webkit-slider-thumb { -webkit-appearance: none; width: 1px; height: 100%; background: transparent; }
+      #seek:disabled { pointer-events: none; }
+      #seek-tip {
+        position: absolute;
+        bottom: 16px;
+        left: 0;
+        transform: translateX(-50%);
+        padding: 3px 7px;
+        border-radius: 4px;
+        background: #2a2a2a;
+        color: var(--fg);
+        font-size: 12px;
+        font-variant-numeric: tabular-nums;
+        pointer-events: none;
+        white-space: nowrap;
+      }
+
+      @media (max-width: 760px) {
+        #time, #volume, #like, #dislike, #av { display: none; }
+        #shuffle, #repeat { display: none; }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        footer { transition: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <button id="back" data-tip="back" hidden>
+        <svg viewBox="0 0 24 24"><path d="M15.4 7.4 14 6l-6 6 6 6 1.4-1.4L10.8 12z" /></svg>
+      </button>
+      <nav>
+        <button data-browse="FEmusic_home" data-t="home"></button>
+        <button data-browse="FEmusic_explore" data-tabs="explore" data-t="explore"></button>
+        <button data-browse="FEmusic_liked_playlists" data-tabs="library" data-t="library"></button>
+        <button data-browse="VLLM" data-t="liked"></button>
+      </nav>
+      <form id="search" role="search">
+        <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" /></svg>
+        <input
+          type="search"
+          maxlength="200"
+          autocomplete="off"
+          spellcheck="false"
+          role="combobox"
+          aria-autocomplete="list"
+          aria-controls="suggest"
+          aria-expanded="false"
+          data-ph="search"
+          data-aria="search"
+        />
+        <button id="search-clear" type="button" data-tip="clear" hidden>
+          <svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
+        </button>
+        <div id="suggest" role="listbox" hidden></div>
+      </form>
+      <button id="sign-in" data-t="signIn" hidden></button>
+      <button id="open-settings" data-tip="settings">
+        <svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 0 0 .12-.61l-1.92-3.32a.49.49 0 0 0-.59-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.48.48 0 0 0-.48-.41h-3.84a.48.48 0 0 0-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96a.48.48 0 0 0-.59.22L2.74 8.87a.48.48 0 0 0 .12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58a.49.49 0 0 0-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32a.48.48 0 0 0-.12-.61zM12 15.6A3.6 3.6 0 1 1 12 8.4a3.6 3.6 0 0 1 0 7.2z" /></svg>
+      </button>
+      <div id="winctl">
+        <button id="win-mini" data-tip="mini">
+          <svg viewBox="0 0 10 10"><rect x="0.6" y="0.6" width="8.8" height="8.8" /><rect class="solid" x="4.2" y="4.8" width="5.2" height="4.6" /></svg>
+        </button>
+        <button id="win-minimize" data-tip="minimize">
+          <svg viewBox="0 0 10 10"><path d="M0 5h10" /></svg>
+        </button>
+        <button id="win-maximize" data-tip="maximize">
+          <svg class="when-normal" viewBox="0 0 10 10"><rect x="0.6" y="0.6" width="8.8" height="8.8" /></svg>
+          <svg class="when-max" viewBox="0 0 10 10"><rect x="0.6" y="2.6" width="6.8" height="6.8" /><path d="M2.6 2.6V0.6h6.8v6.8h-2" /></svg>
+        </button>
+        <button id="win-close" data-tip="close">
+          <svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" /></svg>
+        </button>
+      </div>
+    </header>
+
+    <div id="middle">
+      <main>
+        <div id="inner">
+          <h1 id="heading"></h1>
+          <div id="tabs" role="tablist" hidden></div>
+          <div id="actions" hidden>
+            <button id="play-all">
+              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg><span data-t="playAll"></span>
+            </button>
+            <button id="shuffle-all">
+              <svg viewBox="0 0 24 24"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04z" /></svg><span data-t="shuffle"></span>
+            </button>
+          </div>
+          <p id="status"></p>
+          <div id="list"></div>
+          <div id="more"></div>
+        </div>
+      </main>
+      <div id="stage" hidden></div>
+      <aside id="queue" hidden>
+        <div id="queue-head" role="tablist">
+          <button id="tab-queue" role="tab" aria-selected="true" data-t="queue"></button>
+          <button id="tab-lyrics" role="tab" aria-selected="false" data-t="lyrics"></button>
+          <button id="queue-close" data-tip="closeQueue">
+            <svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
+          </button>
+        </div>
+        <div id="queue-pane" role="tabpanel">
+          <p id="queue-empty" data-t="queueEmpty" hidden></p>
+          <div id="queue-list"></div>
+        </div>
+        <div id="lyrics-pane" role="tabpanel" hidden>
+          <div id="lyrics"></div>
+          <div id="lyrics-source"></div>
+        </div>
+      </aside>
+      <div id="menu" role="menu" hidden></div>
+      <div id="toast" role="status" hidden></div>
+      <dialog id="pl-dialog">
+        <h2 data-t="addPlaylist"></h2>
+        <p id="pl-status"></p>
+        <div id="pl-list"></div>
+        <button id="pl-cancel" data-t="cancel"></button>
+      </dialog>
+    </div>
+
+    <footer>
+      <div id="seekbar">
+        <div id="rail"><div id="fill"></div></div>
+        <div id="glide"></div>
+        <input id="seek" type="range" min="0" max="1" step="1" value="0" data-aria="seek" disabled />
+        <div id="seek-tip" hidden></div>
+      </div>
+      <div id="left">
+        <div id="now">
+          <button id="art-btn" data-tip="nowTip"><div id="art"></div></button>
+          <div id="meta">
+            <div id="title" data-title="nowTip"></div>
+            <div id="artist"></div>
+          </div>
+        </div>
+        <button id="dislike" class="icon-btn" data-tip="dislike" aria-pressed="false">
+          <svg class="off" viewBox="0 0 24 24"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.58-6.59c.37-.36.59-.86.59-1.41V5c0-1.1-.9-2-2-2zm0 12-4.34 4.34L11.77 14H3v-2l3-7h9zm4-12h4v12h-4z" /></svg>
+          <svg class="on" viewBox="0 0 24 24"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3z" /></svg>
+        </button>
+        <button id="skip-ad" data-t="skipAd" hidden></button>
+        <div id="av" role="group" data-title="avTip" hidden>
+          <button id="av-song" data-t="avSong" aria-pressed="true"></button>
+          <button id="av-video" data-t="avVideo" aria-pressed="false"></button>
+        </div>
+        <button id="like" class="icon-btn" data-tip="like" aria-pressed="false">
+          <svg class="off" viewBox="0 0 24 24"><path d="M21 8h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2c0-1.1-.9-2-2-2zm0 4-3 7H9V9l4.34-4.34L12.23 10H21zM1 9h4v12H1z" /></svg>
+          <svg class="on" viewBox="0 0 24 24"><path d="M1 21h4V9H1zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73z" /></svg>
+        </button>
+      </div>
+      <div id="controls">
+        <button id="shuffle" class="icon-btn" data-tip="shuffle" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04z" /></svg>
+        </button>
+        <button id="previous" class="icon-btn main" data-tip="previous">
+          <svg viewBox="0 0 24 24"><path d="M6 6h2v12H6zm3.5 6 8.5 6V6z" /></svg>
+        </button>
+        <button id="playpause" class="icon-btn" data-tip="playpause">
+          <svg class="when-paused" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+          <svg class="when-playing" viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z" /></svg>
+        </button>
+        <button id="next" class="icon-btn main" data-tip="next">
+          <svg viewBox="0 0 24 24"><path d="M16 6h2v12h-2zM6 18l8.5-6L6 6z" /></svg>
+        </button>
+        <button id="repeat" class="icon-btn" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M7 7h10v3l4-4-4-4v3H5v6h2zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2z" /></svg>
+        </button>
+      </div>
+      <div id="right">
+        <span id="time"></span>
+        <button id="mute" class="icon-btn" data-tip="mute">
+          <svg class="when-muted" viewBox="0 0 24 24"><path d="M16.5 12c0-1.77-1.02-3.29-2.5-4.03v2.21l2.45 2.45c.03-.2.05-.41.05-.63zm2.5 0c0 .94-.2 1.82-.54 2.64l1.51 1.51C20.63 14.91 21 13.5 21 12c0-4.28-2.99-7.86-7-8.77v2.06c2.89.86 5 3.54 5 6.71zM4.27 3 3 4.27 7.73 9H3v6h4l5 5v-6.73l4.25 4.25c-.67.52-1.42.93-2.25 1.18v2.06c1.38-.31 2.63-.95 3.69-1.81L19.73 21 21 19.73l-9-9zM12 4 9.91 6.09 12 8.18z" /></svg>
+          <svg class="when-loud" viewBox="0 0 24 24"><path d="M3 9v6h4l5 5V4L7 9zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" /></svg>
+        </button>
+        <input id="volume" type="range" min="0" max="100" value="100" data-tip="volume" />
+        <button id="queue-toggle" class="icon-btn" data-tip="queue" aria-pressed="false">
+          <svg viewBox="0 0 24 24"><path d="M3 6h12v2H3zm0 4h12v2H3zm0 4h8v2H3zm14-4v8l6-4z" /></svg>
+        </button>
+      </div>
+    </footer>
+    <!-- Classic scripts sharing one global scope, in dependency order; app.js wires them up last. -->
+    <script src="base.js"></script>
+    <script src="strings.js"></script>
+    <script src="lists.js"></script>
+    <script src="search.js"></script>
+    <script src="player.js"></script>
+    <script src="panel.js"></script>
+    <script src="settings.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>

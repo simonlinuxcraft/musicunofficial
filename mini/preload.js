@@ -6,9 +6,10 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('mini', {
-  onTrack: (cb) => ipcRenderer.on('mini:track', (_e, track) => cb(track)),
-  request: () => ipcRenderer.send('mini:request'),
-  command: (cmd) => ipcRenderer.send('mini:command', cmd),
+  onTrack: (cb) => ipcRenderer.on('track:update', (_e, track) => cb(track)),
+  request: () => ipcRenderer.send('track:request'),
+  command: (cmd) => ipcRenderer.send('track:command', cmd),
   restore: () => ipcRenderer.send('mini:restore'),
   quit: () => ipcRenderer.send('mini:quit'),
+  language: ipcRenderer.sendSync('ui:language'),
 });

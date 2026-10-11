@@ -1,51 +1,34 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+// The YouTube Music page that plays. A view inside the own interface's window:
+// out of sight, as the stage of the now-playing view (only its player, cover or
+// video), or whole for sign-in and whatever the interface lacks.
+
+const { app, WebContentsView, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
-const store = require('./store');
 const player = require('./player');
-const { APP_TITLE, isInternal, keyAction } = require('./pure');
+const { isInternal, keyAction } = require('./pure');
 
 const ROOT = path.join(__dirname, '..');
 const START_URL = 'https://music.youtube.com/';
-const DEFAULT_BOUNDS = { width: 1280, height: 860 };
-// YouTube Music's own page background, so the window does not flash while it loads.
+// YouTube Music's own page background, so the view does not flash while it loads.
 const DARK = '#030303';
+// One pixel in the window corner, where page and UI are the same #030303. At
+// 0x0 the page counts as hidden, and Chromium pauses a muted video in a hidden page.
+const OUT_OF_SIGHT = { x: 0, y: 0, width: 1, height: 1 };
 const inject = (name) => fs.readFileSync(path.join(ROOT, 'inject', name), 'utf8');
 const CSS = inject('style.css');
-const CONTROLS = inject('controls.js');
+const STAGE_CSS = inject('stage.css');
 const NOWPLAYING = inject('nowplaying.js');
 const RESUME = inject('resume.js');
 
-let win = null;
-let lastBounds = null;
-let saveTimer = null;
+let view = null;
+let where = null;
+// The key of the inserted stage CSS, as a promise; null while not inserted.
+let stageCss = null;
 
-const alive = () => !!win && !win.isDestroyed();
-
-function loadBounds() {
-  const s = store.read('window-state.json');
-  if (s && Number.isInteger(s.width) && Number.isInteger(s.height)) return s;
-  return { ...DEFAULT_BOUNDS };
-}
-
-// Sampled only while mapped: isMaximized() reads false on a hidden window. The
-// last good sample still gets written when quitting from the tray.
-function saveBounds() {
-  clearTimeout(saveTimer);
-  if (!alive()) return;
-  if (win.isVisible() && !win.isMinimized()) {
-    lastBounds = { ...win.getNormalBounds(), maximized: win.isMaximized() };
-  }
-  if (lastBounds) store.write('window-state.json', lastBounds);
-}
-
-// resize and move fire continuously while dragging, and the write is synchronous.
-function scheduleSaveBounds() {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(saveBounds, 400);
-}
+const live = () => (view && !view.webContents.isDestroyed() ? view.webContents : null);
 
 // Ids are validated by sanitizeResume; encoded anyway so a format change cannot add parameters.
 function watchUrl(r) {
@@ -55,19 +38,16 @@ function watchUrl(r) {
 }
 
 // Through mainFrame: webContents.executeJavaScript holds the code back until the
-// page has finished loading, which left the window without controls for 10 s.
+// page has finished loading.
 function injectAll(wc, resume) {
   const log = (what) => (e) => console.log('[inject] ' + what + ': ' + e.message);
   const run = (code) => wc.mainFrame.executeJavaScript(code);
   wc.insertCSS(CSS).catch(log('css'));
-  run(CONTROLS)
-    .then(() => alive() && wc.send('window:maximized', win.isMaximized()))
-    .catch(log('controls'));
   run(NOWPLAYING).then(player.sync).catch(log('nowplaying'));
   if (resume) {
     run(RESUME.replaceAll('__RESUME_DATA__', () => JSON.stringify(resume)))
       .catch(log('resume'))
-      .finally(() => alive() && wc.setAudioMuted(false));
+      .finally(() => !wc.isDestroyed() && wc.setAudioMuted(false));
   }
 }
 
@@ -75,7 +55,7 @@ function onKey(e, input, openMini) {
   const action = keyAction(input);
   if (!action) return;
   e.preventDefault();
-  const wc = win.webContents;
+  const wc = view.webContents;
   if (action === 'quit') app.quit();
   else if (action === 'reload') wc.reload();
   else if (action === 'mini') openMini();
@@ -84,42 +64,36 @@ function onKey(e, input, openMini) {
   else if (action === 'zoom-reset') wc.setZoomLevel(0);
 }
 
-function create({ resume, openMini, canHide }) {
-  const s = loadBounds();
-  win = new BrowserWindow({
-    x: s.x,
-    y: s.y,
-    width: s.width,
-    height: s.height,
-    minWidth: 480,
-    minHeight: 400,
-    backgroundColor: DARK,
-    show: false,
-    // Controls are injected into the page (inject/controls.js); titleBarOverlay looked like a pasted-on black box.
-    frame: false,
-    title: APP_TITLE,
-    icon: path.join(ROOT, 'icon.png'),
-    webPreferences: {
-      preload: path.join(ROOT, 'preload.js'),
-    },
-  });
-  const wc = win.webContents;
+// The player sizes its video on resize only, and a stylesheet alone fires none.
+function setStage(on) {
+  const wc = live();
+  if (!wc || on === !!stageCss) return;
+  let done;
+  if (on) done = stageCss = wc.insertCSS(STAGE_CSS).catch(() => null);
+  else {
+    done = stageCss.then((key) => key && !wc.isDestroyed() && wc.removeInsertedCSS(key));
+    stageCss = null;
+  }
+  done
+    .then(() => !wc.isDestroyed() && wc.mainFrame.executeJavaScript("dispatchEvent(new Event('resize'))"))
+    .catch(() => {});
+}
 
-  if (s.maximized) win.maximize();
-  // At once, not on ready-to-show, which waits for YouTube's first paint.
-  win.show();
-  win.setMenuBarVisibility(false);
-
-  // The page retitles itself on every navigation, which would churn the task bar.
-  win.on('page-title-updated', (e) => e.preventDefault());
+function create({ resume, openMini }) {
+  // Keeps the page visible while the window sits in the tray, for the same reason.
+  // Measured: 2.3 % CPU playing in the tray.
+  view = new WebContentsView({ webPreferences: { preload: path.join(ROOT, 'preload.js'), backgroundThrottling: false } });
+  view.setBackgroundColor(DARK);
+  view.setBounds(OUT_OF_SIGHT);
+  const wc = view.webContents;
 
   // Muted until resume.js settles, so an ad or autoplay cannot blast sound first.
   // The watch URL pins the exact track by id.
   if (resume) {
     wc.setAudioMuted(true);
-    win.loadURL(watchUrl(resume));
+    wc.loadURL(watchUrl(resume));
   } else {
-    win.loadURL(START_URL);
+    wc.loadURL(START_URL);
   }
 
   // dom-ready, not did-finish-load: lands the CSS before Polymer builds the nav bar, so the stock logo never flashes.
@@ -127,6 +101,7 @@ function create({ resume, openMini, canHide }) {
     injectAll(wc, resume);
     // Once only: an SPA navigation fires dom-ready again.
     resume = null;
+    if (where === 'stage') setStage(true);
   });
 
   // A reload drops the injected poller together with its last track.
@@ -136,8 +111,10 @@ function create({ resume, openMini, canHide }) {
   wc.on('did-stop-loading', player.sync);
 
   // Google's consent page sets no background of its own and would show dark text on DARK.
+  // A new document also starts without the stage CSS.
   wc.on('did-navigate', (e, url) => {
-    win.setBackgroundColor(new URL(url).hostname === 'music.youtube.com' ? DARK : '#ffffff');
+    stageCss = null;
+    view.setBackgroundColor(new URL(url).hostname === 'music.youtube.com' ? DARK : '#ffffff');
   });
 
   wc.setWindowOpenHandler(({ url }) => {
@@ -153,53 +130,32 @@ function create({ resume, openMini, canHide }) {
   });
 
   wc.on('before-input-event', (e, input) => onKey(e, input, openMini));
-
-  // A created Tray does not prove the desktop draws it (GNOME dropped GtkStatusIcon),
-  // so without one closing really closes and Ctrl+Q stays the way out.
-  win.on('close', (e) => {
-    saveBounds();
-    if (canHide()) {
-      e.preventDefault();
-      win.hide();
-    }
-  });
-
-  const sendMaxState = () => alive() && wc.send('window:maximized', win.isMaximized());
-  win.on('maximize', sendMaxState);
-  win.on('unmaximize', sendMaxState);
-  win.on('resize', scheduleSaveBounds);
-  win.on('move', scheduleSaveBounds);
 }
 
-function show() {
-  if (!alive()) return;
-  win.show();
-  win.focus();
+// 'stage', 'page' or null for out of sight; bounds in the window's coordinates.
+function place(kind, bounds) {
+  if (!live()) return;
+  // Left halfway through a consent or sign-in page: back to the site, which asks again if it must.
+  if (where === 'page' && !kind && new URL(view.webContents.getURL()).hostname !== 'music.youtube.com') {
+    view.webContents.loadURL(START_URL);
+  }
+  where = kind;
+  setStage(kind === 'stage');
+  view.setBounds(kind ? bounds : OUT_OF_SIGHT);
+  if (kind === 'page') view.webContents.focus();
 }
 
-function hide() {
-  if (alive()) win.hide();
-}
-
-// The page's beforeunload handler vetoes close() during playback; destroy() cannot be vetoed.
+// The page's beforeunload handler would veto a close that waits for it.
 function destroy() {
-  if (alive()) win.destroy();
+  const wc = live();
+  if (wc) wc.close();
 }
-
-ipcMain.on('window:minimize', () => alive() && win.minimize());
-ipcMain.on('window:toggle-maximize', () => {
-  if (!alive()) return;
-  if (win.isMaximized()) win.unmaximize();
-  else win.maximize();
-});
-ipcMain.on('window:close', () => alive() && win.close());
 
 module.exports = {
   create,
-  show,
-  hide,
+  attach: (win) => view && win.contentView.addChildView(view),
+  place,
   destroy,
-  saveBounds,
-  isShown: () => alive() && win.isVisible() && !win.isMinimized(),
-  webContents: () => (alive() ? win.webContents : null),
+  isFocused: () => !!live() && live().isFocused(),
+  webContents: live,
 };

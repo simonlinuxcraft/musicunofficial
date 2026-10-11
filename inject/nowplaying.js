@@ -43,6 +43,40 @@
     };
   }
 
+  // Lets the hybrid UI mark the playing row in its lists.
+  function videoId() {
+    const p = document.getElementById('movie_player');
+    try {
+      const id = p && typeof p.getVideoData === 'function' && p.getVideoData().video_id;
+      return typeof id === 'string' ? id : '';
+    } catch {
+      return '';
+    }
+  }
+
+  function likeStatus() {
+    const el = document.querySelector('ytmusic-player-bar #like-button-renderer');
+    return el ? el.getAttribute('like-status') : null;
+  }
+
+  // The player bar's own state, so the hybrid UI and MPRIS show what the page does.
+  function controls() {
+    const bar = document.querySelector('ytmusic-player-bar');
+    const av = document.querySelector('ytmusic-av-toggle');
+    const skip = document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button');
+    return {
+      shuffle: !!(bar && bar.shuffleOn),
+      repeat: bar ? bar.repeatMode : null,
+      volume: bar ? bar.volume : null,
+      muted: !!(bar && bar.isMuted),
+      // Song or music video, for tracks that come in both versions.
+      avMode: av ? av.getAttribute('playback-mode') : null,
+      avAvailable: !!av && !av.hasAttribute('toggle-disabled'),
+      // YouTube's own skip button, only there once an ad allows skipping.
+      adSkip: !!(skip && skip.offsetParent !== null),
+    };
+  }
+
   function read() {
     const v = video();
     const m = navigator.mediaSession && navigator.mediaSession.metadata;
@@ -71,6 +105,12 @@
       art,
       // video.paused is the truth. playbackState lags behind it on seek.
       playing: !v.paused && !v.ended,
+      // The metadata is the ad's then, which the hybrid UI labels instead of passing off as the track.
+      ad: adShowing(document.getElementById('movie_player')),
+      // Polled with the rest because the bar sets it a moment after the track changes.
+      like: likeStatus(),
+      videoId: videoId(),
+      ...controls(),
       position: t.position,
       duration: t.duration,
       // When position was read. Everything downstream is asynchronous: the IPC
@@ -92,6 +132,16 @@
       a.album !== b.album ||
       a.art !== b.art ||
       a.playing !== b.playing ||
+      a.ad !== b.ad ||
+      a.like !== b.like ||
+      a.videoId !== b.videoId ||
+      a.shuffle !== b.shuffle ||
+      a.repeat !== b.repeat ||
+      a.volume !== b.volume ||
+      a.muted !== b.muted ||
+      a.avMode !== b.avMode ||
+      a.avAvailable !== b.avAvailable ||
+      a.adSkip !== b.adSkip ||
       Math.round(a.duration) !== Math.round(b.duration)
     );
   }
@@ -189,11 +239,25 @@
 
   // Playback control. play/pause goes through the video element because that
   // always exists; skipping needs the app's own buttons, there is no API for it.
-  window.nowPlaying.onCommand((cmd) => {
+  window.nowPlaying.onCommand((cmd, arg) => {
     const v = video();
+    if (cmd === 'seek') {
+      const p = document.getElementById('movie_player');
+      if (p && typeof p.seekTo === 'function') p.seekTo(arg, true);
+      return;
+    }
     if (cmd === 'playpause' && v) {
       if (v.paused) v.play();
       else v.pause();
+      return;
+    }
+    // Separate from playpause for MPRIS, whose Play and Pause must not toggle.
+    if (cmd === 'play' && v) {
+      if (v.paused) v.play();
+      return;
+    }
+    if (cmd === 'pause' && v) {
+      if (!v.paused) v.pause();
       return;
     }
     const sel =
