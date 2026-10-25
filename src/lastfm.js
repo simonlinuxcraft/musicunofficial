@@ -6,7 +6,15 @@
 const { net, shell, safeStorage } = require('electron');
 const store = require('./store');
 const page = require('./page');
-const { scrobbleDue, replayed, primaryArtist, lastfmSignature } = require('./pure');
+const {
+  scrobbleDue,
+  replayed,
+  primaryArtist,
+  lastfmSignature,
+  lastfmRetryable,
+  pendingBatch,
+  scrobbleBatchParams,
+} = require('./pure');
 
 const API = 'https://ws.audioscrobbler.com/2.0/';
 const HEX32 = /^[0-9a-f]{32}$/i;
@@ -36,11 +44,22 @@ async function call(method, params, post) {
   all.api_sig = lastfmSignature(all, secret);
   all.format = 'json';
   const body = new URLSearchParams(all).toString();
-  const res = post
-    ? await net.fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
-    : await net.fetch(API + '?' + body);
+  let res;
+  try {
+    res = post
+      ? await net.fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
+      : await net.fetch(API + '?' + body);
+  } catch (e) {
+    // Offline or no route: worth another try later.
+    e.retry = true;
+    throw e;
+  }
   const json = await res.json().catch(() => ({}));
-  if (!res.ok || json.error) throw new Error(json.message || 'Last.fm answered ' + res.status);
+  if (!res.ok || json.error) {
+    const e = new Error(json.message || 'Last.fm answered ' + res.status);
+    e.retry = lastfmRetryable(res.status, json.error);
+    throw e;
+  }
   return json;
 }
 
@@ -79,9 +98,49 @@ function state() {
   return { connected: connected(), name: connected() ? cfg().name : null, waiting: !!token };
 }
 
-function send(method, params) {
+// Scrobbles that failed for a reason that passes (offline, Last.fm down) wait in
+// the settings and go out with the next call that gets through.
+function keep(scrobble) {
+  const c = cfg();
+  if (!c.key) return;
+  c.pending = [...(c.pending || []), scrobble].slice(-50);
+  store.saveSettings();
+}
+
+let flushing = false;
+async function flush() {
+  const c = cfg();
+  const sk = unseal(c.session);
+  const { batch, stale } = pendingBatch(c.pending, Date.now());
+  if (stale.length) {
+    c.pending = c.pending.filter((p) => !stale.includes(p));
+    store.saveSettings();
+  }
+  if (flushing || !sk || !batch.length) return;
+  flushing = true;
+  try {
+    await call('track.scrobble', { ...scrobbleBatchParams(batch), sk }, true);
+    c.pending = (cfg().pending || []).filter((p) => !batch.includes(p));
+  } catch (e) {
+    console.log('[lastfm] pending scrobbles: ' + e.message);
+    // Refused for good: dropped, or they would block every later batch.
+    if (!e.retry) c.pending = (cfg().pending || []).filter((p) => !batch.includes(p));
+  }
+  store.saveSettings();
+  flushing = false;
+}
+
+async function send(method, params) {
   const sk = unseal(cfg().session);
-  if (sk) call(method, { ...params, sk }, true).catch((e) => console.log('[lastfm] ' + method + ': ' + e.message));
+  if (!sk) return;
+  try {
+    await call(method, { ...params, sk }, true);
+  } catch (e) {
+    console.log('[lastfm] ' + method + ': ' + e.message);
+    if (e.retry && method === 'track.scrobble') keep(params);
+    return;
+  }
+  flush();
 }
 
 // The page's player bar links each artist; the mediaSession line joins them all.

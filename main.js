@@ -76,12 +76,17 @@ app.whenReady().then(() => {
   player.init({
     mainWc: mainWindow.webContents,
     views: [mini.webContents, hybrid.webContents],
-    // MPRIS and the background features need every change. Otherwise the mini
-    // player counts while it exists, the hybrid UI only while it is on screen.
-    wanted: () =>
-      mpris.active() || lastfm.connected() || notify.enabled() || sleep.active() || mini.isOpen() || hybrid.isShown(),
+    // A window showing the track polls fast: the mini player while it exists, the
+    // hybrid UI only while it is on screen. MPRIS and the background features
+    // get by on the page's events and a slow poll.
+    wanted: () => {
+      if (mini.isOpen() || hybrid.isShown()) return player.FAST_POLL;
+      if (mpris.active() || lastfm.connected() || notify.enabled() || sleep.active()) return player.SLOW_POLL;
+      return 0;
+    },
     onTrack: (t) => {
       mpris.update(t);
+      tray.setTrack(t);
       sleep.onTrack(t);
       notify.onTrack(t);
       lastfm.onTrack(t);

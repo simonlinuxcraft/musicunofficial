@@ -214,11 +214,28 @@ function renderTabs(v) {
 // A navigation entry; `tab` picks one part of a page that has several.
 function root(id, title, tabs, tab = id) {
   stack.length = 0;
+  try {
+    localStorage.setItem('root', JSON.stringify([id, tab]));
+  } catch {}
   show({ root: id, title, tabs, browseId: tab, kind: 'browse', load: () => api.browse(tab) });
 }
 
 for (const b of document.querySelectorAll('nav button')) {
   b.addEventListener('click', () => root(b.dataset.browse, b.textContent, b.dataset.tabs));
+}
+
+// The app opens on the navigation entry and tab it was left on, home otherwise.
+function restoreRoot() {
+  let id = 'FEmusic_home';
+  let tab = id;
+  try {
+    [id, tab] = JSON.parse(localStorage.getItem('root')) || [id, tab];
+  } catch {}
+  const b = [...document.querySelectorAll('nav button')].find((n) => n.dataset.browse === id);
+  if (!b) return root('FEmusic_home', T.home);
+  const tabs = b.dataset.tabs;
+  const known = tab === id || (tabs && TABS[tabs].some(([t]) => t === tab));
+  root(id, b.textContent, tabs, known ? tab : id);
 }
 $('back').addEventListener('click', () => stack.length && show(stack.pop()));
 for (const action of ['mini', 'minimize', 'maximize', 'close']) {

@@ -212,6 +212,19 @@ async function sendVolume() {
 }
 $('volume').addEventListener('input', sendVolume);
 
+function volumeBy(step) {
+  $('volume').value = Number($('volume').value) + step;
+  sendVolume();
+}
+$('volume').addEventListener(
+  'wheel',
+  (e) => {
+    e.preventDefault();
+    volumeBy(e.deltaY < 0 ? 5 : -5);
+  },
+  { passive: false }
+);
+
 function setScrubbing(on) {
   scrubbing = on;
   $('seekbar').classList.toggle('scrubbing', on);
@@ -242,17 +255,21 @@ $('seek').addEventListener('input', (e) => {
   showTip(p);
   drawProgress();
 });
-// change fires on release, and once per arrow key press.
-$('seek').addEventListener('change', (e) => {
-  setScrubbing(false);
-  if (!$('seekbar').matches(':hover')) $('seek-tip').hidden = true;
-  if (!track) return;
-  const to = Number(e.target.value);
+function seekTo(to) {
+  if (!track || !duration()) return;
+  to = Math.min(duration(), Math.max(0, to));
   api.command('seek', to);
   // Shown at once; the page confirms with its seeked event a moment later.
   track = { ...track, position: to, at: Date.now() };
   drawProgress();
   syncBar();
+}
+
+// change fires on release, and once per arrow key press.
+$('seek').addEventListener('change', (e) => {
+  setScrubbing(false);
+  if (!$('seekbar').matches(':hover')) $('seek-tip').hidden = true;
+  seekTo(Number(e.target.value));
 });
 // A press without a move fires no change.
 for (const ev of ['pointerup', 'pointercancel']) {

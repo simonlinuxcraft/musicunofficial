@@ -11,8 +11,9 @@ const page = require('./page');
 const sleep = require('./sleep');
 const lastfm = require('./lastfm');
 const pure = require('./pure');
+const { bindKeys } = require('./keys');
 
-const { APP_TITLE, keyAction, parseItems, BROWSE_ID } = pure;
+const { APP_TITLE, parseItems, BROWSE_ID } = pure;
 
 const ROOT = path.join(__dirname, '..');
 const DEFAULT_SIZE = { width: 1100, height: 760 };
@@ -48,7 +49,8 @@ function onPlayerLoad() {
 
 // Size and maximised state survive a restart. Wayland ignores the position, X11 restores it.
 function loadBounds() {
-  const b = store.settings.hybridBounds;
+  // window-state.json is where the YouTube Music window kept them before this UI.
+  const b = store.settings.hybridBounds || store.read('window-state.json');
   if (b && Number.isInteger(b.width) && Number.isInteger(b.height)) return b;
   return { ...DEFAULT_SIZE };
 }
@@ -93,18 +95,7 @@ function create(opts) {
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
-  win.webContents.on('before-input-event', (e, input) => {
-    const action = keyAction(input);
-    const wc = win.webContents;
-    if (action === 'quit') app.quit();
-    else if (action === 'mini') opts.openMini();
-    else if (action === 'reload') wc.reload();
-    else if (action === 'zoom-in') wc.setZoomLevel(Math.min(wc.getZoomLevel() + 0.5, 5));
-    else if (action === 'zoom-out') wc.setZoomLevel(Math.max(wc.getZoomLevel() - 0.5, -5));
-    else if (action === 'zoom-reset') wc.setZoomLevel(0);
-    else return;
-    e.preventDefault();
-  });
+  bindKeys(win.webContents, 'uiZoom', opts.openMini);
 
   const sendMax = () => alive() && win.webContents.send('hybrid:maximized', win.isMaximized());
   win.on('maximize', sendMax);

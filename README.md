@@ -67,9 +67,9 @@ catches up.
 | Mini player | A small window with cover, title and playback controls, on top of other windows |
 | Media keys | Registered with MPRIS as MusicUnofficial, including the GNOME media widget and the lock screen |
 | Discord | Rich Presence, on by default, switched off in the settings or from the tray |
-| Extras | Sleep timer, a notification on a new track, Last.fm scrobbling with an API account of your own |
-| Tray | Closing the window keeps playback running; quit from the tray or with `Ctrl+Q` |
-| Remembers itself | Window size and maximised state are restored on the next start, the position too on X11 |
+| Extras | Sleep timer, a notification on a new track, Last.fm scrobbling with an API account of your own. Scrobbles made offline are sent once Last.fm is reachable again |
+| Tray | Closing the window keeps playback running. The icon shows the track and offers play, pause and skip; quit from the tray or with `Ctrl+Q` |
+| Remembers itself | Window size, maximised state, zoom and the last opened page are restored on the next start, the window position too on X11 |
 | Stays signed in | The profile survives updates, so an update does not sign you out |
 | Runs anywhere | No `libfuse2` required, works on distributions that stopped shipping it |
 | Dependencies | Electron plus one small pure JavaScript D-Bus library for the media keys |
@@ -135,9 +135,18 @@ quietly every 15 seconds until it gets through.
 | `Ctrl` `Q` | Quit |
 | `Ctrl` `M` | Mini player |
 | `Ctrl` `R` | Reload the window |
-| `Space` | Play or pause, except while typing in the search field |
-| `Ctrl` `+` / `Ctrl` `-` | Zoom in and out |
+| `Space` | Play or pause |
+| `←` / `→` | Back or forward 10 seconds |
+| `Shift` `←` / `Shift` `→` | Previous or next track |
+| `+` / `-` | Volume up or down, also the mouse wheel on the volume slider |
+| `M` | Mute |
+| `L` | Like |
+| `/` | Search |
+| `Ctrl` `+` / `Ctrl` `-` | Zoom in and out, kept across restarts |
 | `Ctrl` `0` | Reset zoom |
+
+The player keys work everywhere except in text fields and menus. The settings
+page lists them too.
 
 Media keys are handled by the desktop through MPRIS and need no configuration.
 

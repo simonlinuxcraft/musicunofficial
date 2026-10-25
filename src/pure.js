@@ -398,6 +398,28 @@ function lastfmSignature(params, secret) {
   return crypto.createHash('md5').update(base + secret, 'utf8').digest('hex');
 }
 
+// Last.fm error codes that pass: operation failed, service offline, temporarily
+// unavailable, rate limit. Anything else (bad session, invalid parameters) stays.
+function lastfmRetryable(status, code) {
+  return status >= 500 || [8, 11, 16, 29].includes(code);
+}
+
+// Last.fm takes up to 50 scrobbles per call, and none older than 14 days.
+function pendingBatch(pending, now) {
+  const list = Array.isArray(pending) ? pending : [];
+  const fresh = (p) => p && typeof p.timestamp === 'number' && now / 1000 - p.timestamp < 14 * 24 * 3600;
+  return { batch: list.filter(fresh).slice(0, 50), stale: list.filter((p) => !fresh(p)) };
+}
+
+// track.scrobble's batch form: artist[0], track[0], ... artist[1], ...
+function scrobbleBatchParams(batch) {
+  const out = {};
+  batch.forEach((p, i) => {
+    for (const [k, v] of Object.entries(p)) out[k + '[' + i + ']'] = v;
+  });
+  return out;
+}
+
 // Player bar state read out of the hidden page.
 function sanitizeControls(raw) {
   if (!raw || typeof raw !== 'object') return null;
@@ -460,6 +482,9 @@ module.exports = {
   replayed,
   primaryArtist,
   lastfmSignature,
+  lastfmRetryable,
+  pendingBatch,
+  scrobbleBatchParams,
   CONTINUATION,
   BROWSE_ID,
 };

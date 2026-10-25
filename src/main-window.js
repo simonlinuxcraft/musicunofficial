@@ -4,11 +4,12 @@
 // out of sight, as the stage of the now-playing view (only its player, cover or
 // video), or whole for sign-in and whatever the interface lacks.
 
-const { app, WebContentsView, shell } = require('electron');
+const { WebContentsView, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const player = require('./player');
-const { isInternal, isWebLink, onSite, keyAction } = require('./pure');
+const { isInternal, isWebLink, onSite } = require('./pure');
+const { bindKeys } = require('./keys');
 
 const ROOT = path.join(__dirname, '..');
 const START_URL = 'https://music.youtube.com/';
@@ -53,19 +54,6 @@ function injectAll(wc, resume) {
 
 function openOutside(url) {
   if (isWebLink(url)) shell.openExternal(url);
-}
-
-function onKey(e, input, openMini) {
-  const action = keyAction(input);
-  if (!action) return;
-  e.preventDefault();
-  const wc = view.webContents;
-  if (action === 'quit') app.quit();
-  else if (action === 'reload') wc.reload();
-  else if (action === 'mini') openMini();
-  else if (action === 'zoom-in') wc.setZoomLevel(Math.min(wc.getZoomLevel() + 0.5, 5));
-  else if (action === 'zoom-out') wc.setZoomLevel(Math.max(wc.getZoomLevel() - 0.5, -5));
-  else if (action === 'zoom-reset') wc.setZoomLevel(0);
 }
 
 // The player sizes its video on resize only, and a stylesheet alone fires none.
@@ -133,7 +121,7 @@ function create({ resume, openMini }) {
     openOutside(url);
   });
 
-  wc.on('before-input-event', (e, input) => onKey(e, input, openMini));
+  bindKeys(wc, 'pageZoom', openMini);
 }
 
 // 'stage', 'page' or null for out of sight; bounds in the window's coordinates.
