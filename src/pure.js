@@ -18,6 +18,26 @@ function isInternal(url) {
   return INTERNAL_HOSTS.some((h) => host === h || host.endsWith('.' + h));
 }
 
+// Whether the player page is on YouTube Music itself, not on a consent or sign-in page.
+// An empty or broken URL counts as away.
+function onSite(url) {
+  try {
+    return new URL(url).hostname === 'music.youtube.com';
+  } catch {
+    return false;
+  }
+}
+
+// What may leave the app through the system's handler. Any other scheme from the
+// page could start a local program registered for it.
+function isWebLink(url) {
+  try {
+    return ['https:', 'http:', 'mailto:'].includes(new URL(url).protocol);
+  } catch {
+    return false;
+  }
+}
+
 // The window is frameless and has no menu bar, so these shortcuts are the only
 // way out if the tray is missing or the page stops responding.
 function keyAction(input) {
@@ -354,6 +374,12 @@ function scrobbleDue(playedSeconds, durationSeconds) {
   return durationSeconds > 30 && (playedSeconds >= durationSeconds / 2 || playedSeconds >= 240);
 }
 
+// Repeat-one plays the same track again under the same id. A jump back to its
+// start after it was scrobbled is a new play; a seek before that is not.
+function replayed(scrobbled, lastPosition, position) {
+  return scrobbled && position < 10 && lastPosition - position > 30;
+}
+
 // The first name of a joined artist line ("A und B", "A & B", "A, B", "A feat. B").
 // Only a fallback: a duo called "A & B" is split too, the player bar's links are not.
 function primaryArtist(line) {
@@ -411,6 +437,8 @@ function sanitizeQueue(raw) {
 module.exports = {
   APP_TITLE,
   isInternal,
+  onSite,
+  isWebLink,
   INTERNAL_HOSTS,
   keyAction,
   sanitizeTrack,
@@ -429,6 +457,7 @@ module.exports = {
   parsePlaylistOptions,
   sanitizeLinks,
   scrobbleDue,
+  replayed,
   primaryArtist,
   lastfmSignature,
   CONTINUATION,

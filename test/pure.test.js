@@ -4,6 +4,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const {
   isInternal,
+  onSite,
+  isWebLink,
   keyAction,
   sanitizeTrack,
   positionNow,
@@ -19,6 +21,7 @@ const {
   parsePlaylistOptions,
   sanitizeLinks,
   scrobbleDue,
+  replayed,
   primaryArtist,
   lastfmSignature,
 } = require('../src/pure');
@@ -362,4 +365,28 @@ test('signs Last.fm calls over the sorted parameters', () => {
   const params = { method: 'auth.getSession', token: 'T', api_key: 'K', format: 'json' };
   // format stays out, the rest sorted by name: api_key, method, token.
   assert.equal(lastfmSignature(params, 'S'), md5('api_keyKmethodauth.getSessiontokenTS'));
+});
+
+test('tells YouTube Music from consent, sign-in and broken urls', () => {
+  assert.ok(onSite('https://music.youtube.com/watch?v=x'));
+  assert.ok(!onSite('https://consent.youtube.com/m'));
+  assert.ok(!onSite('https://accounts.google.com/'));
+  assert.ok(!onSite(''));
+});
+
+test('only web and mail links leave the app', () => {
+  assert.ok(isWebLink('https://example.com/'));
+  assert.ok(isWebLink('http://example.com/'));
+  assert.ok(isWebLink('mailto:a@example.com'));
+  assert.ok(!isWebLink('file:///etc/passwd'));
+  assert.ok(!isWebLink('steam://run/1'));
+  assert.ok(!isWebLink('javascript:alert(1)'));
+  assert.ok(!isWebLink('not a url'));
+});
+
+test('counts a repeat-one restart as a new play, a seek before the scrobble not', () => {
+  assert.ok(replayed(true, 180, 1));
+  assert.ok(!replayed(false, 180, 1));
+  assert.ok(!replayed(true, 20, 1));
+  assert.ok(!replayed(true, 180, 60));
 });

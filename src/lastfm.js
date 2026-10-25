@@ -6,7 +6,7 @@
 const { net, shell, safeStorage } = require('electron');
 const store = require('./store');
 const page = require('./page');
-const { scrobbleDue, primaryArtist, lastfmSignature } = require('./pure');
+const { scrobbleDue, replayed, primaryArtist, lastfmSignature } = require('./pure');
 
 const API = 'https://ws.audioscrobbler.com/2.0/';
 const HEX32 = /^[0-9a-f]{32}$/i;
@@ -109,7 +109,7 @@ function onTrack(t) {
     if (cur) cur.playing = false;
     return;
   }
-  if (!cur || cur.id !== id) {
+  if (!cur || cur.id !== id || replayed(cur.scrobbled, cur.position, t.position)) {
     const c = (cur = {
       id,
       track: t.title,
@@ -130,6 +130,7 @@ function onTrack(t) {
     }, 1500);
   }
   cur.playing = t.playing;
+  cur.position = t.position;
   if (t.duration > 0) cur.duration = t.duration;
   if (!cur.artist) return;
   if (!cur.announced && cur.playing) announce(cur);

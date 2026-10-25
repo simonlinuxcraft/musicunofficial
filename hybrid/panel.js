@@ -125,6 +125,8 @@ function toggleQueue(open = $('queue').hidden) {
 // now-playing view, or the whole page for sign-in and what this UI lacks. Main
 // lays it over the slot, so whatever is drawn there here stays underneath.
 let slot = null;
+// The page slot was opened for a consent or sign-in page, not by the user.
+let slotAway = false;
 
 function placePlayer() {
   const el = slot === 'stage' ? $('stage') : slot === 'page' ? $('middle') : null;
@@ -132,7 +134,8 @@ function placePlayer() {
   api.playerView(r ? slot : null, r && { x: r.x, y: r.y, width: r.width, height: r.height });
 }
 
-function setSlot(next) {
+function setSlot(next, away = false) {
+  slotAway = next === 'page' && away;
   if (next === slot) return;
   slot = next;
   main.hidden = slot === 'stage';

@@ -238,12 +238,13 @@ $('sign-in').addEventListener('click', api.signIn);
 checkAccount();
 
 // Consent and sign-in pages need the user, so the page shows itself for them.
-api.onPlayerAway(() => setSlot('page'));
+api.onPlayerAway(() => setSlot('page', true));
 // Back from such a page, what was on screen loads again, now for the account.
 // A view that failed or still waits on the old page does so too.
 api.onPlayerReady(() => {
   checkAccount();
-  const back = slot === 'page';
+  // A page the user opened stays, even when it reloads.
+  const back = slot === 'page' && slotAway;
   if (back) setSlot(null);
   if (!view || !(back || (!view.page && (view.failed || view.loading)))) return;
   view.page = null;

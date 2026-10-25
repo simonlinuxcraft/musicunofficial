@@ -37,7 +37,7 @@ const SIGN_IN =
 let playerAway = false;
 
 function onPlayerNavigate(e, url) {
-  playerAway = new URL(url).hostname !== 'music.youtube.com';
+  playerAway = !pure.onSite(url);
   if (playerAway && alive()) win.webContents.send('hybrid:player-away');
 }
 
@@ -255,7 +255,10 @@ ipcMain.handle('hybrid:setting', (e, key, value) => {
     store.saveSettings();
     player.sync();
   } else if (key === 'richPresence' && typeof value === 'boolean') player.setDiscord(value);
-  else if (key === 'sleep' && SLEEP_CHOICES.includes(value)) sleep.set(value);
+  else if (key === 'sleep' && SLEEP_CHOICES.includes(value)) {
+    sleep.set(value);
+    player.sync();
+  }
   return settings();
 });
 
@@ -268,12 +271,14 @@ ipcMain.handle('hybrid:lastfm-connect', async (e, key, secret) => {
 ipcMain.handle('hybrid:lastfm-finish', async (e) => {
   if (!fromUs(e)) return null;
   await lastfm.finish();
+  player.sync();
   return settings();
 });
 
 ipcMain.handle('hybrid:lastfm-disconnect', (e) => {
   if (!fromUs(e)) return null;
   lastfm.disconnect();
+  player.sync();
   return settings();
 });
 

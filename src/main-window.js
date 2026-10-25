@@ -8,7 +8,7 @@ const { app, WebContentsView, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const player = require('./player');
-const { isInternal, keyAction } = require('./pure');
+const { isInternal, isWebLink, onSite, keyAction } = require('./pure');
 
 const ROOT = path.join(__dirname, '..');
 const START_URL = 'https://music.youtube.com/';
@@ -49,6 +49,10 @@ function injectAll(wc, resume) {
       .catch(log('resume'))
       .finally(() => !wc.isDestroyed() && wc.setAudioMuted(false));
   }
+}
+
+function openOutside(url) {
+  if (isWebLink(url)) shell.openExternal(url);
 }
 
 function onKey(e, input, openMini) {
@@ -114,19 +118,19 @@ function create({ resume, openMini }) {
   // A new document also starts without the stage CSS.
   wc.on('did-navigate', (e, url) => {
     stageCss = null;
-    view.setBackgroundColor(new URL(url).hostname === 'music.youtube.com' ? DARK : '#ffffff');
+    view.setBackgroundColor(onSite(url) ? DARK : '#ffffff');
   });
 
   wc.setWindowOpenHandler(({ url }) => {
     if (isInternal(url)) return { action: 'allow' };
-    shell.openExternal(url);
+    openOutside(url);
     return { action: 'deny' };
   });
 
   wc.on('will-navigate', (e, url) => {
     if (isInternal(url)) return;
     e.preventDefault();
-    shell.openExternal(url);
+    openOutside(url);
   });
 
   wc.on('before-input-event', (e, input) => onKey(e, input, openMini));
@@ -136,7 +140,7 @@ function create({ resume, openMini }) {
 function place(kind, bounds) {
   if (!live()) return;
   // Left halfway through a consent or sign-in page: back to the site, which asks again if it must.
-  if (where === 'page' && !kind && new URL(view.webContents.getURL()).hostname !== 'music.youtube.com') {
+  if (where === 'page' && !kind && !onSite(view.webContents.getURL())) {
     view.webContents.loadURL(START_URL);
   }
   where = kind;
