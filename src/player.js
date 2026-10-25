@@ -12,13 +12,17 @@ const { createPresence } = require('./discord');
 const DISCORD_CLIENT_ID = process.env.MUSICUNOFFICIAL_DISCORD_ID || '1528803144937635890';
 // Keeps "quit today, back tomorrow" without reviving a session from weeks ago.
 const MAX_RESUME_AGE = 7 * 24 * 3600 * 1000;
+// Background consumers react to events (play, pause, seek, track change); the
+// poll only catches metadata, which a window on screen wants sooner.
+const FAST_POLL = 1000;
+const SLOW_POLL = 3000;
 const COMMANDS = ['previous', 'playpause', 'play', 'pause', 'next', 'seek'];
 
 let mainWc = () => null;
 // Our own windows that show the track and send commands: mini player, hybrid UI.
 let views = [];
-// Whether one of them is on screen, or MPRIS is up, and wants updates.
-let wanted = () => false;
+// The poll interval in ms the consumers need right now, 0 for none.
+let wanted = () => 0;
 let onTrack = () => {};
 let track = null;
 let presence = null;
@@ -49,9 +53,9 @@ function command(cmd, arg) {
 function sync() {
   const wc = mainWc();
   if (!wc) return;
-  const needed = wanted() || !!(presence && presence.ready);
-  wc.send('nowplaying:active', needed);
-  if (!needed) setTrack(null);
+  const ms = wanted() || (presence && presence.ready ? SLOW_POLL : 0);
+  wc.send('nowplaying:active', ms);
+  if (!ms) setTrack(null);
 }
 
 // Pulled on a timer instead of riding the now playing pipeline, which is idle
@@ -140,5 +144,7 @@ module.exports = {
   takeResume,
   setDiscord,
   discordAvailable: !!DISCORD_CLIENT_ID,
+  FAST_POLL,
+  SLOW_POLL,
   discordEnabled: () => store.settings.richPresence,
 };

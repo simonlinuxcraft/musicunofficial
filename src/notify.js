@@ -26,7 +26,10 @@ async function onTrack(t) {
   // Remembered even when nothing is shown, so a later focus change does not announce an old track.
   last = key;
   if (!store.settings.notify || inView() || !Notification.isSupported()) return;
-  const n = new Notification({ title: t.title, body: t.artist, icon: await icon(t.art), silent: true });
+  const img = await icon(t.art);
+  // A newer track may have started while this cover loaded.
+  if (key !== last) return;
+  const n = new Notification({ title: t.title, body: t.artist, icon: img, silent: true });
   // One at a time; a stack of old tracks says nothing.
   if (shown) shown.close();
   shown = n;

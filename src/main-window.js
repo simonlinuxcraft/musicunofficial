@@ -4,11 +4,12 @@
 // out of sight, as the stage of the now-playing view (only its player, cover or
 // video), or whole for sign-in and whatever the interface lacks.
 
-const { app, WebContentsView, shell } = require('electron');
+const { WebContentsView, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const player = require('./player');
-const { isInternal, keyAction } = require('./pure');
+const { isInternal, isWebLink, onSite } = require('./pure');
+const { bindKeys } = require('./keys');
 
 const ROOT = path.join(__dirname, '..');
 const START_URL = 'https://music.youtube.com/';
@@ -51,17 +52,8 @@ function injectAll(wc, resume) {
   }
 }
 
-function onKey(e, input, openMini) {
-  const action = keyAction(input);
-  if (!action) return;
-  e.preventDefault();
-  const wc = view.webContents;
-  if (action === 'quit') app.quit();
-  else if (action === 'reload') wc.reload();
-  else if (action === 'mini') openMini();
-  else if (action === 'zoom-in') wc.setZoomLevel(Math.min(wc.getZoomLevel() + 0.5, 5));
-  else if (action === 'zoom-out') wc.setZoomLevel(Math.max(wc.getZoomLevel() - 0.5, -5));
-  else if (action === 'zoom-reset') wc.setZoomLevel(0);
+function openOutside(url) {
+  if (isWebLink(url)) shell.openExternal(url);
 }
 
 // The player sizes its video on resize only, and a stylesheet alone fires none.
@@ -114,29 +106,29 @@ function create({ resume, openMini }) {
   // A new document also starts without the stage CSS.
   wc.on('did-navigate', (e, url) => {
     stageCss = null;
-    view.setBackgroundColor(new URL(url).hostname === 'music.youtube.com' ? DARK : '#ffffff');
+    view.setBackgroundColor(onSite(url) ? DARK : '#ffffff');
   });
 
   wc.setWindowOpenHandler(({ url }) => {
     if (isInternal(url)) return { action: 'allow' };
-    shell.openExternal(url);
+    openOutside(url);
     return { action: 'deny' };
   });
 
   wc.on('will-navigate', (e, url) => {
     if (isInternal(url)) return;
     e.preventDefault();
-    shell.openExternal(url);
+    openOutside(url);
   });
 
-  wc.on('before-input-event', (e, input) => onKey(e, input, openMini));
+  bindKeys(wc, 'pageZoom', openMini);
 }
 
 // 'stage', 'page' or null for out of sight; bounds in the window's coordinates.
 function place(kind, bounds) {
   if (!live()) return;
   // Left halfway through a consent or sign-in page: back to the site, which asks again if it must.
-  if (where === 'page' && !kind && new URL(view.webContents.getURL()).hostname !== 'music.youtube.com') {
+  if (where === 'page' && !kind && !onSite(view.webContents.getURL())) {
     view.webContents.loadURL(START_URL);
   }
   where = kind;

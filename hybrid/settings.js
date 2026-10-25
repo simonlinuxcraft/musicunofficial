@@ -84,7 +84,31 @@ function sleepNote(s) {
   return '';
 }
 
+// Minutes left count down while the page is open; a timer that ran out shows as off.
+let shownSettings = null;
+setInterval(() => {
+  const s = shownSettings;
+  if (!s || !view || view.root !== 'settings' || s.sleep.mode !== 'time') return;
+  if (Date.now() >= s.sleep.endsAt) {
+    api.settings().then((n) => n && view.root === 'settings' && renderSettings(n));
+    return;
+  }
+  const note = $('set-sleep') && $('set-sleep').closest('.set-row').querySelector('.note');
+  if (note) note.textContent = sleepNote(s);
+}, 15000);
+
+function keyList() {
+  const box = div('keys');
+  for (const [keys, label] of T.keys) {
+    const row = div('set-row');
+    row.append(div('', label), div('kbd', keys));
+    box.append(row);
+  }
+  return box;
+}
+
 function renderSettings(s) {
+  shownSettings = s;
   const box = div('settings');
   const sleepChoices = [['off', T.sleepOff], ['track', T.sleepTrack], ...[15, 30, 45, 60, 90].map((m) => [m, m + T.sleepMinutes])];
   box.append(
@@ -134,6 +158,7 @@ function renderSettings(s) {
     row.append(button(T.lastfmConnect, () => lastfmStep(api.lastfmConnect, key.value, secret.value), true));
     box.append(intro, field(T.lastfmKey, key), field(T.lastfmSecret, secret), row);
   }
+  box.append(heading(T.setKeys), keyList());
   $('list').replaceChildren(box);
 }
 

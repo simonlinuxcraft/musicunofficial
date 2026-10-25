@@ -178,23 +178,29 @@
   }
 
   // Only runs while something consumes the result, so a plain window with no
-  // mini player and no Rich Presence does no work at all.
+  // mini player and no Rich Presence does no work at all. `ms` is the poll
+  // interval main asks for: fast while a window shows the track, slow for
+  // background consumers, 0 for none.
   let timer = null;
-  window.nowPlaying.onActive((on) => {
-    if (on && !timer) {
+  let every = 0;
+  window.nowPlaying.onActive((ms) => {
+    ms = Number.isFinite(ms) && ms > 0 ? ms : 0;
+    if (ms === every) return;
+    every = ms;
+    clearInterval(timer);
+    timer = null;
+    window.__ytmPollId = 0;
+    if (ms) {
       bind();
       // Catches a swapped <video> element and metadata changes, which fire no
       // events of their own.
       timer = setInterval(() => {
         bind();
         tick();
-      }, 1000);
+      }, ms);
       window.__ytmPollId = timer;
       send();
-    } else if (!on && timer) {
-      clearInterval(timer);
-      timer = null;
-      window.__ytmPollId = 0;
+    } else {
       if (bound) for (const e of EVENTS) bound.removeEventListener(e, send);
       bound = null;
       last = null;

@@ -4,6 +4,8 @@ const test = require('node:test');
 const assert = require('node:assert');
 const {
   isInternal,
+  onSite,
+  isWebLink,
   keyAction,
   sanitizeTrack,
   positionNow,
@@ -19,6 +21,10 @@ const {
   parsePlaylistOptions,
   sanitizeLinks,
   scrobbleDue,
+  replayed,
+  lastfmRetryable,
+  pendingBatch,
+  scrobbleBatchParams,
   primaryArtist,
   lastfmSignature,
 } = require('../src/pure');
@@ -362,4 +368,57 @@ test('signs Last.fm calls over the sorted parameters', () => {
   const params = { method: 'auth.getSession', token: 'T', api_key: 'K', format: 'json' };
   // format stays out, the rest sorted by name: api_key, method, token.
   assert.equal(lastfmSignature(params, 'S'), md5('api_keyKmethodauth.getSessiontokenTS'));
+});
+
+test('tells YouTube Music from consent, sign-in and broken urls', () => {
+  assert.ok(onSite('https://music.youtube.com/watch?v=x'));
+  assert.ok(!onSite('https://consent.youtube.com/m'));
+  assert.ok(!onSite('https://accounts.google.com/'));
+  assert.ok(!onSite(''));
+});
+
+test('only web and mail links leave the app', () => {
+  assert.ok(isWebLink('https://example.com/'));
+  assert.ok(isWebLink('http://example.com/'));
+  assert.ok(isWebLink('mailto:a@example.com'));
+  assert.ok(!isWebLink('file:///etc/passwd'));
+  assert.ok(!isWebLink('steam://run/1'));
+  assert.ok(!isWebLink('javascript:alert(1)'));
+  assert.ok(!isWebLink('not a url'));
+});
+
+test('counts a repeat-one restart as a new play, a seek before the scrobble not', () => {
+  assert.ok(replayed(true, 180, 1));
+  assert.ok(!replayed(false, 180, 1));
+  assert.ok(!replayed(true, 20, 1));
+  assert.ok(!replayed(true, 180, 60));
+});
+
+test('retries Last.fm only for errors that pass', () => {
+  assert.ok(lastfmRetryable(503, undefined));
+  assert.ok(lastfmRetryable(200, 11));
+  assert.ok(lastfmRetryable(200, 29));
+  assert.ok(!lastfmRetryable(200, 9));
+  assert.ok(!lastfmRetryable(400, 6));
+});
+
+test('batches pending scrobbles and drops those Last.fm no longer takes', () => {
+  const now = Date.parse('2026-10-25T12:00:00Z');
+  const fresh = { artist: 'A', track: 'T', timestamp: now / 1000 - 3600 };
+  const old = { artist: 'B', track: 'U', timestamp: now / 1000 - 15 * 24 * 3600 };
+  const { batch, stale } = pendingBatch([old, fresh, null], now);
+  assert.deepStrictEqual(batch, [fresh]);
+  assert.strictEqual(stale.length, 2);
+  assert.strictEqual(pendingBatch(Array(60).fill(fresh), now).batch.length, 50);
+  assert.deepStrictEqual(pendingBatch(undefined, now), { batch: [], stale: [] });
+});
+
+test('numbers batch scrobble parameters per entry', () => {
+  assert.deepStrictEqual(
+    scrobbleBatchParams([
+      { artist: 'A', track: 'T' },
+      { artist: 'B', track: 'U' },
+    ]),
+    { 'artist[0]': 'A', 'track[0]': 'T', 'artist[1]': 'B', 'track[1]': 'U' }
+  );
 });

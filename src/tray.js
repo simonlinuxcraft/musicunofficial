@@ -8,11 +8,15 @@ const { uiLanguage } = require('./i18n');
 
 let tray = null;
 let actions = null;
+let tip = APP_TITLE;
 
 const STRINGS = {
   en: {
     toggle: 'Show / Hide',
     mini: 'Mini player',
+    playpause: 'Play / Pause',
+    next: 'Next track',
+    previous: 'Previous track',
     discord: 'Discord Rich Presence',
     discordOff: 'Discord Rich Presence (not configured)',
     quit: 'Quit',
@@ -20,6 +24,9 @@ const STRINGS = {
   de: {
     toggle: 'Anzeigen / Verbergen',
     mini: 'Miniplayer',
+    playpause: 'Wiedergabe / Pause',
+    next: 'Nächster Titel',
+    previous: 'Vorheriger Titel',
     discord: 'Discord Rich Presence',
     discordOff: 'Discord Rich Presence (nicht eingerichtet)',
     quit: 'Beenden',
@@ -33,6 +40,10 @@ function rebuild() {
     Menu.buildFromTemplate([
       { label: T.toggle, click: actions.toggle },
       { label: T.mini, accelerator: 'CommandOrControl+M', click: actions.openMini },
+      { type: 'separator' },
+      { label: T.playpause, click: () => player.command('playpause') },
+      { label: T.next, click: () => player.command('next') },
+      { label: T.previous, click: () => player.command('previous') },
       { type: 'separator' },
       {
         label: player.discordAvailable ? T.discord : T.discordOff,
@@ -65,4 +76,12 @@ function create(opts) {
   rebuild();
 }
 
-module.exports = { create, rebuild, exists: () => !!tray };
+// The playing track as the tooltip, so hovering the icon says what is on.
+function setTrack(t) {
+  const next = t && !t.ad ? t.title + (t.artist ? ' - ' + t.artist : '') : APP_TITLE;
+  if (!tray || next === tip) return;
+  tip = next;
+  tray.setToolTip(tip);
+}
+
+module.exports = { create, rebuild, setTrack, exists: () => !!tray };
