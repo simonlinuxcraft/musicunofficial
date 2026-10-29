@@ -18,6 +18,21 @@ const DARK = '#030303';
 // One pixel in the window corner, where page and UI are the same #030303. At
 // 0x0 the page counts as hidden, and Chromium pauses a muted video in a hidden page.
 const OUT_OF_SIGHT = { x: 0, y: 0, width: 1, height: 1 };
+// Below about 616 px YouTube Music switches to its mobile layout, which has no like
+// button or volume, so out of sight the page lays out as a small desktop page.
+const DESKTOP = {
+  screenPosition: 'desktop',
+  screenSize: { width: 720, height: 360 },
+  viewSize: { width: 720, height: 360 },
+  viewPosition: { x: 0, y: 0 },
+  deviceScaleFactor: 0,
+  scale: 1,
+};
+
+function layOut(wc) {
+  if (where) wc.disableDeviceEmulation();
+  else wc.enableDeviceEmulation(DESKTOP);
+}
 const inject = (name) => fs.readFileSync(path.join(ROOT, 'inject', name), 'utf8');
 const CSS = inject('style.css');
 const STAGE_CSS = inject('stage.css');
@@ -94,6 +109,7 @@ function create({ resume, openMini }) {
     // Once only: an SPA navigation fires dom-ready again.
     resume = null;
     if (where === 'stage') setStage(true);
+    layOut(wc);
   });
 
   // A reload drops the injected poller together with its last track.
@@ -134,6 +150,7 @@ function place(kind, bounds) {
   where = kind;
   setStage(kind === 'stage');
   view.setBounds(kind ? bounds : OUT_OF_SIGHT);
+  layOut(view.webContents);
   if (kind === 'page') view.webContents.focus();
 }
 

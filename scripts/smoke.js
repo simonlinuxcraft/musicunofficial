@@ -134,6 +134,18 @@ async function main() {
     await evaluate('hybrid/index.html', "document.getElementById('queue-toggle').click(), 1");
     const rows = await until(() => evaluate('hybrid/index.html', "document.querySelectorAll('.qrow').length"), 15000);
     report(!!rows, 'up next lists the queue', rows ? rows + ' rows' : '');
+
+    // Skipping clicks the page's own button, which YouTube moves between layouts.
+    if (bus) {
+      const id = "document.getElementById('movie_player').getVideoData().video_id";
+      const before = await evaluate('music.youtube.com', id);
+      mpris('org.mpris.MediaPlayer2.Player.Next');
+      const after = await until(async () => {
+        const now = await evaluate('music.youtube.com', id);
+        return now && now !== before && now;
+      }, 20000);
+      report(!!after, 'MPRIS Next skips to another track', after || 'still ' + before);
+    }
   } catch (e) {
     report(false, 'run', e.message);
   }

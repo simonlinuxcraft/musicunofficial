@@ -58,36 +58,37 @@ const navigate = (endpoint) =>
       ' } }))'
   ).then(() => undefined);
 
-// The player bar's own buttons and slider, so YouTube Music keeps its state
-// (shuffle order, repeat mode, the saved volume) exactly as if clicked there.
-// Classes, not aria labels, which follow the UI language.
+// The page's own buttons and slider, so YouTube Music keeps its state (shuffle
+// order, repeat mode, the saved volume) exactly as if clicked there. They sit in
+// the classic player bar, in the redesigned one (ytmusic-miniplayer, seen from
+// 2026-10) or, on a narrow page, in the player page itself. Classes, not aria
+// labels, which follow the UI language. inject/nowplaying.js reads the state.
 // ponytail: DOM of the page; breaks when YouTube renames these classes.
-const BAR = "document.querySelector('ytmusic-player-bar')";
-const CONTROLS =
-  '(() => { const bar = ' +
-  BAR +
-  "; const lk = bar.querySelector('#like-button-renderer');" +
-  ' return { shuffle: !!bar.shuffleOn, repeat: bar.repeatMode,' +
-  " like: lk && lk.getAttribute('like-status'), volume: bar.volume, muted: !!bar.isMuted }; })()";
+const BAR = 'ytmusic-player-bar';
+const MINI = 'ytmusic-app-layout > ytmusic-miniplayer';
+const press = (sel) => 'document.querySelector(' + JSON.stringify(sel) + ').click();';
+const SHUFFLE = `${BAR} .shuffle, ${MINI} .ytmusicPlayerControlsShuffleButton button, ytmusic-player-controls .shuffle`;
+const REPEAT = `${BAR} .repeat, ${MINI} .ytmusicPlayerControlsRepeatButton button, ytmusic-player-controls .repeat`;
+const QUEUE_STATE = "document.querySelector('ytmusic-player-queue').queue.store.getState().queue";
+const CONTROLS = 'window.__ytmControls()';
 const wait = 'await new Promise((r) => setTimeout(r, 120));';
 const ACTIONS = {
-  shuffle: () => "bar.querySelector('.shuffle').click();",
-  repeat: () => "bar.querySelector('.repeat').click();",
-  mute: () => "bar.querySelector('.volume').click();",
-  like: () => "bar.querySelectorAll('#like-button-renderer button')[0].click();",
-  dislike: () => "bar.querySelectorAll('#like-button-renderer button')[1].click();",
+  shuffle: () => press(SHUFFLE),
+  repeat: () => press(REPEAT),
+  mute: () => press(`${BAR} .volume, ${MINI} .ytMusicMiniPlayerMuteButton button`),
+  like: () => press(`${BAR} #like-button-renderer button, ${MINI} like-button-view-model button`),
+  dislike: () =>
+    `(document.querySelectorAll('${BAR} #like-button-renderer button')[1] || document.querySelector('${MINI} dislike-button-view-model button')).click();`,
+  // The classic bar's slider takes the value on change, the redesigned one on input.
   volume: (v) =>
-    "const s = bar.querySelector('#volume-slider'); s.value = " +
+    `const s = document.querySelector('${BAR} #volume-slider, ${MINI} .ytSliderShapeVerticalSlider'); s.value = ` +
     v +
-    "; s.dispatchEvent(new CustomEvent('change', { bubbles: true, composed: true }));",
+    "; if (s.tagName === 'INPUT') s.dispatchEvent(new Event('input', { bubbles: true }));" +
+    " s.dispatchEvent(new CustomEvent('change', { bubbles: true, composed: true }));",
   // MPRIS sets a state rather than toggling; the bar only toggles, so click until it matches.
   repeatTo: (mode) =>
-    'for (let i = 0; i < 3 && bar.repeatMode !== ' +
-    JSON.stringify(mode) +
-    "; i++) { bar.querySelector('.repeat').click(); " +
-    wait +
-    ' }',
-  shuffleTo: (on) => 'if (!!bar.shuffleOn !== ' + !!on + ") bar.querySelector('.shuffle').click();",
+    'for (let i = 0; i < 3 && ' + QUEUE_STATE + '.repeatMode !== ' + JSON.stringify(mode) + '; i++) { ' + press(REPEAT) + ' ' + wait + ' }',
+  shuffleTo: (on) => 'if (!!' + QUEUE_STATE + '.shuffleEnabled !== ' + !!on + ') ' + press(SHUFFLE),
   avSong: () => "document.querySelector('ytmusic-av-toggle .song-button').click();",
   avVideo: () => "document.querySelector('ytmusic-av-toggle .video-button').click();",
   // Only YouTube's own skip button, which it shows once an ad may be skipped.
@@ -109,16 +110,24 @@ async function control(action, arg) {
   if (!Object.hasOwn(ACTIONS, action)) return null;
   const value = actionArg(action, arg);
   if (value === null) return null;
-  await inPage('(async () => { const bar = ' + BAR + '; ' + ACTIONS[action](value) + ' })()');
+  await inPage('(async () => { ' + ACTIONS[action](value) + ' })()');
   // The bar updates its own state a tick after the click.
   await new Promise((ok) => setTimeout(ok, 250));
   return readControls();
 }
 
-// Artist and album links under the title in the page's own player bar.
+// Artist and album links under the title. The redesigned bar links by script
+// without an href; the playing queue entry still carries the endpoints.
 const NOW_LINKS =
-  "[...document.querySelectorAll('ytmusic-player-bar .byline a')]" +
-  ".map((a) => ({ text: a.textContent, href: a.getAttribute('href') }))";
+  // The classic layout has a second bar in its player page; one is enough.
+  `(() => { const bar = document.querySelector('${BAR}'); const a = bar ? [...bar.querySelectorAll('.byline a')] : [];` +
+  " if (a.length) return a.map((x) => ({ text: x.textContent, href: x.getAttribute('href') }));" +
+  ' const q = ' +
+  QUEUE_STATE +
+  '; const it = q.items[q.selectedItemIndex] || {};' +
+  ' const r = it.playlistPanelVideoRenderer || (it.playlistPanelVideoWrapperRenderer && it.playlistPanelVideoWrapperRenderer.primaryRenderer.playlistPanelVideoRenderer) || {};' +
+  ' return ((r.longBylineText && r.longBylineText.runs) || []).filter((x) => x.navigationEndpoint && x.navigationEndpoint.browseEndpoint)' +
+  ".map((x) => ({ text: x.text, href: 'browse/' + x.navigationEndpoint.browseEndpoint.browseId })); })()";
 const nowLinks = () => inPage(NOW_LINKS).then(pure.sanitizeLinks);
 
 // Rows as the page shows them. A track with a music video sits in a wrapper with
@@ -129,18 +138,22 @@ const ROWS =
 
 // The queue as the page renders it; long queues load further rows as they play.
 // `top` is the row's place in the reorderable list (-1 for autoplay suggestions),
-// `itemId` the id the queue removes it by.
+// `itemId` the id the queue removes it by. The playing row comes from the store:
+// the rows' own selected attribute can stay on tracks played before.
 const QUEUE =
+  '(() => { const sel = ' +
+  QUEUE_STATE +
+  '.selectedItemIndex; return ' +
   ROWS +
   '.map((el) => {' +
   " const d = el.data || {}; const t = (x) => ((x && x.runs) || []).map((r) => r.text).join('');" +
   ' const th = (d.thumbnail && d.thumbnail.thumbnails) || [];' +
   ' const pic = th.find((x) => x.width >= 96) || th[th.length - 1];' +
-  " const top = el.closest('#contents > *');" +
+  " const row = el.closest('#contents > *'); const top = row ? [...row.parentElement.children].indexOf(row) : -1;" +
   ' const w = d.navigationEndpoint && d.navigationEndpoint.watchEndpoint;' +
   ' return { videoId: d.videoId, title: t(d.title), artist: t(d.shortBylineText || d.longBylineText),' +
-  " length: t(d.lengthText), thumb: pic ? pic.url : '', selected: el.hasAttribute('selected')," +
-  ' top: top ? [...top.parentElement.children].indexOf(top) : -1, itemId: w ? w.index : null }; })';
+  " length: t(d.lengthText), thumb: pic ? pic.url : '', selected: top >= 0 ? top === sel : el.hasAttribute('selected')," +
+  ' top, itemId: w ? w.index : null }; }); })()';
 const queue = () => inPage(QUEUE).then(pure.sanitizeQueue);
 
 // The row's own play button jumps inside the current queue and keeps its order,
