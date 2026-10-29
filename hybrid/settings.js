@@ -107,6 +107,16 @@ function keyList() {
   return box;
 }
 
+const QUALITY_LABELS = [
+  ['hd2160', '2160p'],
+  ['hd1440', '1440p'],
+  ['hd1080', '1080p'],
+  ['hd720', '720p'],
+  ['large', '480p'],
+  ['medium', '360p'],
+  ['tiny', '144p'],
+];
+
 function renderSettings(s) {
   shownSettings = s;
   const box = div('settings');
@@ -126,6 +136,11 @@ function renderSettings(s) {
       T.setDiscord,
       checkbox('set-discord', s.richPresence, (v) => set('richPresence', v), !s.discordAvailable),
       s.discordAvailable ? '' : T.setDiscordOff
+    ),
+    field(
+      T.setQuality,
+      select('set-quality', [['auto', T.qualityAuto], ...QUALITY_LABELS], s.videoQuality, (v) => set('videoQuality', v)),
+      T.setQualityHint
     ),
     heading(T.setSleep),
     field(

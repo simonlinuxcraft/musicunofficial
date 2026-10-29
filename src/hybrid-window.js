@@ -149,6 +149,7 @@ function settings() {
     language: store.settings.language || 'system',
     notify: store.settings.notify === true,
     richPresence: player.discordEnabled(),
+    videoQuality: store.settings.videoQuality || 'auto',
     discordAvailable: player.discordAvailable,
     sleep: sleep.state(),
     lastfm: lastfm.state(),
@@ -238,9 +239,14 @@ ipcMain.handle('hybrid:queue-play', (e, index, videoId) => {
 
 ipcMain.handle('hybrid:settings', (e) => (fromUs(e) ? settings() : null));
 
-ipcMain.handle('hybrid:setting', (e, key, value) => {
+ipcMain.handle('hybrid:setting', async (e, key, value) => {
   if (!fromUs(e)) return null;
   if (key === 'language' && ['system', 'de', 'en'].includes(value)) actions.setLanguage(value);
+  else if (key === 'videoQuality' && page.QUALITIES.includes(value)) {
+    await page.setQuality(value);
+    store.settings.videoQuality = value;
+    store.saveSettings();
+  }
   else if (key === 'notify' && typeof value === 'boolean') {
     store.settings.notify = value;
     store.saveSettings();

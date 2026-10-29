@@ -216,6 +216,12 @@ async function queueAdd(target, position) {
   return -1;
 }
 
+// The player keeps the choice itself (localStorage yt-player-quality, about a year), across tracks and reloads.
+// ponytail: not reapplied on load; do that if it ever drops back to auto on its own.
+const QUALITIES = ['auto', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'tiny'];
+const setQuality = (q) =>
+  inPage("document.getElementById('movie_player').setPlaybackQualityRange(" + JSON.stringify(q) + ', ' + JSON.stringify(q) + ')');
+
 module.exports = {
   inPage,
   innertube,
@@ -229,4 +235,6 @@ module.exports = {
   queueMove,
   queueAdd,
   QUEUE_POSITIONS,
+  QUALITIES,
+  setQuality,
 };
