@@ -115,7 +115,11 @@ function showTab(tab) {
   else loadQueue();
 }
 
+// A narrow window lays the card over the stage, where the page's own view would cover it.
+const narrow = matchMedia('(max-width: 760px)');
+
 function toggleQueue(open = $('queue').hidden) {
+  if (open && narrow.matches && slot === 'stage') setSlot(null);
   $('queue').hidden = !open;
   $('queue-toggle').setAttribute('aria-pressed', String(open));
   if (open) showTab(panelTab);
@@ -146,8 +150,10 @@ function setSlot(next, away = false) {
 // Like YouTube Music's player page: the player big, up next beside it.
 function toggleStage(open = slot !== 'stage') {
   setSlot(open ? 'stage' : null);
-  toggleQueue(open);
+  toggleQueue(open && !narrow.matches);
 }
+
+narrow.addEventListener('change', () => narrow.matches && slot === 'stage' && toggleQueue(false));
 
 const slotWatch = new ResizeObserver(placePlayer);
 slotWatch.observe($('stage'));
