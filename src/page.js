@@ -112,6 +112,25 @@ async function control(action, arg) {
   return readControls();
 }
 
+// Rows as the page shows them. A track with a music video sits in a wrapper with
+// both versions, and the one not chosen by the song/video switch is under [hidden].
+const ROWS =
+  "[...document.querySelectorAll('ytmusic-player-queue ytmusic-player-queue-item')]" +
+  ".filter((el) => !el.closest('ytmusic-playlist-panel-video-wrapper-renderer > [hidden]'))";
+const TOP = "((el) => { const row = el.closest('#contents > *'); return row ? [...row.parentElement.children].indexOf(row) : -1; })";
+
+// Store index of the playing track. After a shuffle the store keeps the previous
+// track's index (and selected flag) until the next track, so the player decides.
+const CURRENT =
+  "(() => { const p = document.querySelector('#movie_player'); const id = p && p.getVideoData ? p.getVideoData().video_id : '';" +
+  ' const sel = ' +
+  QUEUE_STATE +
+  '.selectedItemIndex; const tops = ' +
+  ROWS +
+  '.filter((el) => el.data && el.data.videoId === id).map(' +
+  TOP +
+  '); return tops.length && !tops.includes(sel) ? tops[0] : sel; })()';
+
 // Artist and album links under the title; the redesigned bar has no hrefs, the playing queue entry has the endpoints.
 const NOW_LINKS =
   // The classic layout has a second bar in its player page; one is enough.
@@ -119,32 +138,30 @@ const NOW_LINKS =
   " if (a.length) return a.map((x) => ({ text: x.textContent, href: x.getAttribute('href') }));" +
   ' const q = ' +
   QUEUE_STATE +
-  '; const it = q.items[q.selectedItemIndex] || {};' +
+  '; const it = q.items[' +
+  CURRENT +
+  '] || {};' +
   ' const r = it.playlistPanelVideoRenderer || (it.playlistPanelVideoWrapperRenderer && it.playlistPanelVideoWrapperRenderer.primaryRenderer.playlistPanelVideoRenderer) || {};' +
   ' return ((r.longBylineText && r.longBylineText.runs) || []).filter((x) => x.navigationEndpoint && x.navigationEndpoint.browseEndpoint)' +
   ".map((x) => ({ text: x.text, href: 'browse/' + x.navigationEndpoint.browseEndpoint.browseId })); })()";
 const nowLinks = () => inPage(NOW_LINKS).then(pure.sanitizeLinks);
 
-// Rows as the page shows them. A track with a music video sits in a wrapper with
-// both versions, and the one not chosen by the song/video switch is under [hidden].
-const ROWS =
-  "[...document.querySelectorAll('ytmusic-player-queue ytmusic-player-queue-item')]" +
-  ".filter((el) => !el.closest('ytmusic-playlist-panel-video-wrapper-renderer > [hidden]'))";
-
 // The queue as the page renders it; long queues load further rows as they play.
 // `top` is the row's place in the reorderable list (-1 for autoplay suggestions),
-// `itemId` the id the queue removes it by. The playing row comes from the store:
-// the rows' own selected attribute can stay on tracks played before.
+// `itemId` the id the queue removes it by. The rows' own selected attribute can
+// stay on tracks played before, so the playing row comes from CURRENT.
 const QUEUE =
   '(() => { const sel = ' +
-  QUEUE_STATE +
-  '.selectedItemIndex; return ' +
+  CURRENT +
+  '; return ' +
   ROWS +
   '.map((el) => {' +
   " const d = el.data || {}; const t = (x) => ((x && x.runs) || []).map((r) => r.text).join('');" +
   ' const th = (d.thumbnail && d.thumbnail.thumbnails) || [];' +
   ' const pic = th.find((x) => x.width >= 96) || th[th.length - 1];' +
-  " const row = el.closest('#contents > *'); const top = row ? [...row.parentElement.children].indexOf(row) : -1;" +
+  ' const top = ' +
+  TOP +
+  '(el);' +
   ' const w = d.navigationEndpoint && d.navigationEndpoint.watchEndpoint;' +
   ' return { videoId: d.videoId, title: t(d.title), artist: t(d.shortBylineText || d.longBylineText),' +
   " length: t(d.lengthText), thumb: pic ? pic.url : '', selected: top >= 0 ? top === sel : el.hasAttribute('selected')," +
@@ -206,8 +223,9 @@ const QUEUE_ADD = (target, position) =>
   '));' +
   ' const items = ((res && res.queueDatas) || []).map((d) => d.content).filter(Boolean);' +
   ' const now = q.queue.store.getState().queue;' +
-  ' const pick = (it) => it.playlistPanelVideoRenderer || (it.playlistPanelVideoWrapperRenderer && it.playlistPanelVideoWrapperRenderer.primaryRenderer.playlistPanelVideoRenderer) || {};' +
-  ' const sel = now.items.findIndex((it) => pick(it).selected);' +
+  ' const sel = now.items.length ? ' +
+  CURRENT +
+  ' : -1;' +
   ' const index = ' +
   JSON.stringify(position) +
   " === 'INSERT_AFTER_CURRENT_VIDEO' && sel >= 0 ? sel + 1 : now.items.length;" +
