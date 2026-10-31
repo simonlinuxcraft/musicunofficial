@@ -5,6 +5,7 @@ const api = window.hybrid;
 
 const ICON_PLAY = 'M8 5v14l11-7z';
 const ICON_OPEN = 'M8.6 16.6 10 18l6-6-6-6-1.4 1.4 4.6 4.6z';
+const ICON_BACK = 'M15.4 16.6 14 18l-6-6 6-6 1.4 1.4-4.6 4.6z';
 const ICON_MORE = 'M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4zm0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4z';
 const ICON_REPEAT = 'M7 7h10v3l4-4-4-4v3H5v6h2zm10 10H7v-3l-4 4 4 4v-3h12v-6h-2z';
 const ICON_REPEAT_ONE = ICON_REPEAT + 'm-4-2V9h-1l-2 1v1h1.5v4z';

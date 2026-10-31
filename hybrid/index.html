@@ -133,7 +133,7 @@
       main { overflow-y: auto; padding: 28px 16px 24px; }
       /* Under the player view, which main places over it. */
       #stage { background: #000; }
-      #inner { max-width: 960px; margin: 0 auto; }
+      #inner { max-width: 1280px; margin: 0 auto; }
       h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15; margin: 0 8px 14px; }
       #actions { display: flex; gap: 8px; margin: 0 8px 18px; }
       #actions button {
@@ -151,7 +151,13 @@
       #status button { color: var(--fg); text-decoration: underline; }
 
       section + section { margin-top: 26px; }
-      h2.shelf { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; margin: 0 8px 12px; }
+      /* Card sizes follow the width of the list, so a row always ends on a whole card. */
+      section { container-type: inline-size; }
+      .shelf-head { display: flex; align-items: center; gap: 8px; margin: 0 8px 12px; }
+      h2.shelf { flex: 1; min-width: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.01em; }
+      .pager { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--raise); }
+      .pager:hover { background: #2a2a2a; }
+      .pager[aria-disabled='true'] { opacity: 0.35; cursor: default; background: var(--raise); }
 
       .item {
         display: grid;
@@ -195,17 +201,24 @@
       }
       .item:hover .cover-play, .tile:hover .cover-play, .cover-play:focus-visible { opacity: 1; }
 
+      /* Inline padding is half the gap, which makes one page of cards exactly clientWidth wide. */
+      .tiles, .grid { --n: 2; --gap: 16px; display: grid; gap: var(--gap); padding: 2px calc(var(--gap) / 2) 12px; }
+      @container (min-width: 520px) { .tiles, .grid { --n: 3; } }
+      @container (min-width: 720px) { .tiles, .grid { --n: 4; } }
+      @container (min-width: 920px) { .tiles, .grid { --n: 5; } }
+      @container (min-width: 1120px) { .tiles, .grid { --n: 6; } }
+      /* A shelf pages sideways with its arrows; wheel and touchpad still scroll it. */
       .tiles {
-        display: grid;
         grid-auto-flow: column;
-        grid-auto-columns: 168px;
-        gap: 16px;
+        grid-auto-columns: calc((100% - (var(--n) - 1) * var(--gap)) / var(--n));
         overflow-x: auto;
-        padding: 2px 8px 12px;
+        scroll-padding-inline: calc(var(--gap) / 2);
         scroll-snap-type: x proximity;
+        scrollbar-width: none;
       }
+      .grid { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); row-gap: 24px; }
       .tile { position: relative; min-width: 0; cursor: pointer; scroll-snap-align: start; border-radius: 8px; }
-      .tile .cover { width: 168px; height: 168px; }
+      .tile .cover { width: 100%; height: auto; aspect-ratio: 1; }
       .tile .thumb { border-radius: 6px; }
       .tile .title { margin-top: 8px; font-weight: 500; }
       .tile .sub { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
@@ -216,14 +229,14 @@
         position: fixed;
         z-index: 50;
         min-width: 230px;
-        padding: 6px 0;
-        border: 1px solid #333;
-        border-radius: 8px;
-        background: #212121;
+        padding: 6px;
+        border: 1px solid #2a2a2a;
+        border-radius: 12px;
+        background: #1c1c1c;
         box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
       }
-      #menu button { display: block; width: 100%; padding: 9px 16px; text-align: left; }
-      #menu button:hover, #menu button:focus-visible { background: #2e2e2e; outline: none; border-radius: 0; }
+      #menu button { display: block; width: 100%; padding: 9px 12px; border-radius: 8px; text-align: left; }
+      #menu button:hover, #menu button:focus-visible { background: #2c2c2c; outline: none; }
 
       dialog {
         margin: auto;
