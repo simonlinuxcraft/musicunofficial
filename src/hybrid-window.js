@@ -239,15 +239,14 @@ ipcMain.handle('hybrid:queue-play', (e, index, videoId) => {
 
 ipcMain.handle('hybrid:settings', (e) => (fromUs(e) ? settings() : null));
 
-ipcMain.handle('hybrid:setting', async (e, key, value) => {
+ipcMain.handle('hybrid:setting', (e, key, value) => {
   if (!fromUs(e)) return null;
   if (key === 'language' && ['system', 'de', 'en'].includes(value)) actions.setLanguage(value);
   else if (key === 'videoQuality' && page.QUALITIES.includes(value)) {
-    await page.setQuality(value);
     store.settings.videoQuality = value;
     store.saveSettings();
-  }
-  else if (key === 'notify' && typeof value === 'boolean') {
+    page.setQuality(value).catch(() => {});
+  } else if (key === 'notify' && typeof value === 'boolean') {
     store.settings.notify = value;
     store.saveSettings();
     player.sync();
@@ -315,8 +314,17 @@ ipcMain.on('hybrid:player-view', (e, kind, r) => {
   mainWindow.place(ok ? kind : null, ok ? { x: px(r.x), y: px(r.y), width: px(r.width), height: px(r.height) } : null);
 });
 
+// The player stores the quality only while a track is loaded, so each new track gets it again.
+let qualityFor = null;
+function onTrack(t) {
+  if (!t || t.ad || !t.videoId || t.videoId === qualityFor) return;
+  qualityFor = t.videoId;
+  page.setQuality(store.settings.videoQuality || 'auto').catch(() => {});
+}
+
 module.exports = {
   create,
+  onTrack,
   show,
   hide,
   destroy,

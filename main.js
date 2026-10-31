@@ -90,12 +90,13 @@ app.whenReady().then(() => {
       sleep.onTrack(t);
       notify.onTrack(t);
       lastfm.onTrack(t);
+      hybrid.onTrack(t);
     },
   });
   sleep.init(() => player.command('pause'));
   // No notification for a track the user is looking at anyway.
   notify.init(() => mainWindow.isFocused() || hybrid.isFocused() || mini.isOpen());
-  mpris.start({ raise: showMain, quit: () => app.quit(), command: player.command, control: page.control });
+  mpris.start({ raise: showMain, quit: () => app.quit(), command: player.command, control: (action, arg) => page.control(action, arg).catch(() => null) });
   mainWindow.create({ resume, openMini: mini.open });
   hybrid.create({ openMini: mini.open, canHide: tray.exists, setLanguage });
   try {

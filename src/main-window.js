@@ -18,20 +18,26 @@ const DARK = '#030303';
 // One pixel in the window corner, where page and UI are the same #030303. At
 // 0x0 the page counts as hidden, and Chromium pauses a muted video in a hidden page.
 const OUT_OF_SIGHT = { x: 0, y: 0, width: 1, height: 1 };
-// Below about 616 px YouTube Music switches to its mobile layout, which has no like
-// button or volume, so out of sight the page lays out as a small desktop page.
-const DESKTOP = {
-  screenPosition: 'desktop',
-  screenSize: { width: 720, height: 360 },
-  viewSize: { width: 720, height: 360 },
-  viewPosition: { x: 0, y: 0 },
-  deviceScaleFactor: 0,
-  scale: 1,
-};
+// Below about 616 px YouTube Music switches to its mobile layout, which has no like button or volume.
+const DESKTOP_WIDTH = 720;
 
-function layOut(wc) {
-  if (where) wc.disableDeviceEmulation();
-  else wc.enableDeviceEmulation(DESKTOP);
+// Out of sight a small desktop page; a narrower stage keeps that layout, scaled down to fit.
+function emulation() {
+  if (where === 'page' || (where === 'stage' && placed.width >= DESKTOP_WIDTH)) return null;
+  const scale = where ? Math.max(placed.width, 1) / DESKTOP_WIDTH : 1;
+  const size = { width: DESKTOP_WIDTH, height: where ? Math.round(placed.height / scale) : 360 };
+  return { screenPosition: 'desktop', screenSize: size, viewSize: size, viewPosition: { x: 0, y: 0 }, deviceScaleFactor: 0, scale };
+}
+
+// A new document needs it again; otherwise only a change is sent.
+let emulated = '';
+function layOut(wc, again = false) {
+  const e = emulation();
+  const key = JSON.stringify(e);
+  if (key === emulated && !again) return;
+  emulated = key;
+  if (e) wc.enableDeviceEmulation(e);
+  else wc.disableDeviceEmulation();
 }
 const inject = (name) => fs.readFileSync(path.join(ROOT, 'inject', name), 'utf8');
 const CSS = inject('style.css');
@@ -41,6 +47,7 @@ const RESUME = inject('resume.js');
 
 let view = null;
 let where = null;
+let placed = null;
 // The key of the inserted stage CSS, as a promise; null while not inserted.
 let stageCss = null;
 
@@ -109,7 +116,7 @@ function create({ resume, openMini }) {
     // Once only: an SPA navigation fires dom-ready again.
     resume = null;
     if (where === 'stage') setStage(true);
-    layOut(wc);
+    layOut(wc, true);
   });
 
   // A reload drops the injected poller together with its last track.
@@ -148,6 +155,7 @@ function place(kind, bounds) {
     view.webContents.loadURL(START_URL);
   }
   where = kind;
+  placed = kind ? bounds : null;
   setStage(kind === 'stage');
   view.setBounds(kind ? bounds : OUT_OF_SIGHT);
   layOut(view.webContents);

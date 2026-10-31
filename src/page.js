@@ -58,19 +58,15 @@ const navigate = (endpoint) =>
       ' } }))'
   ).then(() => undefined);
 
-// The page's own buttons and slider, so YouTube Music keeps its state (shuffle
-// order, repeat mode, the saved volume) exactly as if clicked there. They sit in
-// the classic player bar, in the redesigned one (ytmusic-miniplayer, seen from
-// 2026-10) or, on a narrow page, in the player page itself. Classes, not aria
-// labels, which follow the UI language. inject/nowplaying.js reads the state.
-// ponytail: DOM of the page; breaks when YouTube renames these classes.
+// ponytail: the page's own controls by class (aria labels follow the UI language), so it keeps its state; breaks when YouTube renames them.
 const BAR = 'ytmusic-player-bar';
 const MINI = 'ytmusic-app-layout > ytmusic-miniplayer';
 const press = (sel) => 'document.querySelector(' + JSON.stringify(sel) + ').click();';
 const SHUFFLE = `${BAR} .shuffle, ${MINI} .ytmusicPlayerControlsShuffleButton button, ytmusic-player-controls .shuffle`;
 const REPEAT = `${BAR} .repeat, ${MINI} .ytmusicPlayerControlsRepeatButton button, ytmusic-player-controls .repeat`;
 const QUEUE_STATE = "document.querySelector('ytmusic-player-queue').queue.store.getState().queue";
-const CONTROLS = 'window.__ytmControls()';
+// Null until inject/nowplaying.js is in a new document; its next poll reports the state anyway.
+const CONTROLS = "typeof __ytmControls === 'function' ? __ytmControls() : null";
 const wait = 'await new Promise((r) => setTimeout(r, 120));';
 const ACTIONS = {
   shuffle: () => press(SHUFFLE),
@@ -116,8 +112,7 @@ async function control(action, arg) {
   return readControls();
 }
 
-// Artist and album links under the title. The redesigned bar links by script
-// without an href; the playing queue entry still carries the endpoints.
+// Artist and album links under the title; the redesigned bar has no hrefs, the playing queue entry has the endpoints.
 const NOW_LINKS =
   // The classic layout has a second bar in its player page; one is enough.
   `(() => { const bar = document.querySelector('${BAR}'); const a = bar ? [...bar.querySelectorAll('.byline a')] : [];` +
@@ -229,11 +224,14 @@ async function queueAdd(target, position) {
   return -1;
 }
 
-// The player keeps the choice itself (localStorage yt-player-quality, about a year), across tracks and reloads.
-// ponytail: not reapplied on load; do that if it ever drops back to auto on its own.
+// The player stores it (yt-player-quality, about a year) only once a track plays or pauses, so hybrid-window sets it per track.
 const QUALITIES = ['auto', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'tiny'];
 const setQuality = (q) =>
-  inPage("document.getElementById('movie_player').setPlaybackQualityRange(" + JSON.stringify(q) + ', ' + JSON.stringify(q) + ')');
+  inPage(
+    "(async () => { const p = document.getElementById('movie_player');" +
+      ' for (let i = 0; i < 50 && ![1, 2].includes(p.getPlayerState()); i++) await new Promise((r) => setTimeout(r, 200));' +
+      ' p.setPlaybackQualityRange(' + JSON.stringify(q) + ', ' + JSON.stringify(q) + '); })()'
+  );
 
 module.exports = {
   inPage,

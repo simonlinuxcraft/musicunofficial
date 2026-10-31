@@ -68,10 +68,7 @@
     return like ? 'LIKE' : pressed('dislike-button-view-model button') ? 'DISLIKE' : 'INDIFFERENT';
   }
 
-  // The page's state, so the hybrid UI and MPRIS show what the page does. Shuffle
-  // and repeat from the store every layout of its player bar shares. The volume
-  // from the classic bar, whose slider runs on a curve over the player's volume,
-  // else from the player, which the redesigned slider sets one to one.
+  // Shuffle and repeat from the store all bar layouts share; the classic slider curves its volume, the redesigned one does not.
   function controls() {
     const q = document.querySelector('ytmusic-player-queue');
     const st = q && q.queue && q.queue.store ? q.queue.store.getState().queue : null;

@@ -1,7 +1,4 @@
-/* The now-playing view of the own interface shows only the page's player, cover
-   or video as the page picks it. The layout around the player differs between
-   accounts, and an ancestor with a transform or containment would pin the fixed
-   player inside it, below the nav bar and beside the guide. So none may have one. */
+/* An ancestor with a transform or containment would pin the fixed player inside the page layout. */
 :has(ytmusic-player#player) {
   transform: none !important;
   filter: none !important;
@@ -12,15 +9,13 @@
   will-change: auto !important;
 }
 
-/* Nothing but the player is painted: nav bar, guide, side panel, mini player.
-   The layout's parts set their own visibility, so each is hidden by name.
-   Hidden, not removed: the interface still clicks the song/video switch. The
-   z-index keeps it above anything the page shows visible on its own, like a toast. */
+/* Hidden, not removed: the interface still clicks the song/video switch; each part sets its own visibility. */
 body,
 ytmusic-app-layout > * {
   visibility: hidden !important;
 }
 
+/* Above anything the page shows visible on its own, like a toast. */
 ytmusic-player-page#player-page {
   z-index: 2147483647 !important;
 }
