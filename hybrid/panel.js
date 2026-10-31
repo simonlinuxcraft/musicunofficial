@@ -131,11 +131,22 @@ function toggleQueue(open = $('queue').hidden) {
 let slot = null;
 // The page slot was opened for a consent or sign-in page, not by the user.
 let slotAway = false;
+// A track without a video shows its cover here, whatever the page's layout does with it.
+let stageVideo = true;
 
 function placePlayer() {
-  const el = slot === 'stage' ? $('stage') : slot === 'page' ? $('middle') : null;
+  const el = slot === 'stage' ? (stageVideo ? $('stage') : null) : slot === 'page' ? $('middle') : null;
   const r = el && el.getBoundingClientRect();
   api.playerView(r ? slot : null, r && { x: r.x, y: r.y, width: r.width, height: r.height });
+}
+
+function setStageVideo(video, art) {
+  const img = $('stage-art');
+  if (art && img.getAttribute('src') !== art) img.src = art;
+  img.hidden = video || !art;
+  if (video === stageVideo) return;
+  stageVideo = video;
+  placePlayer();
 }
 
 function setSlot(next, away = false) {

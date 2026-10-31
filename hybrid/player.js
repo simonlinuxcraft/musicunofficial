@@ -140,6 +140,7 @@ api.onTrack((t) => {
   $('av-song').setAttribute('aria-pressed', String(!has || t.avMode !== 'OMV_PREFERRED'));
   $('av-video').setAttribute('aria-pressed', String(has && t.avMode === 'OMV_PREFERRED'));
   $('skip-ad').hidden = !(has && t.ad && t.adSkip);
+  setStageVideo(!has || t.video, has ? t.art || '' : '');
   document.title = has && !t.ad ? t.title + (t.artist ? ' - ' + t.artist : '') : 'Music';
 
   const art = has ? t.art || '' : '';

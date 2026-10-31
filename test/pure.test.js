@@ -83,6 +83,8 @@ test('accepts a normal track and clamps the strings', () => {
   assert.equal(sanitizeTrack({ title: 'x', like: 'LOVE' }).like, null);
   assert.equal(sanitizeTrack({ title: 'x', videoId: 'iNjGNNoUjkk' }).videoId, 'iNjGNNoUjkk');
   assert.equal(sanitizeTrack({ title: 'x', videoId: '"><img>' }).videoId, null);
+  assert.equal(sanitizeTrack({ title: 'x', video: true }).video, true);
+  assert.equal(sanitizeTrack({ title: 'x', video: 'yes' }).video, false);
   const c = sanitizeTrack({ title: 'x', shuffle: 'yes', repeat: 'ONE', volume: 140.6, muted: true, avMode: 'OMV_PREFERRED', avAvailable: true });
   assert.deepEqual([c.shuffle, c.repeat, c.volume, c.muted, c.avMode, c.avAvailable, c.adSkip], [false, 'ONE', 100, true, 'OMV_PREFERRED', true, false]);
   assert.equal(sanitizeTrack({ title: 'x', repeat: 'SOMETIMES', avMode: 'X' }).repeat, 'NONE');

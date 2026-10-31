@@ -90,6 +90,19 @@
     };
   }
 
+  // Songs, podcasts and uploads play audio only, and so does any track in the page's audio-only mode.
+  const AUDIO_TYPES = ['MUSIC_VIDEO_TYPE_ATV', 'MUSIC_VIDEO_TYPE_PODCAST_EPISODE', 'MUSIC_VIDEO_TYPE_PRIVATELY_OWNED_TRACK'];
+  function hasVideo(v) {
+    // Loaded but without a picture: a video that only plays as sound here.
+    if (v.readyState >= 2 && v.videoWidth === 0) return false;
+    const p = document.getElementById('movie_player');
+    const type = p && typeof p.getPlayerResponse === 'function' ? p.getPlayerResponse()?.videoDetails?.musicVideoType : null;
+    if (!type) return v.videoWidth > 0;
+    const q = document.querySelector('ytmusic-player-queue');
+    const audioOnly = !!(q && q.queue && q.queue.store && q.queue.store.getState().player?.audioOnly);
+    return !AUDIO_TYPES.includes(type) && !audioOnly;
+  }
+
   // src/page.js reads it back after a click.
   window.__ytmControls = () => ({ ...controls(), like: likeStatus() });
 
@@ -126,6 +139,7 @@
       // Polled with the rest because the bar sets it a moment after the track changes.
       like: likeStatus(),
       videoId: videoId(),
+      video: hasVideo(v),
       ...controls(),
       position: t.position,
       duration: t.duration,
@@ -151,6 +165,7 @@
       a.ad !== b.ad ||
       a.like !== b.like ||
       a.videoId !== b.videoId ||
+      a.video !== b.video ||
       a.shuffle !== b.shuffle ||
       a.repeat !== b.repeat ||
       a.volume !== b.volume ||

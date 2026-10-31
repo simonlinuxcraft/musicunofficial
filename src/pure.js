@@ -101,6 +101,7 @@ function sanitizeTrack(raw) {
     ad: raw.ad === true,
     like: ['LIKE', 'DISLIKE', 'INDIFFERENT'].includes(raw.like) ? raw.like : null,
     videoId: typeof raw.videoId === 'string' && VIDEO_ID.test(raw.videoId) ? raw.videoId : null,
+    video: raw.video === true,
     shuffle: raw.shuffle === true,
     repeat: ['NONE', 'ALL', 'ONE'].includes(raw.repeat) ? raw.repeat : 'NONE',
     volume: Number.isFinite(raw.volume) ? Math.min(100, Math.max(0, Math.round(raw.volume))) : 100,
