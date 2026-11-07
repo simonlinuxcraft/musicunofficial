@@ -38,7 +38,7 @@
 
 <img src="docs/screenshot.png" width="820" alt="The player running in its own frameless window">
 
-<sub>Playlist names and profile picture replaced for this screenshot.</sub>
+<sub>Signed out, with the German interface.</sub>
 
 </div>
 
@@ -69,7 +69,7 @@ catches up.
 | Discord | Rich Presence, on by default, switched off in the settings or from the tray |
 | Extras | Sleep timer, a notification on a new track, Last.fm scrobbling with an API account of your own. Scrobbles made offline are sent once Last.fm is reachable again |
 | Tray | Closing the window keeps playback running. The icon shows the track and offers play, pause and skip; quit from the tray or with `Ctrl+Q` |
-| Remembers itself | Window size, maximised state, zoom and the last opened page are restored on the next start, the window position too on X11 |
+| Remembers itself | Window size, maximised state, zoom and the last opened page are restored on the next start, the window position too on X11. The last track comes back paused where it stopped, if that was less than a week ago |
 | Stays signed in | The profile survives updates, so an update does not sign you out |
 | Runs anywhere | No `libfuse2` required, works on distributions that stopped shipping it |
 | Dependencies | Electron plus one small pure JavaScript D-Bus library for the media keys |
@@ -109,7 +109,9 @@ draws at 20 frames per second.
 Track information comes from the page's own `mediaSession` data, the same
 source the media keys and the desktop's media widget use, so it does not depend
 on the site's markup staying the way it is today. The page reads the player once
-a second and reports only what changed, which costs about 0.2 % of one core.
+a second while a window shows the track and every three seconds in the
+background, and reports only what changed. The fast rate costs about 0.2 % of
+one core.
 
 ## Discord Rich Presence
 
