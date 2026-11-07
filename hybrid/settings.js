@@ -174,8 +174,19 @@ function renderSettings(s) {
     row.append(button(T.lastfmConnect, () => lastfmStep(api.lastfmConnect, key.value, secret.value), true));
     box.append(intro, field(T.lastfmKey, key), field(T.lastfmSecret, secret), row);
   }
+  box.append(heading(T.setUpdates), div('note', T.updateVersion + s.update.version + (s.update.on ? '' : '. ' + T.updateManual)));
+  if (s.update.ready) {
+    const row = div('actions');
+    row.append(div('', T.updateReady + s.update.ready), button(T.updateRestart, api.restart, true));
+    box.append(row);
+  }
   box.append(heading(T.setKeys), keyList());
   $('list').replaceChildren(box);
 }
 
 $('open-settings').addEventListener('click', openSettings);
+
+api.onUpdateReady((version) => {
+  toast(T.updateReady + version);
+  if (view && view.root === 'settings') api.settings().then((s) => s && view.root === 'settings' && renderSettings(s));
+});

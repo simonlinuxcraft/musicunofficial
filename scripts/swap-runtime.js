@@ -15,7 +15,7 @@ const { execFileSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
 const RUNTIME = path.join(ROOT, 'vendor', 'runtime-x86_64');
-const DIST = path.join(ROOT, 'dist');
+const DIST = process.argv[2] || path.join(ROOT, 'dist');
 
 function payloadOffset(file) {
   // LC_ALL=C: readelf translates its field labels, and this parses them.
@@ -33,7 +33,7 @@ function payloadOffset(file) {
 }
 
 const images = fs.readdirSync(DIST).filter((f) => f.endsWith('.AppImage'));
-if (!images.length) throw new Error('no .AppImage in dist/');
+if (!images.length) throw new Error('no .AppImage in ' + DIST);
 
 for (const name of images) {
   const file = path.join(DIST, name);
