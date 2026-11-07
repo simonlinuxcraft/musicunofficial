@@ -247,8 +247,9 @@ ipcMain.handle('hybrid:settings', (e) => (fromUs(e) ? settings() : null));
 
 ipcMain.handle('hybrid:setting', (e, key, value) => {
   if (!fromUs(e)) return null;
-  if (key === 'language' && ['system', 'de', 'en'].includes(value)) actions.setLanguage(value);
-  else if (key === 'videoQuality' && page.QUALITIES.includes(value)) {
+  if (key === 'language' && ['system', 'de', 'en'].includes(value)) {
+    actions.setLanguage(value);
+  } else if (key === 'videoQuality' && page.QUALITIES.includes(value)) {
     store.settings.videoQuality = value;
     store.saveSettings();
     page.setQuality(value).catch(() => {});
@@ -256,8 +257,9 @@ ipcMain.handle('hybrid:setting', (e, key, value) => {
     store.settings.notify = value;
     store.saveSettings();
     player.sync();
-  } else if (key === 'richPresence' && typeof value === 'boolean') player.setDiscord(value);
-  else if (key === 'sleep' && SLEEP_CHOICES.includes(value)) {
+  } else if (key === 'richPresence' && typeof value === 'boolean') {
+    player.setDiscord(value);
+  } else if (key === 'sleep' && SLEEP_CHOICES.includes(value)) {
     sleep.set(value);
     player.sync();
   }
@@ -317,9 +319,10 @@ ipcMain.on('hybrid:sign-in', (e) => {
 ipcMain.on('hybrid:player-view', (e, kind, r) => {
   if (!fromUs(e)) return;
   const ok = ['stage', 'page'].includes(kind) && r && ['x', 'y', 'width', 'height'].every((k) => Number.isFinite(r[k]));
+  if (!ok) return mainWindow.place(null, null);
   const z = win.webContents.getZoomFactor();
   const px = (v) => Math.max(0, Math.round(v * z));
-  mainWindow.place(ok ? kind : null, ok ? { x: px(r.x), y: px(r.y), width: px(r.width), height: px(r.height) } : null);
+  mainWindow.place(kind, { x: px(r.x), y: px(r.y), width: px(r.width), height: px(r.height) });
 });
 
 // The player stores the quality only while a track is loaded, so each new track gets it again.

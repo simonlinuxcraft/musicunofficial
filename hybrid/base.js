@@ -38,6 +38,15 @@ function div(cls, text) {
   return el;
 }
 
+// Clickable text inside a line of other text.
+function link(text, onClick) {
+  const a = document.createElement('span');
+  a.className = 'link';
+  a.textContent = text;
+  a.addEventListener('click', onClick);
+  return a;
+}
+
 function iconButton(cls, icon, label, onClick) {
   const b = document.createElement('button');
   b.className = cls;

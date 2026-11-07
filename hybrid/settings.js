@@ -64,11 +64,15 @@ function button(label, onClick, primary) {
   return b;
 }
 
+const onSettings = () => view?.root === 'settings';
+// Drawn only while the user is still on the settings page.
+const redraw = (s) => s && onSettings() && renderSettings(s);
+
 // Every change comes back as the full new state and the page is drawn from it.
 const set = (key, value) =>
   api
     .setting(key, value)
-    .then((s) => s && view && view.root === 'settings' && renderSettings(s))
+    .then(redraw)
     .catch((e) => toast(errorText(e)));
 
 function lastfmStep(step, ...args) {
@@ -87,12 +91,12 @@ function sleepNote(s) {
 let shownSettings = null;
 setInterval(() => {
   const s = shownSettings;
-  if (!s || !view || view.root !== 'settings' || s.sleep.mode !== 'time') return;
+  if (!s || !onSettings() || s.sleep.mode !== 'time') return;
   if (Date.now() >= s.sleep.endsAt) {
-    api.settings().then((n) => n && view.root === 'settings' && renderSettings(n));
+    api.settings().then(redraw);
     return;
   }
-  const note = $('set-sleep') && $('set-sleep').closest('.set-row').querySelector('.note');
+  const note = $('set-sleep')?.closest('.set-row').querySelector('.note');
   if (note) note.textContent = sleepNote(s);
 }, 15000);
 
@@ -158,11 +162,7 @@ function renderSettings(s) {
     box.append(div('note', T.lastfmWaiting), row);
   } else {
     const intro = div('note', T.lastfmIntro + ' ');
-    const create = document.createElement('span');
-    create.className = 'link';
-    create.textContent = T.lastfmCreate;
-    create.addEventListener('click', api.openLastfmAccount);
-    intro.append(create);
+    intro.append(link(T.lastfmCreate, api.openLastfmAccount));
     const key = textInput('lastfm-key', 'text', T.lastfmKey);
     const secret = textInput('lastfm-secret', 'password', T.lastfmSecret);
     const row = div('actions');
@@ -186,5 +186,5 @@ $('open-settings').addEventListener('click', openSettings);
 
 api.onUpdateReady((version) => {
   toast(T.updateReady + version);
-  if (view && view.root === 'settings') api.settings().then((s) => s && view.root === 'settings' && renderSettings(s));
+  if (onSettings()) api.settings().then(redraw);
 });

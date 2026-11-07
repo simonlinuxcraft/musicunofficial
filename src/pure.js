@@ -4,6 +4,21 @@ const crypto = require('crypto');
 
 const APP_TITLE = 'Music';
 
+// Shapes of YouTube's ids. Anything that does not match is dropped, not trusted.
+const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+const LIST_ID = /^[A-Za-z0-9_-]{2,64}$/;
+const BROWSE_ID = /^[A-Za-z0-9_-]{2,128}$/;
+const PARAMS = /^[A-Za-z0-9%_=-]{1,100}$/;
+const CONTINUATION = /^[A-Za-z0-9%_=-]{8,4000}$/;
+
+const REPEAT_MODES = ['NONE', 'ALL', 'ONE'];
+const LIKE_STATES = ['LIKE', 'DISLIKE', 'INDIFFERENT'];
+
+const matching = (v, re) => (typeof v === 'string' && re.test(v) ? v : null);
+const pick = (v, allowed) => (allowed.includes(v) ? v : null);
+const clampVolume = (v) => Math.min(100, Math.max(0, Math.round(v)));
+const pageType = (b) => b?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType || '';
+
 // Google's login flow bounces across accounts.google.com and back, so those
 // hosts have to stay in-app. Everything else is a real outbound link.
 const INTERNAL_HOSTS = ['youtube.com', 'google.com', 'ytimg.com', 'ggpht.com'];
@@ -81,14 +96,14 @@ function sanitizeTrack(raw) {
     art,
     playing: raw.playing === true,
     ad: raw.ad === true,
-    like: ['LIKE', 'DISLIKE', 'INDIFFERENT'].includes(raw.like) ? raw.like : null,
-    videoId: typeof raw.videoId === 'string' && VIDEO_ID.test(raw.videoId) ? raw.videoId : null,
+    like: pick(raw.like, LIKE_STATES),
+    videoId: matching(raw.videoId, VIDEO_ID),
     video: raw.video === true,
     shuffle: raw.shuffle === true,
-    repeat: ['NONE', 'ALL', 'ONE'].includes(raw.repeat) ? raw.repeat : 'NONE',
-    volume: Number.isFinite(raw.volume) ? Math.min(100, Math.max(0, Math.round(raw.volume))) : 100,
+    repeat: pick(raw.repeat, REPEAT_MODES) || 'NONE',
+    volume: Number.isFinite(raw.volume) ? clampVolume(raw.volume) : 100,
     muted: raw.muted === true,
-    avMode: ['ATV_PREFERRED', 'OMV_PREFERRED'].includes(raw.avMode) ? raw.avMode : null,
+    avMode: pick(raw.avMode, ['ATV_PREFERRED', 'OMV_PREFERRED']),
     avAvailable: raw.avAvailable === true,
     adSkip: raw.adSkip === true,
     position: num(raw.position),
@@ -105,21 +120,15 @@ function positionNow(track, now = Date.now()) {
   return Math.min(track.duration, track.position + elapsed);
 }
 
-// A resume snapshot comes from the player API in the renderer and becomes a
-// navigation target on next launch, so the id is validated hard: no id, no
-// resume. videoId is YouTube's fixed 11-char handle; list is a playlist/radio
-// id. Anything that fails the shape is dropped rather than trusted.
-const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
-const LIST_ID = /^[A-Za-z0-9_-]{2,64}$/;
-
+// A resume snapshot becomes a navigation target on next launch: no valid id, no resume.
 function sanitizeResume(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const videoId = typeof raw.videoId === 'string' && VIDEO_ID.test(raw.videoId) ? raw.videoId : null;
+  const videoId = matching(raw.videoId, VIDEO_ID);
   if (!videoId) return null;
 
   return {
     videoId,
-    list: typeof raw.list === 'string' && LIST_ID.test(raw.list) ? raw.list : null,
+    list: matching(raw.list, LIST_ID),
     position: num(raw.position),
     duration: num(raw.duration),
     playing: raw.playing === true,
@@ -127,24 +136,23 @@ function sanitizeResume(raw) {
   };
 }
 
-const BROWSE_ID = /^[A-Za-z0-9_-]{2,128}$/;
-const PARAMS = /^[A-Za-z0-9%_=-]{1,100}$/;
-
 // Only the ids a navigation needs. The rest of a watchEndpoint (params, tracking)
 // stays behind, so nothing from a response is replayed into the page unchecked.
 function sanitizeWatch(raw) {
-  if (!raw || typeof raw !== 'object' || typeof raw.videoId !== 'string' || !VIDEO_ID.test(raw.videoId)) return null;
-  const w = { videoId: raw.videoId };
-  if (typeof raw.playlistId === 'string' && LIST_ID.test(raw.playlistId)) w.playlistId = raw.playlistId;
-  return w;
+  if (!raw || typeof raw !== 'object') return null;
+  const videoId = matching(raw.videoId, VIDEO_ID);
+  if (!videoId) return null;
+  const playlistId = matching(raw.playlistId, LIST_ID);
+  return playlistId ? { videoId, playlistId } : { videoId };
 }
 
 // A playlist or album header's shuffle entry, which plays the whole list shuffled.
 function sanitizePlaylistWatch(raw) {
-  if (!raw || typeof raw !== 'object' || typeof raw.playlistId !== 'string' || !LIST_ID.test(raw.playlistId)) return null;
-  const w = { playlistId: raw.playlistId };
-  if (typeof raw.params === 'string' && PARAMS.test(raw.params)) w.params = raw.params;
-  return w;
+  if (!raw || typeof raw !== 'object') return null;
+  const playlistId = matching(raw.playlistId, LIST_ID);
+  if (!playlistId) return null;
+  const params = matching(raw.params, PARAMS);
+  return params ? { playlistId, params } : { playlistId };
 }
 
 // The two endpoints the hybrid UI may hand back to the page: play a track, or a
@@ -160,18 +168,15 @@ function sanitizeEndpoint(raw) {
 // What "play next" and "add to queue" put in: one track or a whole list.
 function sanitizeQueueTarget(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  if (typeof raw.videoId === 'string' && VIDEO_ID.test(raw.videoId)) return { videoId: raw.videoId };
-  if (typeof raw.playlistId === 'string' && LIST_ID.test(raw.playlistId)) return { playlistId: raw.playlistId };
-  return null;
+  const videoId = matching(raw.videoId, VIDEO_ID);
+  if (videoId) return { videoId };
+  const playlistId = matching(raw.playlistId, LIST_ID);
+  return playlistId ? { playlistId } : null;
 }
 
-const CONTINUATION = /^[A-Za-z0-9%_=-]{8,4000}$/;
-
-// Tracks and cards out of an InnerTube browse or search response, grouped by the
-// shelves they sit in, plus the header's shuffle entry on a playlist or album and
-// the token for the next page. Walks the whole tree instead of fixed paths: the
-// shelves around the items differ per page and change over time, the item
-// renderers have stayed put.
+// Tracks and cards of a browse or search response, grouped by shelf, plus the
+// header's shuffle entry and the next page token. Walks the whole tree because
+// the shelves change per page and over time, the item renderers have stayed put.
 function parseItems(json) {
   const out = [];
   const sections = [];
@@ -180,8 +185,7 @@ function parseItems(json) {
   let next = null;
   const runsOf = (t) => (Array.isArray(t?.runs) ? t.runs.filter((r) => typeof r?.text === 'string') : []);
   const text = (t) => runsOf(t).map((r) => r.text).join('').trim().slice(0, 256);
-  const pageType = (b) => b?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType || '';
-  const browseOf = (b) => (typeof b?.browseId === 'string' && BROWSE_ID.test(b.browseId) ? b.browseId : null);
+  const browseOf = (b) => matching(b?.browseId, BROWSE_ID);
   // The smallest picture that is still sharp at the size it is shown, so a long
   // list does not decode 544 px covers for 48 px rows.
   const thumb = (t, min) => {
@@ -219,9 +223,24 @@ function parseItems(json) {
     section.items.push(item);
     out.push(item);
   };
-  const base = () => ({ play: null, shuffle: null, radio: null, queue: null, artistId: null, albumId: null });
   const overlayPlay = (o) => o?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint;
   const shelfTitle = (sh) => text(sh.title) || text(Object.values(sh.header || {})[0]?.title);
+  // A list row, a card or the top result. menuOf() and push() fill in the rest.
+  const entry = ({ title, subtitle, parts, thumb, card = false, watch, browse, play }) => ({
+    play: sanitizeEndpoint(play),
+    shuffle: null,
+    radio: null,
+    queue: null,
+    artistId: null,
+    albumId: null,
+    title,
+    subtitle,
+    parts,
+    thumb,
+    card,
+    watch,
+    browseId: watch ? null : browseOf(browse),
+  });
   const walk = (o) => {
     if (!o || typeof o !== 'object') return;
     if (!shuffle && o.icon?.iconType === 'MUSIC_SHUFFLE') shuffle = sanitizePlaylistWatch(o.navigationEndpoint?.watchPlaylistEndpoint);
@@ -237,28 +256,48 @@ function parseItems(json) {
       const cols = (li.flexColumns || []).map((c) => c?.musicResponsiveListItemFlexColumnRenderer?.text);
       const fixed = (li.fixedColumns || []).map((c) => text(c?.musicResponsiveListItemFixedColumnRenderer?.text)).filter(Boolean);
       const play = overlayPlay(li.overlay);
-      const watch = sanitizeWatch(
-        play?.watchEndpoint || runsOf(cols[0])[0]?.navigationEndpoint?.watchEndpoint || (li.playlistItemData && { videoId: li.playlistItemData.videoId })
-      );
+      const titleWatch = runsOf(cols[0])[0]?.navigationEndpoint?.watchEndpoint;
+      const rowWatch = li.playlistItemData && { videoId: li.playlistItemData.videoId };
+      const watch = sanitizeWatch(play?.watchEndpoint || titleWatch || rowWatch);
       const links = parts(cols[1]);
       for (const f of fixed) links.push({ text: ' • ', browseId: null }, { text: f, browseId: null });
-      const item = { ...base(), title: text(cols[0]), subtitle: links.map((r) => r.text).join('').trim(), parts: links, thumb: thumb(li.thumbnail, 96), card: false, watch, browseId: watch ? null : browseOf(li.navigationEndpoint?.browseEndpoint) };
-      item.play = sanitizeEndpoint(play);
+      const item = entry({
+        title: text(cols[0]),
+        subtitle: links.map((r) => r.text).join('').trim(),
+        parts: links,
+        thumb: thumb(li.thumbnail, 96),
+        watch,
+        browse: li.navigationEndpoint?.browseEndpoint,
+        play,
+      });
       push(item, li.menu, links);
     } else if (card) {
       const nav = card.navigationEndpoint || {};
-      const watch = sanitizeWatch(nav.watchEndpoint);
       const links = parts(card.subtitle);
-      const item = { ...base(), title: text(card.title), subtitle: text(card.subtitle), parts: links, thumb: thumb(card.thumbnailRenderer, 300), card: true, watch, browseId: watch ? null : browseOf(nav.browseEndpoint) };
-      item.play = sanitizeEndpoint(overlayPlay(card.thumbnailOverlay));
+      const item = entry({
+        title: text(card.title),
+        subtitle: text(card.subtitle),
+        parts: links,
+        thumb: thumb(card.thumbnailRenderer, 300),
+        card: true,
+        watch: sanitizeWatch(nav.watchEndpoint),
+        browse: nav.browseEndpoint,
+        play: overlayPlay(card.thumbnailOverlay),
+      });
       push(item, card.menu, links);
     } else if (top) {
       // Search's top result: the entity itself, then the tracks the card lists under it.
       const nav = runsOf(top.title)[0]?.navigationEndpoint || {};
-      const watch = sanitizeWatch(nav.watchEndpoint);
       const links = parts(top.subtitle);
-      const item = { ...base(), title: text(top.title), subtitle: text(top.subtitle), parts: links, thumb: thumb(top.thumbnail, 96), card: false, watch, browseId: watch ? null : browseOf(nav.browseEndpoint) };
-      item.play = sanitizeEndpoint(overlayPlay(top.thumbnailOverlay));
+      const item = entry({
+        title: text(top.title),
+        subtitle: text(top.subtitle),
+        parts: links,
+        thumb: thumb(top.thumbnail, 96),
+        watch: sanitizeWatch(nav.watchEndpoint),
+        browse: nav.browseEndpoint,
+        play: overlayPlay(top.thumbnailOverlay),
+      });
       push(item, top.menu, links);
       for (const c of top.contents || []) walk(c);
     } else if (shelf) {
@@ -282,8 +321,7 @@ function lyricsBrowseId(json) {
   const walk = (o) => {
     if (found || !o || typeof o !== 'object') return;
     const b = o.tabRenderer?.endpoint?.browseEndpoint;
-    const type = b?.browseEndpointContextSupportedConfigs?.browseEndpointContextMusicConfig?.pageType;
-    if (type === 'MUSIC_PAGE_TYPE_TRACK_LYRICS' && typeof b.browseId === 'string' && BROWSE_ID.test(b.browseId)) {
+    if (pageType(b) === 'MUSIC_PAGE_TYPE_TRACK_LYRICS' && matching(b.browseId, BROWSE_ID)) {
       found = b.browseId;
       return;
     }
@@ -323,7 +361,7 @@ function parsePlaylistOptions(json) {
   const walk = (o) => {
     if (!o || typeof o !== 'object') return;
     const p = o.playlistAddToOptionRenderer;
-    if (p && typeof p.playlistId === 'string' && LIST_ID.test(p.playlistId)) {
+    if (p && matching(p.playlistId, LIST_ID)) {
       const title = (p.title?.runs || []).map((r) => (typeof r?.text === 'string' ? r.text : '')).join('').trim();
       if (title) out.push({ playlistId: p.playlistId, title: title.slice(0, 256) });
       return;
@@ -408,13 +446,12 @@ function scrobbleBatchParams(batch) {
 // Player bar state read out of the hidden page.
 function sanitizeControls(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const pick = (v, allowed) => (allowed.includes(v) ? v : null);
   const volume = Number(raw.volume);
   return {
     shuffle: raw.shuffle === true,
-    repeat: pick(raw.repeat, ['NONE', 'ALL', 'ONE']) || 'NONE',
-    like: pick(raw.like, ['LIKE', 'DISLIKE', 'INDIFFERENT']),
-    volume: Number.isFinite(volume) ? Math.min(100, Math.max(0, Math.round(volume))) : 100,
+    repeat: pick(raw.repeat, REPEAT_MODES) || 'NONE',
+    like: pick(raw.like, LIKE_STATES),
+    volume: Number.isFinite(volume) ? clampVolume(volume) : 100,
     muted: raw.muted === true,
   };
 }
@@ -424,7 +461,7 @@ function sanitizeQueue(raw) {
   if (!Array.isArray(raw)) return [];
   const out = [];
   for (const q of raw.slice(0, 500)) {
-    if (!q || typeof q.videoId !== 'string' || !VIDEO_ID.test(q.videoId)) continue;
+    if (!q || !matching(q.videoId, VIDEO_ID)) continue;
     out.push({
       videoId: q.videoId,
       title: str(q.title),
@@ -480,5 +517,7 @@ module.exports = {
   scrobbleBatchParams,
   CONTINUATION,
   BROWSE_ID,
+  REPEAT_MODES,
+  clampVolume,
   isNewer,
 };

@@ -12,12 +12,15 @@ const BRIDGE = fs.readFileSync(path.join(__dirname, '..', 'inject', 'bridge.js')
 const ANSWER_MS = 35000;
 
 // The first request comes right at startup, while the page is still loading.
-const READY =
-  'new Promise((ok, no) => { const t0 = Date.now(); (function poll() {' +
-  " const a = document.querySelector('ytmusic-app');" +
-  ' if (a && a.networkManager) return ok(a);' +
-  " if (Date.now() - t0 > 30000) return no(new Error('YouTube Music did not finish loading'));" +
-  ' setTimeout(poll, 200); })(); })';
+const READY = `new Promise((ok, no) => {
+  const t0 = Date.now();
+  (function poll() {
+    const a = document.querySelector('ytmusic-app');
+    if (a && a.networkManager) return ok(a);
+    if (Date.now() - t0 > 30000) return no(new Error('YouTube Music did not finish loading'));
+    setTimeout(poll, 200);
+  })();
+})`;
 
 // Whichever of the events comes first; the other listeners go with it.
 function firstOf(wc, events, ms) {
@@ -54,7 +57,7 @@ async function inPage(code) {
 }
 
 // One function of inject/bridge.js. Arguments go in as JSON, never as code.
-const call = (fn, ...args) => inPage('{ const b = ' + BRIDGE + '\n; return b.' + fn + '(app, ...' + JSON.stringify(args) + '); }');
+const call = (fn, ...args) => inPage(`{ const b = ${BRIDGE}\n; return b.${fn}(app, ...${JSON.stringify(args)}); }`);
 
 // ponytail: an internal of the page; a plain fetch to /youtubei/v1 with a SAPISIDHASH header if it goes away.
 const innertube = (endpoint, body) => call('fetch', endpoint, body);
@@ -65,8 +68,8 @@ const signedIn = () => call('signedIn');
 const ACTIONS = ['shuffle', 'repeat', 'mute', 'like', 'dislike', 'volume', 'repeatTo', 'shuffleTo', 'avSong', 'avVideo', 'skipAd'];
 
 function actionArg(action, arg) {
-  if (action === 'volume') return typeof arg === 'number' && Number.isFinite(arg) ? Math.min(100, Math.max(0, Math.round(arg))) : null;
-  if (action === 'repeatTo') return ['NONE', 'ALL', 'ONE'].includes(arg) ? arg : null;
+  if (action === 'volume') return Number.isFinite(arg) ? pure.clampVolume(arg) : null;
+  if (action === 'repeatTo') return pure.REPEAT_MODES.includes(arg) ? arg : null;
   if (action === 'shuffleTo') return typeof arg === 'boolean' ? arg : null;
   return true;
 }

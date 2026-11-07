@@ -4,8 +4,11 @@
 // jumping. Touchpads already scroll in fine steps and pass through untouched.
 function smoothWheel(e) {
   const el = e.currentTarget;
-  const dy = e.deltaMode === 1 ? e.deltaY * 40 : e.deltaMode === 2 ? e.deltaY * el.clientHeight : e.deltaY;
-  if (e.ctrlKey || e.shiftKey || Math.abs(e.deltaX) > Math.abs(dy) || (e.deltaMode === 0 && Math.abs(dy) < 50)) return;
+  let dy = e.deltaY;
+  if (e.deltaMode === WheelEvent.DOM_DELTA_LINE) dy *= 40;
+  else if (e.deltaMode === WheelEvent.DOM_DELTA_PAGE) dy *= el.clientHeight;
+  if (e.ctrlKey || e.shiftKey || Math.abs(e.deltaX) > Math.abs(dy)) return;
+  if (e.deltaMode === WheelEvent.DOM_DELTA_PIXEL && Math.abs(dy) < 50) return;
   e.preventDefault();
   // Notches during a glide add up instead of restarting from wherever it is.
   const max = el.scrollHeight - el.clientHeight;

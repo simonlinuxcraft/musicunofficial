@@ -15,6 +15,8 @@ const { isNewer } = require('./pure');
 
 const LATEST = process.env.MUSICUNOFFICIAL_UPDATE_URL || 'https://api.github.com/repos/simonlinuxcraft/musicunofficial/releases/latest';
 const FIRST_CHECK = 60 * 1000;
+// Waits until this process, and its single-instance lock, is gone, then starts the new build.
+const RELAUNCH = 'while kill -0 "$1" 2>/dev/null; do sleep 0.2; done; exec "$2"';
 const EVERY = 6 * 3600 * 1000;
 const LOOKUP_MS = 30 * 1000;
 const DOWNLOAD_MS = 30 * 60 * 1000;
@@ -97,8 +99,7 @@ function install() {
         return done(false);
       }
       log(ready + ' installed, restarting');
-      // A host shell waits until this process, and its single-instance lock, is gone.
-      spawn('/bin/sh', ['-c', 'while kill -0 "$1" 2>/dev/null; do sleep 0.2; done; exec "$2"', 'sh', String(process.pid), launcher], { detached: true, stdio: 'ignore' }).unref();
+      spawn('/bin/sh', ['-c', RELAUNCH, 'sh', String(process.pid), launcher], { detached: true, stdio: 'ignore' }).unref();
       done(true);
       app.quit();
     });

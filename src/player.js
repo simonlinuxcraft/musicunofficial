@@ -48,8 +48,7 @@ function command(cmd, arg) {
   wc.send('player:command', cmd, cmd === 'seek' ? arg : undefined);
 }
 
-// The page only polls while something consumes the result: polling regardless
-// was two thirds of the app's CPU during playback.
+// The page only polls while something consumes the result: polling is most of the app's CPU.
 function sync() {
   const wc = mainWc();
   if (!wc) return;

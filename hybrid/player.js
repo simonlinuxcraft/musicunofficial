@@ -6,6 +6,7 @@ let track = null;
 let lastArt = null;
 let lastTime = null;
 let lastId = null;
+const quiet = () => {};
 
 const fmt = (s) => {
   s = Math.max(0, Math.floor(s));
@@ -27,9 +28,8 @@ function moveBar(p) {
   $('fill').style.transform = $('glide').style.transform = 'translateX(' + (Math.min(1, Math.max(0, p)) - 1) * 100 + '%)';
 }
 
-// Puts fill and knob at p (0..1) and, while playing, moves both on one device
-// pixel at a time. A linear transition looks the same but draws a frame on every
-// refresh, a third of a core at 320 Hz. Restarted on every track update.
+// Puts fill and knob at p (0..1) and, while playing, steps both one device pixel at
+// a time: a CSS transition would draw a frame on every refresh. Restarted per update.
 let barTimer = 0;
 function placeBar(p, secondsLeft) {
   clearInterval(barTimer);
@@ -73,12 +73,24 @@ function coverColor(url) {
   return img.decode().then(() => {
     const c = document.createElement('canvas');
     c.width = c.height = 1;
-    const g = c.getContext('2d');
-    g.drawImage(img, 0, 0, 1, 1);
-    const [r, gr, b] = g.getImageData(0, 0, 1, 1).data;
-    const k = Math.min(1, 190 / Math.max(r, gr, b, 1));
-    return 'rgb(' + [r, gr, b].map((v) => Math.round(v * k)).join(' ') + ')';
+    const ctx = c.getContext('2d');
+    ctx.drawImage(img, 0, 0, 1, 1);
+    const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
+    const k = Math.min(1, 190 / Math.max(r, g, b, 1));
+    return 'rgb(' + [r, g, b].map((v) => Math.round(v * k)).join(' ') + ')';
   });
+}
+
+async function tintBar(art) {
+  const bar = document.querySelector('footer');
+  if (!art) return bar.style.removeProperty('--cover');
+  // A newer track may have arrived while this one decoded.
+  try {
+    const color = await coverColor(art);
+    if (art === lastArt) bar.style.setProperty('--cover', color);
+  } catch {
+    if (art === lastArt) bar.style.removeProperty('--cover');
+  }
 }
 
 function applyLike(like) {
@@ -100,7 +112,7 @@ function applyControls(c) {
   if (document.activeElement !== $('volume')) $('volume').value = c.muted ? 0 : c.volume;
 }
 
-const refreshControls = () => api.controls().then(applyControls, () => {});
+const refreshControls = () => api.controls().then(applyControls, quiet);
 
 // Artist and album names under the title become links once the page's player bar
 // shows them. It updates a moment after the track, so links that do not match
@@ -116,19 +128,17 @@ async function loadNowLinks(id, tries = 0) {
   }
   const box = $('artist');
   box.replaceChildren();
-  const link = (l) => {
-    const a = document.createElement('span');
-    a.className = 'link';
-    a.textContent = l.text;
-    a.addEventListener('click', () => openPage(l.text, l.browseId));
-    return a;
-  };
-  artists.forEach((l, i) => box.append(...(i ? [', ', link(l)] : [link(l)])));
-  if (album) box.append(' \u2022 ', link(album));
+  const linkTo = (l) => link(l.text, () => openPage(l.text, l.browseId));
+  artists.forEach((l, i) => {
+    if (i) box.append(', ');
+    box.append(linkTo(l));
+  });
+  if (album) box.append(' \u2022 ', linkTo(album));
 }
 
 api.onTrack((t) => {
   const has = !!(t && t.title);
+  const art = has ? t.art || '' : '';
   track = has ? t : null;
   document.body.classList.toggle('has-track', has);
   document.body.classList.toggle('playing', has && !!t.playing);
@@ -140,26 +150,14 @@ api.onTrack((t) => {
   $('av-song').setAttribute('aria-pressed', String(!has || t.avMode !== 'OMV_PREFERRED'));
   $('av-video').setAttribute('aria-pressed', String(has && t.avMode === 'OMV_PREFERRED'));
   $('skip-ad').hidden = !(has && t.ad && t.adSkip);
-  setStageVideo(!has || t.video, has ? t.art || '' : '');
+  setStageVideo(!has || t.video, art);
   document.title = has && !t.ad ? t.title + (t.artist ? ' - ' + t.artist : '') : 'Music';
 
-  const art = has ? t.art || '' : '';
   if (art !== lastArt) {
     lastArt = art;
     // Quoted and escaped so a stray quote cannot end the value; main only passes https urls anyway.
-    const css = art ? 'url("' + art.replace(/["\\]/g, encodeURIComponent) + '")' : '';
-    $('art').style.backgroundImage = css;
-    const bar = document.querySelector('footer');
-    const reset = () => bar.style.removeProperty('--cover');
-    if (!art) reset();
-    else
-      coverColor(art).then(
-        (color) => {
-          // A newer track may have arrived while this one decoded.
-          if (art === lastArt) bar.style.setProperty('--cover', color);
-        },
-        () => art === lastArt && reset()
-      );
+    $('art').style.backgroundImage = art ? 'url("' + art.replace(/["\\]/g, encodeURIComponent) + '")' : '';
+    tintBar(art);
   }
 
   // Everything that belongs to the track follows a change of it.
@@ -171,7 +169,10 @@ api.onTrack((t) => {
     if (!(has && t.ad)) markCurrent(has ? t.videoId : null);
     if (has) refreshControls();
     if (has && !t.ad) loadNowLinks(id);
-    if (!$('queue').hidden) (panelTab === 'lyrics' ? loadLyrics : loadQueue)();
+    if (!$('queue').hidden) {
+      if (panelTab === 'lyrics') loadLyrics();
+      else loadQueue();
+    }
   }
   drawProgress();
   syncBar();
@@ -190,7 +191,6 @@ for (const action of ['shuffle', 'repeat', 'like', 'dislike', 'mute']) {
   });
 }
 // Both versions of a track sit in the queue; the switch picks which one plays.
-const quiet = () => {};
 $('av-song').addEventListener('click', () => api.control('avSong').then(() => !$('queue').hidden && loadQueue(), quiet));
 $('av-video').addEventListener('click', () => {
   toggleStage(true);

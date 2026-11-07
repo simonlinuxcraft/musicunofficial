@@ -14,7 +14,7 @@
   const REPEAT = `${BAR} .repeat, ${MINI} .ytmusicPlayerControlsRepeatButton button, ytmusic-player-controls .repeat`;
   const queueEl = () => $('ytmusic-player-queue');
   const queueState = () => queueEl().queue.store.getState().queue;
-  const runs = (x) => ((x && x.runs) || []).map((r) => r.text).join('');
+  const runs = (x) => (x?.runs || []).map((r) => r.text).join('');
 
   const ACTIONS = {
     shuffle: () => press(SHUFFLE),
@@ -64,7 +64,7 @@
   // track's index (and selected flag) until the next track, so the player decides.
   const current = () => {
     const p = $('#movie_player');
-    const id = p && p.getVideoData ? p.getVideoData().video_id : '';
+    const id = p?.getVideoData ? p.getVideoData().video_id : '';
     const sel = queueState().selectedItemIndex;
     const tops = rows()
       .filter((el) => el.data && el.data.videoId === id)
@@ -94,12 +94,9 @@
       const a = bar ? [...bar.querySelectorAll('.byline a')] : [];
       if (a.length) return a.map((x) => ({ text: x.textContent, href: x.getAttribute('href') }));
       const it = queueState().items[current()] || {};
-      const r =
-        it.playlistPanelVideoRenderer ||
-        (it.playlistPanelVideoWrapperRenderer && it.playlistPanelVideoWrapperRenderer.primaryRenderer.playlistPanelVideoRenderer) ||
-        {};
-      return ((r.longBylineText && r.longBylineText.runs) || [])
-        .filter((x) => x.navigationEndpoint && x.navigationEndpoint.browseEndpoint)
+      const r = it.playlistPanelVideoRenderer || it.playlistPanelVideoWrapperRenderer?.primaryRenderer.playlistPanelVideoRenderer || {};
+      return (r.longBylineText?.runs || [])
+        .filter((x) => x.navigationEndpoint?.browseEndpoint)
         .map((x) => ({ text: x.text, href: 'browse/' + x.navigationEndpoint.browseEndpoint.browseId }));
     },
 
@@ -110,10 +107,10 @@
       const sel = current();
       return rows().map((el) => {
         const d = el.data || {};
-        const th = (d.thumbnail && d.thumbnail.thumbnails) || [];
+        const th = d.thumbnail?.thumbnails || [];
         const pic = th.find((x) => x.width >= 96) || th[th.length - 1];
         const t = top(el);
-        const w = d.navigationEndpoint && d.navigationEndpoint.watchEndpoint;
+        const w = d.navigationEndpoint?.watchEndpoint;
         return {
           videoId: d.videoId,
           title: runs(d.title),
@@ -167,18 +164,21 @@
         queueInsertPosition: position,
         ...(target.videoId ? { videoIds: [target.videoId] } : { playlistId: target.playlistId }),
       });
-      const items = ((res && res.queueDatas) || []).map((d) => d.content).filter(Boolean);
+      const items = (res?.queueDatas || []).map((d) => d.content).filter(Boolean);
       if (!items.length) return 0;
       const now = q.queue.store.getState().queue;
       const sel = now.items.length ? current() : -1;
       const index = position === 'INSERT_AFTER_CURRENT_VIDEO' && sel >= 0 ? sel + 1 : now.items.length;
-      q.dispatch({ type: 'ADD_ITEMS', payload: { nextQueueItemId: now.nextQueueItemId, index, items, shuffleEnabled: false, shouldAssignIds: true } });
+      q.dispatch({
+        type: 'ADD_ITEMS',
+        payload: { nextQueueItemId: now.nextQueueItemId, index, items, shuffleEnabled: false, shouldAssignIds: true },
+      });
       return items.length;
     },
 
     // The player stores it (yt-player-quality, about a year) only once a track plays or pauses.
     setQuality: async (app, q) => {
-      const p = document.getElementById('movie_player');
+      const p = $('#movie_player');
       for (let i = 0; i < 50 && ![1, 2].includes(p.getPlayerState()); i++) await sleep(200);
       p.setPlaybackQualityRange(q, q);
     },

@@ -126,14 +126,15 @@ async function flush() {
   }
   if (flushing || !sk || !batch.length) return;
   flushing = true;
+  let done = true;
   try {
     await call('track.scrobble', { ...scrobbleBatchParams(batch), sk }, true);
-    c.pending = (cfg().pending || []).filter((p) => !batch.includes(p));
   } catch (e) {
     console.log('[lastfm] pending scrobbles: ' + e.message);
-    // Refused for good: dropped, or they would block every later batch.
-    if (!e.retry) c.pending = (cfg().pending || []).filter((p) => !batch.includes(p));
+    done = !e.retry;
   }
+  // Sent, or refused for good: a refused batch would block every later one.
+  if (done) c.pending = (cfg().pending || []).filter((p) => !batch.includes(p));
   store.saveSettings();
   flushing = false;
 }

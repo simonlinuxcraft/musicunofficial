@@ -135,10 +135,17 @@ let slotAway = false;
 // A track without a video shows its cover here, whatever the page's layout does with it.
 let stageVideo = true;
 
+function slotElement() {
+  if (slot === 'stage') return stageVideo ? $('stage') : null;
+  if (slot === 'page') return $('middle');
+  return null;
+}
+
 function placePlayer() {
-  const el = slot === 'stage' ? (stageVideo ? $('stage') : null) : slot === 'page' ? $('middle') : null;
-  const r = el && el.getBoundingClientRect();
-  api.playerView(r ? slot : null, r && { x: r.x, y: r.y, width: r.width, height: r.height });
+  const el = slotElement();
+  if (!el) return api.playerView(null, null);
+  const r = el.getBoundingClientRect();
+  api.playerView(slot, { x: r.x, y: r.y, width: r.width, height: r.height });
 }
 
 function setStageVideo(video, art) {

@@ -2,10 +2,11 @@
 // muted, splices the record into the placeholder and unmutes once this settles.
 // Leaves the track paused; up to the deadline every failure stays silent.
 (() => {
-  const D = __RESUME_DATA__;
+  const saved = __RESUME_DATA__;
   // Generous: on a slow network the player can take well over 20 s to start, and giving up
   // unmutes a track that then plays from the top.
   const DEADLINE = 60000;
+  const PLAYING = 1; // getPlayerState()
   const start = Date.now();
   let sawTarget = false;
   let mismatchSince = 0;
@@ -32,18 +33,20 @@
       }
       const id = vd && vd.video_id;
       if (!id) return;
-      if (id === D.videoId) sawTarget = true;
-      // The target played and moved on (autoplay, or the user picked something): leave it.
-      else if (sawTarget) return fin('left');
-      // A foreign id first is most likely a pre-roll ad without the class marker.
-      else return;
-      // Seeking or pausing before playback has started leaves the player stuck on
-      // its buffering spinner, which burned 36 % CPU for good. Muted, so the wait is silent.
-      if (state !== 1) return;
+      if (id !== saved.videoId) {
+        // After the target: it moved on (autoplay, or the user picked something), leave it.
+        // Before it: most likely a pre-roll ad without the class marker.
+        if (sawTarget) return fin('left');
+        return;
+      }
+      sawTarget = true;
+      // Seeking or pausing before playback has started leaves the player stuck buffering.
+      // Muted, so the wait is silent.
+      if (state !== PLAYING) return;
       // seekableEnd, not the video element: that one spans everything appended to the MediaSource.
       const len = g && g.seekableEnd > 0 ? g.seekableEnd : 0;
       if (!len) return;
-      if (D.duration > 0 && Math.abs(len - D.duration) > 3) {
+      if (saved.duration > 0 && Math.abs(len - saved.duration) > 3) {
         // A length that stays off is not settling: paused and unmuted rather than playing muted until the deadline.
         mismatchSince ||= Date.now();
         if (Date.now() - mismatchSince < 5000) return;
@@ -53,7 +56,7 @@
         return fin('mismatch');
       }
       try {
-        p.seekTo(Math.min(Math.max(D.position, 0), Math.max(0, len - 5)), true);
+        p.seekTo(Math.min(Math.max(saved.position, 0), Math.max(0, len - 5)), true);
         p.pauseVideo();
       } catch {
         return fin('seek-error');

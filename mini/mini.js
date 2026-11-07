@@ -66,8 +66,7 @@ window.mini.onTrack((t) => {
   drawProgress();
 });
 
-// Four steps a second move the bar at most a pixel at a time. A per-frame loop
-// kept renderer and GPU busy at 6.7 % CPU even while paused.
+// Four steps a second move the bar at most a pixel at a time; a per-frame loop kept the GPU busy.
 setInterval(drawProgress, 250);
 
 for (const id of ['previous', 'playpause', 'next']) {

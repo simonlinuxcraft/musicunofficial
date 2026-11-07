@@ -26,31 +26,31 @@ const HANDSHAKE_MS = 30000;
 // space survives a trim, a plain space might not.
 const field = (s) => String(s).slice(0, 128).padEnd(2, '​');
 
+const HEADER = 8;
+
 function encodeFrame(op, payload) {
   const body = Buffer.from(JSON.stringify(payload), 'utf8');
-  const head = Buffer.allocUnsafe(8);
+  const head = Buffer.allocUnsafe(HEADER);
   head.writeInt32LE(op, 0);
   head.writeInt32LE(body.length, 4);
   return Buffer.concat([head, body]);
 }
 
-// A socket read can split one frame across chunks or glue two frames together,
-// so this returns the complete frames plus the bytes that belong to the next
-// read.
+// A socket read can split or glue frames: returns the complete ones plus the rest.
 function decodeFrames(buf) {
   const frames = [];
   let off = 0;
-  while (buf.length - off >= 8) {
+  while (buf.length - off >= HEADER) {
     const op = buf.readInt32LE(off);
     const len = buf.readInt32LE(off + 4);
     if (len < 0 || len > 1 << 20) return { frames, rest: Buffer.alloc(0) };
-    if (buf.length - off - 8 < len) break;
+    if (buf.length - off - HEADER < len) break;
     let data = null;
     try {
-      data = JSON.parse(buf.toString('utf8', off + 8, off + 8 + len));
+      data = JSON.parse(buf.toString('utf8', off + HEADER, off + HEADER + len));
     } catch {}
     frames.push({ op, data });
-    off += 8 + len;
+    off += HEADER + len;
   }
   return { frames, rest: buf.subarray(off) };
 }
@@ -185,15 +185,14 @@ function createPresence(clientId, log = () => {}, onReadyChange = () => {}, retr
         log('refused (' + (f.data && f.data.code) + ' ' + ((f.data && f.data.message) || '') + ')');
         onDrop();
         return;
-      } else if (f.op === OP_FRAME && f.data && f.data.evt === 'READY') {
+      } else if (f.op === OP_FRAME && f.data?.evt === 'READY') {
         ready = true;
         log('connected');
         onReadyChange();
         if (pending) flush(true);
-      } else if (f.op === OP_FRAME && f.data && f.data.evt === 'ERROR') {
-        // Only this one update was refused, the connection is fine. Nothing on
-        // the profile beats the previous track. Answering only our own
-        // activity frames means a refused clear cannot start a loop.
+      } else if (f.op === OP_FRAME && f.data?.evt === 'ERROR') {
+        // Only this update was refused; cleared so the previous track does not stay on the
+        // profile. Answering only our own frames means a refused clear cannot loop.
         log('rejected: ' + JSON.stringify(f.data.data || {}));
         if (f.data.nonce && f.data.nonce === lastNonce) clear();
       }
@@ -210,8 +209,7 @@ function createPresence(clientId, log = () => {}, onReadyChange = () => {}, retr
     const pos = positionNow(track, now);
     const key = track.title + '|' + track.artist + '|' + Math.round(track.duration);
     if (tsKey === key && tsValue) {
-      // Same track: keep the anchor so Discord's counter runs continuously.
-      // Only a real discontinuity, a seek, is worth re-anchoring for.
+      // Same track: re-anchor only on a seek.
       const projected = (now - tsValue.start) / 1000;
       if (Math.abs(pos - projected) < 1.5) return tsValue;
     }

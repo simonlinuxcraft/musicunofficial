@@ -2,6 +2,11 @@
   if (window.__ytmNowPlaying) return 'already mounted';
   window.__ytmNowPlaying = true;
 
+  const BAR = 'ytmusic-player-bar';
+  const MINI = 'ytmusic-app-layout > ytmusic-miniplayer';
+  const moviePlayer = () => document.getElementById('movie_player');
+  const queueStore = () => document.querySelector('ytmusic-player-queue')?.queue?.store?.getState();
+
   // Metadata comes from mediaSession, not from the DOM, so it survives layout changes.
   // An ad or a preview can add a second <video>: prefer the playing one, then any with a duration.
   function video() {
@@ -14,14 +19,11 @@
     );
   }
 
-  // Not video.currentTime/duration. When a track ends and the next one starts
-  // by itself, YouTube Music appends it to the same MediaSource, so the
-  // element's timeline keeps counting across the whole session: measured at
-  // 280 s of 379 s while the player bar read 1:11 of 3:29. The player API stays
-  // track relative. getDuration() is not the length either, it reports how much
-  // has buffered and grows while the track plays; seekableEnd is the length.
+  // The player API, not video.currentTime: YouTube Music appends the next track to the
+  // same MediaSource, so the element's timeline runs on across tracks. The length is
+  // seekableEnd; getDuration() is only what has buffered.
   function times(v) {
-    const p = document.getElementById('movie_player');
+    const p = moviePlayer();
     if (p && typeof p.getProgressState === 'function') {
       try {
         const g = p.getProgressState();
@@ -40,7 +42,7 @@
 
   // Lets the hybrid UI mark the playing row in its lists.
   function videoId() {
-    const p = document.getElementById('movie_player');
+    const p = moviePlayer();
     try {
       const id = p && typeof p.getVideoData === 'function' && p.getVideoData().video_id;
       return typeof id === 'string' ? id : '';
@@ -49,34 +51,50 @@
     }
   }
 
+  function adShowing(p) {
+    // ponytail: the only ad signal we have. Verified present as a class on
+    // #movie_player, but not verified to flip true during a Free-tier ad. If it
+    // never flips, capture during an ad falls back to lastSnap on the duration
+    // mismatch alone, which the restore side also guards.
+    return !!p && (p.classList.contains('ad-showing') || p.classList.contains('ad-interrupting'));
+  }
+
   // The classic player bar, or the redesigned one (ytmusic-miniplayer, seen from 2026-10).
   function likeStatus() {
-    const el = document.querySelector('ytmusic-player-bar #like-button-renderer');
+    const el = document.querySelector(`${BAR} #like-button-renderer`);
     if (el) return el.getAttribute('like-status');
-    const bar = document.querySelector('ytmusic-app-layout > ytmusic-miniplayer');
+    const bar = document.querySelector(MINI);
     const pressed = (sel) => {
       const b = bar && bar.querySelector(sel);
       return b ? b.getAttribute('aria-pressed') === 'true' : null;
     };
     const like = pressed('like-button-view-model button');
     if (like === null) return null;
-    return like ? 'LIKE' : pressed('dislike-button-view-model button') ? 'DISLIKE' : 'INDIFFERENT';
+    if (like) return 'LIKE';
+    return pressed('dislike-button-view-model button') ? 'DISLIKE' : 'INDIFFERENT';
   }
 
   // Shuffle and repeat from the store all bar layouts share; the classic slider curves its volume, the redesigned one does not.
   function controls() {
-    const q = document.querySelector('ytmusic-player-queue');
-    const st = q && q.queue && q.queue.store ? q.queue.store.getState().queue : null;
-    const bar = document.querySelector('ytmusic-player-bar');
-    const p = document.getElementById('movie_player');
-    const api = p && typeof p.getVolume === 'function';
+    const st = queueStore()?.queue;
+    const bar = document.querySelector(BAR);
+    const p = moviePlayer();
+    let volume = null;
+    let muted = false;
+    if (bar) {
+      volume = bar.volume;
+      muted = !!bar.isMuted;
+    } else if (typeof p?.getVolume === 'function') {
+      volume = p.getVolume();
+      muted = !!p.isMuted();
+    }
     const av = document.querySelector('ytmusic-av-toggle');
     const skip = document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button');
     return {
-      shuffle: !!(st && st.shuffleEnabled),
+      shuffle: !!st?.shuffleEnabled,
       repeat: st ? st.repeatMode : null,
-      volume: bar ? bar.volume : api ? p.getVolume() : null,
-      muted: bar ? !!bar.isMuted : !!(api && p.isMuted()),
+      volume,
+      muted,
       // Song or music video, for tracks that come in both versions.
       avMode: av ? av.getAttribute('playback-mode') : null,
       avAvailable: !!av && !av.hasAttribute('toggle-disabled'),
@@ -90,11 +108,10 @@
   function hasVideo(v) {
     // Loaded but without a picture: a video that only plays as sound here.
     if (v.readyState >= 2 && v.videoWidth === 0) return false;
-    const p = document.getElementById('movie_player');
-    const type = p && typeof p.getPlayerResponse === 'function' ? p.getPlayerResponse()?.videoDetails?.musicVideoType : null;
+    const p = moviePlayer();
+    const type = typeof p?.getPlayerResponse === 'function' ? p.getPlayerResponse()?.videoDetails?.musicVideoType : null;
     if (!type) return v.videoWidth > 0;
-    const q = document.querySelector('ytmusic-player-queue');
-    const audioOnly = !!(q && q.queue && q.queue.store && q.queue.store.getState().player?.audioOnly);
+    const audioOnly = !!queueStore()?.player?.audioOnly;
     return !AUDIO_TYPES.includes(type) && !audioOnly;
   }
 
@@ -130,7 +147,7 @@
       // video.paused is the truth. playbackState lags behind it on seek.
       playing: !v.paused && !v.ended,
       // The metadata is the ad's then, which the hybrid UI labels instead of passing off as the track.
-      ad: adShowing(document.getElementById('movie_player')),
+      ad: adShowing(moviePlayer()),
       // Polled with the rest because the bar sets it a moment after the track changes.
       like: likeStatus(),
       videoId: videoId(),
@@ -143,9 +160,7 @@
     };
   }
 
-  // Everything except position, which moves on its own and would make every
-  // single tick look like a change. The mini player runs the position forward
-  // locally, so it does not need one message per tick to stay smooth.
+  // Everything except position, which the consumers project forward from `at` themselves.
   function differs(a, b) {
     if (!a || !b) return a !== b;
     return (
@@ -180,15 +195,11 @@
   }
 
   function tick() {
-    // Only worth a message when something other than the position moved; the
-    // consumers project the position forward themselves from `at`. The slow
-    // heartbeat is a safety net for metadata, which has no event to listen to.
+    // The heartbeat is a safety net for metadata, which has no event of its own.
     if (differs(read(), last) || Date.now() - sentAt > 5000) send();
   }
 
-  // Events, not polling, for anything that moves the playhead. A seek is a
-  // discontinuity no interval can catch in time: with a 500 ms poll the
-  // consumers stayed on the old position until the next tick.
+  // Events for anything that moves the playhead: a seek cannot wait for the next poll.
   const EVENTS = ['seeked', 'play', 'pause', 'ratechange', 'durationchange', 'loadedmetadata', 'ended'];
   let bound = null;
 
@@ -227,21 +238,11 @@
     }
   });
 
-  // Resume snapshot. The main process pulls this on a slow timer to
-  // remember which track to reopen. It needs a durable id, which mediaSession
-  // does not carry; #movie_player.getVideoData() does, and has since long before
-  // this Polymer layout. Everything is feature-detected so a renamed API just
-  // stops resume working, never breaks the read path above.
+  // Resume snapshot, pulled by main on a slow timer. Needs getVideoData()'s durable id,
+  // which mediaSession lacks. Feature-detected, so a renamed API only stops resume.
   let lastSnap = null;
-  function adShowing(p) {
-    // ponytail: the only ad signal we have. Verified present as a class on
-    // #movie_player, but not verified to flip true during a Free-tier ad. If it
-    // never flips, capture during an ad falls back to lastSnap on the duration
-    // mismatch alone, which the restore side also guards.
-    return !!p && (p.classList.contains('ad-showing') || p.classList.contains('ad-interrupting'));
-  }
   window.__ytmSnapshot = () => {
-    const p = document.getElementById('movie_player');
+    const p = moviePlayer();
     const base = read();
     if (!p || typeof p.getVideoData !== 'function' || adShowing(p) || !base) return lastSnap;
     let vd = null;
@@ -263,13 +264,19 @@
     return lastSnap;
   };
 
+  // Classic bar, redesigned bar, or the player page's own controls on a narrow page.
+  const SKIP = {
+    next: `${BAR} .next-button, ${MINI} .ytmusicPlayerControlsNextButton button, ytmusic-player-controls .next-button`,
+    previous: `${BAR} .previous-button, ${MINI} .ytmusicPlayerControlsPreviousButton button, ytmusic-player-controls .previous-button`,
+  };
+
   // Playback control. play/pause goes through the video element because that
   // always exists; skipping needs the app's own buttons, there is no API for it.
   window.nowPlaying.onCommand((cmd, arg) => {
     const v = video();
     if (cmd === 'seek') {
-      const p = document.getElementById('movie_player');
-      if (p && typeof p.seekTo === 'function') p.seekTo(arg, true);
+      const p = moviePlayer();
+      if (typeof p?.seekTo === 'function') p.seekTo(arg, true);
       return;
     }
     if (cmd === 'playpause' && v) {
@@ -286,13 +293,7 @@
       if (!v.paused) v.pause();
       return;
     }
-    // Classic bar, redesigned bar, or the player page's own controls on a narrow page.
-    const sel =
-      cmd === 'next'
-        ? 'ytmusic-player-bar .next-button, ytmusic-app-layout > ytmusic-miniplayer .ytmusicPlayerControlsNextButton button, ytmusic-player-controls .next-button'
-        : cmd === 'previous'
-          ? 'ytmusic-player-bar .previous-button, ytmusic-app-layout > ytmusic-miniplayer .ytmusicPlayerControlsPreviousButton button, ytmusic-player-controls .previous-button'
-          : null;
+    const sel = SKIP[cmd];
     const btn = sel && document.querySelector(sel);
     if (btn) btn.click();
   });

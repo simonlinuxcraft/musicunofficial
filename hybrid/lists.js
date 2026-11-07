@@ -16,14 +16,11 @@ function subLine(item) {
       box.append(p.text);
       continue;
     }
-    const a = document.createElement('span');
-    a.className = 'link';
-    a.textContent = p.text;
-    a.addEventListener('click', (e) => {
+    const open = (e) => {
       e.stopPropagation();
       openPage(p.text, p.browseId);
-    });
-    box.append(a);
+    };
+    box.append(link(p.text, open));
   }
   return box;
 }
@@ -272,10 +269,7 @@ api.onMaximized((on) => document.documentElement.classList.toggle('maximized', !
 
 // Shown only while signed out; it goes once the page is back with an account.
 async function checkAccount() {
-  let signedIn = null;
-  try {
-    signedIn = await api.signedIn();
-  } catch {}
+  const signedIn = await api.signedIn().catch(() => null);
   $('sign-in').hidden = signedIn !== false;
 }
 $('sign-in').addEventListener('click', api.signIn);
@@ -290,22 +284,22 @@ api.onPlayerReady(() => {
   // A page the user opened stays, even when it reloads.
   const back = slot === 'page' && slotAway;
   if (back) setSlot(null);
-  if (!view || !(back || (!view.page && (view.failed || view.loading)))) return;
+  if (!view) return;
+  const stale = !view.page && (view.failed || view.loading);
+  if (!back && !stale) return;
   view.page = null;
   show(view);
 });
 
 // Long lists continue as they scroll into view, like on YouTube Music.
+const PRELOAD_PX = 800;
 
 async function loadMore() {
   const v = view;
   const page = v && v.page;
   if (!page || !page.next || v.loadingMore) return;
   v.loadingMore = true;
-  let more = null;
-  try {
-    more = await api.more(v.kind, page.next);
-  } catch {}
+  const more = await api.more(v.kind, page.next).catch(() => null);
   v.loadingMore = false;
   // On failure the token stays, the next scroll tries again.
   if (!more) return;
@@ -330,13 +324,13 @@ async function loadMore() {
 function checkMore() {
   requestAnimationFrame(() => {
     const r = $('more').getBoundingClientRect();
-    if (r.top < main.getBoundingClientRect().bottom + 800) loadMore();
+    if (r.top < main.getBoundingClientRect().bottom + PRELOAD_PX) loadMore();
   });
 }
 
 new IntersectionObserver((entries) => entries[0].isIntersecting && loadMore(), {
   root: main,
-  rootMargin: '800px',
+  rootMargin: PRELOAD_PX + 'px',
 }).observe($('more'));
 
 // Context menu
@@ -431,10 +425,7 @@ async function saveToPlaylist(item) {
   $('pl-list').replaceChildren();
   $('pl-status').textContent = T.loading;
   d.showModal();
-  let lists = [];
-  try {
-    lists = await api.playlists(videoId);
-  } catch {}
+  const lists = await api.playlists(videoId).catch(() => []);
   if (!d.open) return;
   $('pl-status').textContent = lists.length ? '' : T.noPlaylists;
   $('pl-list').append(
