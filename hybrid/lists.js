@@ -11,10 +11,6 @@ const openPage = (title, browseId) => go({ title, kind: 'browse', load: () => ap
 // Subtitle with its artist, album and playlist names as links.
 function subLine(item) {
   const box = div('sub');
-  if (!item.parts || !item.parts.length) {
-    box.textContent = item.subtitle || '';
-    return box;
-  }
   for (const p of item.parts) {
     if (!p.browseId) {
       box.append(p.text);

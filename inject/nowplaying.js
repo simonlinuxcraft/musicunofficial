@@ -2,13 +2,8 @@
   if (window.__ytmNowPlaying) return 'already mounted';
   window.__ytmNowPlaying = true;
 
-  // Metadata comes from mediaSession, not from the DOM. YouTube Music fills it
-  // in itself (it is why the media keys and the GNOME widget already work), so
-  // it survives the layout changes that break every selector sooner or later.
-  // Not just the first <video> in the document: an ad or a preview can add a
-  // second one, and reading position and play state off that while the
-  // metadata still describes the real track shows a mismatched player. Prefer
-  // one that is actually playing, then any that has a duration.
+  // Metadata comes from mediaSession, not from the DOM, so it survives layout changes.
+  // An ad or a preview can add a second <video>: prefer the playing one, then any with a duration.
   function video() {
     const all = [...document.querySelectorAll('video')];
     return (
@@ -143,10 +138,7 @@
       ...controls(),
       position: t.position,
       duration: t.duration,
-      // When position was read. Everything downstream is asynchronous: the IPC
-      // hop, the mini player's own redraw, Discord's rate limit. Without this
-      // each consumer treats a stale position as current and ends up behind by
-      // however long the trip took.
+      // When position was read, so the asynchronous consumers can project it forward.
       at: Date.now(),
     };
   }
@@ -208,10 +200,9 @@
     if (bound) for (const e of EVENTS) bound.addEventListener(e, send);
   }
 
-  // Only runs while something consumes the result, so a plain window with no
-  // mini player and no Rich Presence does no work at all. `ms` is the poll
-  // interval main asks for: fast while a window shows the track, slow for
-  // background consumers, 0 for none.
+  // Only runs while something consumes the result. `ms` is the poll interval
+  // main asks for: fast while a window shows the track, slow for background
+  // consumers, 0 for none.
   let timer = null;
   let every = 0;
   window.nowPlaying.onActive((ms) => {
@@ -220,7 +211,6 @@
     every = ms;
     clearInterval(timer);
     timer = null;
-    window.__ytmPollId = 0;
     if (ms) {
       bind();
       // Catches a swapped <video> element and metadata changes, which fire no
@@ -229,7 +219,6 @@
         bind();
         tick();
       }, ms);
-      window.__ytmPollId = timer;
       send();
     } else {
       if (bound) for (const e of EVENTS) bound.removeEventListener(e, send);
@@ -238,7 +227,7 @@
     }
   });
 
-  // Resume snapshot. The main process pulls this on a slow timer and at quit to
+  // Resume snapshot. The main process pulls this on a slow timer to
   // remember which track to reopen. It needs a durable id, which mediaSession
   // does not carry; #movie_player.getVideoData() does, and has since long before
   // this Polymer layout. Everything is feature-detected so a renamed API just

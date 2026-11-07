@@ -9,33 +9,20 @@ const APP_TITLE = 'Music';
 const INTERNAL_HOSTS = ['youtube.com', 'google.com', 'ytimg.com', 'ggpht.com'];
 
 function isInternal(url) {
-  let host;
-  try {
-    host = new URL(url).hostname.toLowerCase();
-  } catch {
-    return false;
-  }
-  return INTERNAL_HOSTS.some((h) => host === h || host.endsWith('.' + h));
+  const host = URL.parse(url)?.hostname.toLowerCase();
+  return !!host && INTERNAL_HOSTS.some((h) => host === h || host.endsWith('.' + h));
 }
 
 // Whether the player page is on YouTube Music itself, not on a consent or sign-in page.
 // An empty or broken URL counts as away.
 function onSite(url) {
-  try {
-    return new URL(url).hostname === 'music.youtube.com';
-  } catch {
-    return false;
-  }
+  return URL.parse(url)?.hostname === 'music.youtube.com';
 }
 
 // What may leave the app through the system's handler. Any other scheme from the
 // page could start a local program registered for it.
 function isWebLink(url) {
-  try {
-    return ['https:', 'http:', 'mailto:'].includes(new URL(url).protocol);
-  } catch {
-    return false;
-  }
+  return ['https:', 'http:', 'mailto:'].includes(URL.parse(url)?.protocol);
 }
 
 // The window is frameless and has no menu bar, so these shortcuts are the only
@@ -63,11 +50,16 @@ function keyAction(input) {
 
 function httpsUrl(v) {
   if (typeof v !== 'string' || v.length >= 2048) return '';
-  try {
-    return new URL(v).protocol === 'https:' ? v : '';
-  } catch {
-    return '';
-  }
+  return URL.parse(v)?.protocol === 'https:' ? v : '';
+}
+
+const str = (v) => (typeof v === 'string' ? v.trim().slice(0, 256) : '');
+const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
+
+// When a position was measured, so consumers can project it forward. A missing
+// or absurd stamp falls back to now.
+function stampAt(at, now = Date.now()) {
+  return typeof at === 'number' && Number.isFinite(at) && at <= now && now - at <= 60000 ? at : now;
 }
 
 // Track data arrives over IPC from a window that runs YouTube's own code, and
@@ -75,22 +67,12 @@ function httpsUrl(v) {
 // rather than trusted.
 function sanitizeTrack(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const str = (v) => (typeof v === 'string' ? v.trim().slice(0, 256) : '');
-  const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
-
   const title = str(raw.title);
   if (!title) return null;
 
   // Only https images. A file: or data: url here would be handed straight to
   // Discord and rendered by the mini player.
   const art = httpsUrl(raw.art);
-
-  // When position was measured, so consumers can project it forward instead of
-  // treating a stale value as current. A missing or absurd stamp falls back to
-  // now, which is the old behaviour and never worse.
-  const now = Date.now();
-  let at = typeof raw.at === 'number' && Number.isFinite(raw.at) ? raw.at : now;
-  if (at > now || now - at > 60000) at = now;
 
   return {
     title,
@@ -111,7 +93,7 @@ function sanitizeTrack(raw) {
     adSkip: raw.adSkip === true,
     position: num(raw.position),
     duration: num(raw.duration),
-    at,
+    at: stampAt(raw.at),
   };
 }
 
@@ -135,18 +117,13 @@ function sanitizeResume(raw) {
   const videoId = typeof raw.videoId === 'string' && VIDEO_ID.test(raw.videoId) ? raw.videoId : null;
   if (!videoId) return null;
 
-  const num = (v) => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : 0);
-  const now = Date.now();
-  let at = typeof raw.at === 'number' && Number.isFinite(raw.at) ? raw.at : now;
-  if (at > now || now - at > 60000) at = now;
-
   return {
     videoId,
     list: typeof raw.list === 'string' && LIST_ID.test(raw.list) ? raw.list : null,
     position: num(raw.position),
     duration: num(raw.duration),
     playing: raw.playing === true,
-    at,
+    at: stampAt(raw.at),
   };
 }
 
@@ -445,7 +422,6 @@ function sanitizeControls(raw) {
 // The rendered queue, read out of the hidden page.
 function sanitizeQueue(raw) {
   if (!Array.isArray(raw)) return [];
-  const str = (v) => (typeof v === 'string' ? v.trim().slice(0, 256) : '');
   const out = [];
   for (const q of raw.slice(0, 500)) {
     if (!q || typeof q.videoId !== 'string' || !VIDEO_ID.test(q.videoId)) continue;
@@ -479,13 +455,11 @@ module.exports = {
   isInternal,
   onSite,
   isWebLink,
-  INTERNAL_HOSTS,
   keyAction,
   sanitizeTrack,
   positionNow,
   sanitizeResume,
   sanitizeWatch,
-  sanitizePlaylistWatch,
   sanitizeEndpoint,
   sanitizeQueueTarget,
   sanitizeControls,

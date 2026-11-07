@@ -2,7 +2,7 @@
 
 const $ = (id) => document.getElementById(id);
 
-// UI strings follow the system language, like the hybrid window.
+// UI strings follow the language setting, like the hybrid window.
 const STRINGS = {
   en: {
     nothing: 'Nothing playing',

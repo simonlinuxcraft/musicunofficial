@@ -18,7 +18,6 @@ const STRINGS = {
     next: 'Next track',
     previous: 'Previous track',
     discord: 'Discord Rich Presence',
-    discordOff: 'Discord Rich Presence (not configured)',
     quit: 'Quit',
   },
   de: {
@@ -28,7 +27,6 @@ const STRINGS = {
     next: 'Nächster Titel',
     previous: 'Vorheriger Titel',
     discord: 'Discord Rich Presence',
-    discordOff: 'Discord Rich Presence (nicht eingerichtet)',
     quit: 'Beenden',
   },
 };
@@ -46,9 +44,8 @@ function rebuild() {
       { label: T.previous, click: () => player.command('previous') },
       { type: 'separator' },
       {
-        label: player.discordAvailable ? T.discord : T.discordOff,
+        label: T.discord,
         type: 'checkbox',
-        enabled: player.discordAvailable,
         checked: player.discordEnabled(),
         click: (item) => {
           player.setDiscord(item.checked);

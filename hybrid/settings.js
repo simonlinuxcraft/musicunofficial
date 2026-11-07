@@ -37,12 +37,11 @@ function select(id, options, value, onChange) {
   return s;
 }
 
-function checkbox(id, checked, onChange, disabled) {
+function checkbox(id, checked, onChange) {
   const c = document.createElement('input');
   c.type = 'checkbox';
   c.id = id;
   c.checked = checked;
-  c.disabled = !!disabled;
   c.addEventListener('change', () => onChange(c.checked));
   return c;
 }
@@ -132,11 +131,7 @@ function renderSettings(s) {
       })
     ),
     field(T.setNotify, checkbox('set-notify', s.notify, (v) => set('notify', v)), T.setNotifyHint),
-    field(
-      T.setDiscord,
-      checkbox('set-discord', s.richPresence, (v) => set('richPresence', v), !s.discordAvailable),
-      s.discordAvailable ? '' : T.setDiscordOff
-    ),
+    field(T.setDiscord, checkbox('set-discord', s.richPresence, (v) => set('richPresence', v))),
     field(
       T.setQuality,
       select('set-quality', [['auto', T.qualityAuto], ...QUALITY_LABELS], s.videoQuality, (v) => set('videoQuality', v)),

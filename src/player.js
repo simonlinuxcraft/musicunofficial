@@ -59,7 +59,7 @@ function sync() {
 }
 
 // Pulled on a timer instead of riding the now playing pipeline, which is idle
-// unless the mini player is open or Discord is connected.
+// while nothing consumes the track.
 function capture() {
   const wc = mainWc();
   if (!wc) return;
@@ -96,7 +96,7 @@ function saveResume() {
 }
 
 function setDiscord(on) {
-  store.settings.richPresence = !!on && !!DISCORD_CLIENT_ID;
+  store.settings.richPresence = !!on;
   store.saveSettings();
   if (presence) {
     presence.setEnabled(store.settings.richPresence);
@@ -110,10 +110,8 @@ function init(opts) {
   views = opts.views;
   wanted = opts.wanted;
   onTrack = opts.onTrack || onTrack;
-  if (DISCORD_CLIENT_ID) {
-    presence = createPresence(DISCORD_CLIENT_ID, (m) => console.log('[discord] ' + m), sync);
-    presence.setEnabled(store.settings.richPresence);
-  }
+  presence = createPresence(DISCORD_CLIENT_ID, (m) => console.log('[discord] ' + m), sync);
+  presence.setEnabled(store.settings.richPresence);
   setInterval(capture, 12000);
 }
 
@@ -143,7 +141,6 @@ module.exports = {
   command,
   takeResume,
   setDiscord,
-  discordAvailable: !!DISCORD_CLIENT_ID,
   FAST_POLL,
   SLOW_POLL,
   discordEnabled: () => store.settings.richPresence,

@@ -17,9 +17,9 @@ exports.default = async function afterPack(context) {
   const wrapper = `#!/bin/bash
 DIR="$(dirname "$(readlink -f "$0")")"
 
-# A terminal running as a snap passes on a GIO_MODULE_DIR that does not exist
-# here, and glib falls back to GDummyTlsBackend. Inside a snap it is right and stays.
-[ -z "$SNAP" ] && unset GIO_MODULE_DIR
+# A terminal running as a snap passes on its GIO_MODULE_DIR (and $SNAP), and glib
+# falls back to GDummyTlsBackend. The deb never runs inside a snap.
+unset GIO_MODULE_DIR
 
 # Native Wayland: XWayland reports a wrong refresh rate on high refresh panels
 # (20.08 Hz on 320 Hz) and Chromium draws at it. The cost: on GNOME Wayland no

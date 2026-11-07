@@ -47,8 +47,7 @@
       }
       header button, header input { -webkit-app-region: no-drag; }
       header button { padding: 7px 12px; border-radius: 18px; color: var(--dim); }
-      header button:hover { color: var(--fg); background: var(--raise); }
-      header button[aria-current='true'] { color: var(--fg); background: var(--raise); }
+      header button:hover, header button[aria-current='true'] { color: var(--fg); background: var(--raise); }
       #back { padding: 7px; }
       #search { position: relative; flex: 1 1 160px; max-width: 420px; margin-left: auto; -webkit-app-region: no-drag; }
       #search > svg { position: absolute; left: 12px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--dim); }
@@ -308,9 +307,9 @@
         padding: 6px 12px 6px 8px;
         border-radius: 8px;
         text-align: left;
+        cursor: pointer;
       }
       .qrow:hover, .qrow:focus-visible { background: #1f1f1f; }
-      .qrow { cursor: pointer; }
       .qrow .drop { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; color: var(--dim); opacity: 0; }
       .qrow:hover .drop, .qrow:focus-within .drop { opacity: 1; }
       .qrow .drop:hover { background: #2c2c2c; color: var(--fg); }
@@ -356,7 +355,6 @@
       #now { display: flex; align-items: center; gap: 12px; min-width: 0; padding-right: 8px; }
       #art-btn { flex: 0 0 auto; padding: 0; border-radius: 4px; }
       #art-btn:hover #art { filter: brightness(1.15); }
-      #title { cursor: pointer; }
       #art {
         flex: 0 0 auto;
         width: 56px;
@@ -365,7 +363,7 @@
         background: var(--raise) center / cover no-repeat;
       }
       #meta { min-width: 0; }
-      #title { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #title { cursor: pointer; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       /* A notch lighter than --dim: it sits on the strongest part of the tint. */
       #artist { color: #b0b0b0; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       body:not(.has-track) #title { color: var(--dim); font-weight: 400; }

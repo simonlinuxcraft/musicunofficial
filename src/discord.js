@@ -1,11 +1,7 @@
 'use strict';
 
-// Talks to Discord's local IPC socket directly. The discord-rpc package would
-// do the same thing but has been unmaintained since 2022 and pulls in ws and
-// uuid for a protocol that is an 8 byte header plus JSON.
-//
-// No network access is involved: this is a unix socket in the user's runtime
-// directory. Nothing is sent while the user has it switched off.
+// Discord's local IPC socket, spoken directly: discord-rpc is unmaintained since
+// 2022 for a protocol that is an 8 byte header plus JSON. A unix socket, no network.
 
 const net = require('net');
 const path = require('path');
@@ -88,9 +84,7 @@ function createPresence(clientId, log = () => {}, onReadyChange = () => {}, retr
   let lastNonce = null;
   let flushTimer = null;
   let retryTimer = null;
-  // Bumped whenever the connection is torn down. A sweep that was already in
-  // flight compares against it and drops its socket instead of installing it,
-  // which otherwise leaks a live file descriptor on a fast off/on toggle.
+  // Bumped on teardown, so a sweep still in flight drops its socket instead of leaking it.
   let generation = 0;
 
   function send(op, payload) {
@@ -106,9 +100,7 @@ function createPresence(clientId, log = () => {}, onReadyChange = () => {}, retr
     send(OP_FRAME, { cmd: 'SET_ACTIVITY', nonce: crypto.randomUUID(), args: { pid: process.pid } });
   }
 
-  // graceful uses end() rather than destroy(): writes are buffered, and
-  // destroy() throws away whatever has not gone out yet, which would drop the
-  // frame that clears the presence when the user switches the feature off.
+  // graceful uses end(): destroy() would drop the buffered frame that clears the presence.
   function reset(graceful = false) {
     generation++;
     if (sock) {
@@ -134,7 +126,7 @@ function createPresence(clientId, log = () => {}, onReadyChange = () => {}, retr
       retryTimer = null;
       connect();
     }, retryMs);
-    if (retryTimer.unref) retryTimer.unref();
+    retryTimer.unref();
   }
 
   // Tries every candidate path in turn. Discord not running is the normal case,
@@ -171,7 +163,7 @@ function createPresence(clientId, log = () => {}, onReadyChange = () => {}, retr
         log('no answer to handshake');
         onDrop();
       }, HANDSHAKE_MS);
-      if (t.unref) t.unref();
+      t.unref();
     });
   }
 
@@ -208,19 +200,14 @@ function createPresence(clientId, log = () => {}, onReadyChange = () => {}, retr
     }
   }
 
-  // Discord derives its own progress bar from these, so they must stay put for
-  // as long as a track plays. Recomputing them on every update moved the
-  // reference point by however stale the reported position was and made the
-  // bar visibly jump.
+  // Kept for as long as a track plays: recomputing them made Discord's progress bar jump.
   let tsKey = null;
   let tsValue = null;
 
   function timestampsFor(track) {
     const now = Date.now();
-    // Projected to now from when it was measured. Discord renders a live
-    // counter from these, so anchoring on a position that is a poll interval
-    // and a rate limit window old puts the whole countdown behind by that much.
-    const pos = Math.min(positionNow(track, now), track.duration);
+    // Projected to now, or Discord's counter lags by the poll and rate limit delay.
+    const pos = positionNow(track, now);
     const key = track.title + '|' + track.artist + '|' + Math.round(track.duration);
     if (tsKey === key && tsValue) {
       // Same track: keep the anchor so Discord's counter runs continuously.
@@ -245,11 +232,7 @@ function createPresence(clientId, log = () => {}, onReadyChange = () => {}, retr
     }
     const a = {
       type: 2, // Listening to
-      // Overrides the application name in the member list, which is what makes
-      // this read "Listening to <artist>" the way Spotify does instead of
-      // naming the app. Discord only started honouring this field for RPC
-      // clients recently; before that it was reserved for its own Spotify
-      // integration. Falls back to the title when a track has no artist.
+      // Replaces the app name, so the member list reads "Listening to <artist>".
       name: field(track.artist || track.title),
       details: field(track.title),
       state: track.artist ? field(track.artist) : undefined,
@@ -258,9 +241,7 @@ function createPresence(clientId, log = () => {}, onReadyChange = () => {}, retr
     if (track.art && track.art.length <= 256) {
       a.assets = { large_image: track.art, large_text: field(track.album || track.title) };
     }
-    // position is clamped: the poller reads it every 500 ms and can catch a
-    // value just past duration, which would put the end in the past.
-    if (track.duration > 0 && track.position >= 0) a.timestamps = timestampsFor(track);
+    if (track.duration > 0) a.timestamps = timestampsFor(track);
     return a;
   }
 
@@ -273,7 +254,7 @@ function createPresence(clientId, log = () => {}, onReadyChange = () => {}, retr
           flushTimer = null;
           flush(true);
         }, wait);
-        if (flushTimer.unref) flushTimer.unref();
+        flushTimer.unref();
       }
       return;
     }
@@ -288,9 +269,6 @@ function createPresence(clientId, log = () => {}, onReadyChange = () => {}, retr
   }
 
   return {
-    get enabled() {
-      return enabled;
-    },
     get ready() {
       return ready;
     },

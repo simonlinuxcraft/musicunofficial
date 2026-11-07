@@ -39,12 +39,11 @@ render(tile, 'icon.png', 512);
 
 // Only the symbol goes in as an image. The wordmark is real text rendered by
 // the browser: an SVG <text> scaled down to nav bar height renders muddy,
-// because a background-image gets no font hinting or subpixel antialiasing.
-const mark = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">${inner}</svg>`;
+// because a background-image gets no font hinting or subpixel antialiasing. Same SVG as the tray icon.
 
 const cssPath = path.join(ROOT, 'inject', 'style.css');
 let css = fs.readFileSync(cssPath, 'utf8');
-const b64 = Buffer.from(mark).toString('base64');
+const b64 = Buffer.from(tray).toString('base64');
 
 // Test for the rule, do not compare before/after: an unchanged wordmark
 // produces identical output and would look like a missing rule.

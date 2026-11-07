@@ -14,7 +14,6 @@ const sleep = require('./src/sleep');
 const notify = require('./src/notify');
 const lastfm = require('./src/lastfm');
 const update = require('./src/update');
-require('./src/i18n');
 
 // Pinned so a rename cannot move the profile and sign the user out. Must run
 // before requestSingleInstanceLock, which keeps its lock there.

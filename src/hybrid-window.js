@@ -156,7 +156,6 @@ function settings() {
     notify: store.settings.notify === true,
     richPresence: player.discordEnabled(),
     videoQuality: store.settings.videoQuality || 'auto',
-    discordAvailable: player.discordAvailable,
     sleep: sleep.state(),
     lastfm: lastfm.state(),
     update: update.state(),

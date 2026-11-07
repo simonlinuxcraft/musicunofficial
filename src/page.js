@@ -1,8 +1,7 @@
 'use strict';
 
 // Talking to the YouTube Music page in the player window: its own InnerTube
-// client, its navigation, its player bar and its queue. Used by the hybrid UI
-// and by MPRIS, which also runs in the normal mode. The page side is inject/bridge.js.
+// client, its navigation, its player bar and its queue. The page side is inject/bridge.js.
 
 const fs = require('fs');
 const path = require('path');

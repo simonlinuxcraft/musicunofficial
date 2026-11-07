@@ -116,8 +116,7 @@ function setStage(on) {
 }
 
 function create({ resume, openMini }) {
-  // Keeps the page visible while the window sits in the tray, for the same reason.
-  // Measured: 2.3 % CPU playing in the tray.
+  // Not throttled while the window sits in the tray. Measured: 2.3 % CPU playing there.
   view = new WebContentsView({ webPreferences: { preload: path.join(ROOT, 'preload.js'), backgroundThrottling: false } });
   view.setBackgroundColor(DARK);
   view.setBounds(OUT_OF_SIGHT);
