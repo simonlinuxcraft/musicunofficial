@@ -38,7 +38,7 @@
 
 <img src="docs/screenshot.png" width="820" alt="The player running in its own frameless window">
 
-<sub>Signed out, with the German interface.</sub>
+<sub>Signed out, on an artist page.</sub>
 
 </div>
 
