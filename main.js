@@ -26,7 +26,7 @@ if (!app.requestSingleInstanceLock()) {
 
 // Audio mixers list the stream under these instead of "Chromium". libpulse reads
 // it in the audio process, which starts later and inherits the environment.
-process.env.PULSE_PROP_OVERRIDE ??= "application.name='MusicUnofficial' application.icon_name='musicunofficial'";
+process.env.PULSE_PROP_OVERRIDE ??= "application.name='Music' application.icon_name='musicunofficial'";
 
 // Overlay scrollbars fade out instead of taking layout width.
 app.commandLine.appendSwitch('enable-features', 'OverlayScrollbar,FluentOverlayScrollbar');

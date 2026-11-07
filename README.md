@@ -65,7 +65,7 @@ catches up.
 | Own interface | Home, explore, library, search with suggestions, playlists, an editable queue and lyrics, in German or English |
 | Player bar | Seek, shuffle, repeat, like, volume and the song or video switch, all mirrored from the site's own bar |
 | Mini player | A small window with cover, title and playback controls, on top of other windows |
-| Media keys | Registered with MPRIS as MusicUnofficial, including the GNOME media widget and the lock screen |
+| Media keys | Registered with MPRIS as Music, including the GNOME media widget and the lock screen |
 | Discord | Rich Presence, on by default, switched off in the settings or from the tray |
 | Extras | Sleep timer, a notification on a new track, Last.fm scrobbling with an API account of your own. Scrobbles made offline are sent once Last.fm is reachable again |
 | Tray | Closing the window keeps playback running. The icon shows the track and offers play, pause and skip; quit from the tray or with `Ctrl+Q` |
