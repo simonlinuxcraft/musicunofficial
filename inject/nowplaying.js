@@ -54,21 +54,34 @@
     }
   }
 
+  // The classic player bar, or the redesigned one (ytmusic-miniplayer, seen from 2026-10).
   function likeStatus() {
     const el = document.querySelector('ytmusic-player-bar #like-button-renderer');
-    return el ? el.getAttribute('like-status') : null;
+    if (el) return el.getAttribute('like-status');
+    const bar = document.querySelector('ytmusic-app-layout > ytmusic-miniplayer');
+    const pressed = (sel) => {
+      const b = bar && bar.querySelector(sel);
+      return b ? b.getAttribute('aria-pressed') === 'true' : null;
+    };
+    const like = pressed('like-button-view-model button');
+    if (like === null) return null;
+    return like ? 'LIKE' : pressed('dislike-button-view-model button') ? 'DISLIKE' : 'INDIFFERENT';
   }
 
-  // The player bar's own state, so the hybrid UI and MPRIS show what the page does.
+  // Shuffle and repeat from the store all bar layouts share; the classic slider curves its volume, the redesigned one does not.
   function controls() {
+    const q = document.querySelector('ytmusic-player-queue');
+    const st = q && q.queue && q.queue.store ? q.queue.store.getState().queue : null;
     const bar = document.querySelector('ytmusic-player-bar');
+    const p = document.getElementById('movie_player');
+    const api = p && typeof p.getVolume === 'function';
     const av = document.querySelector('ytmusic-av-toggle');
     const skip = document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button');
     return {
-      shuffle: !!(bar && bar.shuffleOn),
-      repeat: bar ? bar.repeatMode : null,
-      volume: bar ? bar.volume : null,
-      muted: !!(bar && bar.isMuted),
+      shuffle: !!(st && st.shuffleEnabled),
+      repeat: st ? st.repeatMode : null,
+      volume: bar ? bar.volume : api ? p.getVolume() : null,
+      muted: bar ? !!bar.isMuted : !!(api && p.isMuted()),
       // Song or music video, for tracks that come in both versions.
       avMode: av ? av.getAttribute('playback-mode') : null,
       avAvailable: !!av && !av.hasAttribute('toggle-disabled'),
@@ -76,6 +89,22 @@
       adSkip: !!(skip && skip.offsetParent !== null),
     };
   }
+
+  // Songs, podcasts and uploads play audio only, and so does any track in the page's audio-only mode.
+  const AUDIO_TYPES = ['MUSIC_VIDEO_TYPE_ATV', 'MUSIC_VIDEO_TYPE_PODCAST_EPISODE', 'MUSIC_VIDEO_TYPE_PRIVATELY_OWNED_TRACK'];
+  function hasVideo(v) {
+    // Loaded but without a picture: a video that only plays as sound here.
+    if (v.readyState >= 2 && v.videoWidth === 0) return false;
+    const p = document.getElementById('movie_player');
+    const type = p && typeof p.getPlayerResponse === 'function' ? p.getPlayerResponse()?.videoDetails?.musicVideoType : null;
+    if (!type) return v.videoWidth > 0;
+    const q = document.querySelector('ytmusic-player-queue');
+    const audioOnly = !!(q && q.queue && q.queue.store && q.queue.store.getState().player?.audioOnly);
+    return !AUDIO_TYPES.includes(type) && !audioOnly;
+  }
+
+  // src/page.js reads it back after a click.
+  window.__ytmControls = () => ({ ...controls(), like: likeStatus() });
 
   function read() {
     const v = video();
@@ -110,6 +139,7 @@
       // Polled with the rest because the bar sets it a moment after the track changes.
       like: likeStatus(),
       videoId: videoId(),
+      video: hasVideo(v),
       ...controls(),
       position: t.position,
       duration: t.duration,
@@ -135,6 +165,7 @@
       a.ad !== b.ad ||
       a.like !== b.like ||
       a.videoId !== b.videoId ||
+      a.video !== b.video ||
       a.shuffle !== b.shuffle ||
       a.repeat !== b.repeat ||
       a.volume !== b.volume ||
@@ -266,11 +297,12 @@
       if (!v.paused) v.pause();
       return;
     }
+    // Classic bar, redesigned bar, or the player page's own controls on a narrow page.
     const sel =
       cmd === 'next'
-        ? 'ytmusic-player-bar .next-button'
+        ? 'ytmusic-player-bar .next-button, ytmusic-app-layout > ytmusic-miniplayer .ytmusicPlayerControlsNextButton button, ytmusic-player-controls .next-button'
         : cmd === 'previous'
-          ? 'ytmusic-player-bar .previous-button'
+          ? 'ytmusic-player-bar .previous-button, ytmusic-app-layout > ytmusic-miniplayer .ytmusicPlayerControlsPreviousButton button, ytmusic-player-controls .previous-button'
           : null;
     const btn = sel && document.querySelector(sel);
     if (btn) btn.click();

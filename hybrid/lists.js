@@ -51,7 +51,13 @@ function activate(item) {
 function coverOf(item) {
   const box = div('cover');
   box.append(thumb(item.thumb));
-  if (!item.watch && item.play) box.append(iconButton('cover-play', ICON_PLAY, T.playAll, () => play(item.play)));
+  if (item.watch) {
+    // Does what the row does, so pointer only: no extra tab stop or announcement.
+    const b = iconButton('cover-play', ICON_PLAY, T.playAll, () => activate(item));
+    b.tabIndex = -1;
+    b.setAttribute('aria-hidden', 'true');
+    box.append(b);
+  } else if (item.play) box.append(iconButton('cover-play', ICON_PLAY, T.playAll, () => play(item.play)));
   return box;
 }
 
@@ -100,18 +106,42 @@ function tile(item) {
   return el;
 }
 
-// A shelf of cards scrolls sideways like on YouTube Music, everything else is rows.
+// The arrows page a shelf by its visible width and hide when everything fits.
+const pagerWatch = new ResizeObserver((entries) => entries.forEach((e) => e.target.updatePagers()));
+
+function pagers(list) {
+  const page = (dir) => list.scrollBy({ left: dir * list.clientWidth, behavior: 'smooth' });
+  const prev = iconButton('pager', ICON_BACK, T.scrollLeft, () => page(-1));
+  const next = iconButton('pager', ICON_OPEN, T.scrollRight, () => page(1));
+  list.updatePagers = () => {
+    const max = list.scrollWidth - list.clientWidth;
+    prev.hidden = next.hidden = max < 2;
+    // aria-disabled, not disabled: a disabled button would drop the keyboard focus.
+    prev.setAttribute('aria-disabled', String(list.scrollLeft < 2));
+    next.setAttribute('aria-disabled', String(list.scrollLeft > max - 2));
+  };
+  list.addEventListener('scroll', list.updatePagers, { passive: true });
+  pagerWatch.observe(list);
+  return [prev, next];
+}
+
+// Titled card shelves are carousels on YouTube Music, untitled cards a page's own grid.
 function renderSection(sec) {
   const el = document.createElement('section');
+  const cards = sec.items.every((i) => i.card);
+  const carousel = cards && !!sec.title;
+  sec.make = cards ? tile : row;
+  sec.list = div(carousel ? 'tiles' : cards ? 'grid' : 'rows');
+  sec.list.append(...sec.items.map(sec.make));
   if (sec.title) {
+    const head = div('shelf-head');
     const h = document.createElement('h2');
     h.className = 'shelf';
     h.textContent = sec.title;
-    el.append(h);
+    head.append(h);
+    if (carousel) head.append(...pagers(sec.list));
+    el.append(head);
   }
-  const cards = sec.items.every((i) => i.card);
-  sec.list = div(cards ? 'tiles' : 'rows');
-  sec.list.append(...sec.items.map(cards ? tile : row));
   el.append(sec.list);
   return el;
 }
@@ -132,6 +162,7 @@ async function show(next) {
   $('heading').textContent = next.title;
   $('actions').hidden = true;
   renderTabs(next);
+  pagerWatch.disconnect();
   $('list').replaceChildren();
   status(T.loading);
   let page = next.page;
@@ -289,7 +320,7 @@ async function loadMore() {
     // Untitled continuation rows belong to the list they continue.
     if (!sec.title && last && !last.title) {
       last.items.push(...sec.items);
-      if (view === v && last.list) last.list.append(...sec.items.map(last.list.className === 'tiles' ? tile : row));
+      if (view === v && last.list) last.list.append(...sec.items.map(last.make));
     } else {
       page.sections.push(sec);
       if (view === v) $('list').append(renderSection(sec));
@@ -371,7 +402,8 @@ function closeMenu() {
 }
 
 document.addEventListener('pointerdown', (e) => !$('menu').contains(e.target) && closeMenu(), true);
-main.addEventListener('scroll', closeMenu, { passive: true });
+// Capture, so a shelf scrolling sideways closes it too.
+main.addEventListener('scroll', closeMenu, { passive: true, capture: true });
 window.addEventListener('blur', closeMenu);
 $('menu').addEventListener('keydown', (e) => {
   const items = [...$('menu').querySelectorAll('button')];
@@ -386,8 +418,9 @@ $('menu').addEventListener('keydown', (e) => {
 async function queueAdd(target, position, done) {
   try {
     const n = await api.queueAdd(target, position);
-    // -1: nothing was playing, so the target simply started.
+    // -1: nothing was playing, so the target simply started. 0: YouTube sent nothing to add.
     if (n > 0) toast(done);
+    else if (n === 0) toast(T.queueFailed);
     if (n && !$('queue').hidden) loadQueue();
   } catch {
     toast(T.queueFailed);

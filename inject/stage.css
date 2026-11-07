@@ -1,13 +1,27 @@
-/* The now-playing view of the own interface shows only the page's player, cover
-   or video as the page picks it. The player page's transform would otherwise
-   pin the fixed player inside it, below the nav bar. */
-ytmusic-player-page#player-page {
+/* An ancestor with a transform or containment would pin the fixed player inside the page layout. */
+:has(ytmusic-player#player) {
   transform: none !important;
+  filter: none !important;
+  backdrop-filter: none !important;
+  perspective: none !important;
+  contain: none !important;
+  container-type: normal !important;
   will-change: auto !important;
+}
+
+/* Hidden, not removed: the interface still clicks the song/video switch; each part sets its own visibility. */
+body,
+ytmusic-app-layout > * {
+  visibility: hidden !important;
+}
+
+/* Above anything the page shows visible on its own, like a toast. */
+ytmusic-player-page#player-page {
   z-index: 2147483647 !important;
 }
 
 ytmusic-player#player {
+  visibility: visible !important;
   position: fixed !important;
   inset: 0 !important;
   width: 100vw !important;
@@ -18,12 +32,7 @@ ytmusic-player#player {
   background: #000 !important;
 }
 
-/* The interface brings its own up next and song/video switch. On a wide stage the
-   page would show its side panel over the player; the page's mini player button
-   would take the player off the stage. Hidden, not removed: the interface still
-   clicks the switch. */
-ytmusic-player-page #side-panel,
-ytmusic-player-page ytmusic-av-toggle,
+/* The page's mini player button would take the player off the stage. */
 ytmusic-player .player-minimize-button,
 ytmusic-player .fullscreen-button {
   visibility: hidden !important;

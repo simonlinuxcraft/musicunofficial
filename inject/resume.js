@@ -8,6 +8,7 @@
   const DEADLINE = 60000;
   const start = Date.now();
   let sawTarget = false;
+  let mismatchSince = 0;
   return new Promise((resolve) => {
     const fin = (why) => {
       clearInterval(t);
@@ -42,7 +43,15 @@
       // seekableEnd, not the video element: that one spans everything appended to the MediaSource.
       const len = g && g.seekableEnd > 0 ? g.seekableEnd : 0;
       if (!len) return;
-      if (D.duration > 0 && Math.abs(len - D.duration) > 3) return;
+      if (D.duration > 0 && Math.abs(len - D.duration) > 3) {
+        // A length that stays off is not settling: paused and unmuted rather than playing muted until the deadline.
+        mismatchSince ||= Date.now();
+        if (Date.now() - mismatchSince < 5000) return;
+        try {
+          p.pauseVideo();
+        } catch {}
+        return fin('mismatch');
+      }
       try {
         p.seekTo(Math.min(Math.max(D.position, 0), Math.max(0, len - 5)), true);
         p.pauseVideo();

@@ -18,6 +18,27 @@ const DARK = '#030303';
 // One pixel in the window corner, where page and UI are the same #030303. At
 // 0x0 the page counts as hidden, and Chromium pauses a muted video in a hidden page.
 const OUT_OF_SIGHT = { x: 0, y: 0, width: 1, height: 1 };
+// Below about 616 px YouTube Music switches to its mobile layout, which has no like button or volume.
+const DESKTOP_WIDTH = 720;
+
+// Out of sight a small desktop page; a narrower stage keeps that layout, scaled down to fit.
+function emulation() {
+  if (where === 'page' || (where === 'stage' && placed.width >= DESKTOP_WIDTH)) return null;
+  const scale = where ? Math.max(placed.width, 1) / DESKTOP_WIDTH : 1;
+  const size = { width: DESKTOP_WIDTH, height: where ? Math.round(placed.height / scale) : 360 };
+  return { screenPosition: 'desktop', screenSize: size, viewSize: size, viewPosition: { x: 0, y: 0 }, deviceScaleFactor: 0, scale };
+}
+
+// A new document needs it again; otherwise only a change is sent.
+let emulated = '';
+function layOut(wc, again = false) {
+  const e = emulation();
+  const key = JSON.stringify(e);
+  if (key === emulated && !again) return;
+  emulated = key;
+  if (e) wc.enableDeviceEmulation(e);
+  else wc.disableDeviceEmulation();
+}
 const inject = (name) => fs.readFileSync(path.join(ROOT, 'inject', name), 'utf8');
 const CSS = inject('style.css');
 const STAGE_CSS = inject('stage.css');
@@ -26,6 +47,7 @@ const RESUME = inject('resume.js');
 
 let view = null;
 let where = null;
+let placed = null;
 // The key of the inserted stage CSS, as a promise; null while not inserted.
 let stageCss = null;
 
@@ -46,14 +68,36 @@ function injectAll(wc, resume) {
   wc.insertCSS(CSS).catch(log('css'));
   run(NOWPLAYING).then(player.sync).catch(log('nowplaying'));
   if (resume) {
+    const unmute = () => !wc.isDestroyed() && wc.setAudioMuted(false);
+    // A new document kills resume.js, and its promise then never settles.
+    wc.once('did-navigate', unmute);
     run(RESUME.replaceAll('__RESUME_DATA__', () => JSON.stringify(resume)))
       .catch(log('resume'))
-      .finally(() => !wc.isDestroyed() && wc.setAudioMuted(false));
+      .finally(unmute);
   }
 }
 
 function openOutside(url) {
   if (isWebLink(url)) shell.openExternal(url);
+}
+
+// will-navigate misses server redirects, and popups bring none of the parent's listeners.
+function guard(wc) {
+  // Main frame only: ads and Google's cookie frames redirect across hosts all the time.
+  const check = (e, url) => {
+    if (e.isMainFrame === false || isInternal(url)) return;
+    e.preventDefault();
+    console.log('[nav] sent outside: ' + (URL.parse(url)?.host || 'invalid url'));
+    openOutside(url);
+  };
+  wc.on('will-navigate', check);
+  wc.on('will-redirect', check);
+  wc.setWindowOpenHandler(({ url }) => {
+    if (isInternal(url)) return { action: 'allow' };
+    openOutside(url);
+    return { action: 'deny' };
+  });
+  wc.on('did-create-window', (child) => guard(child.webContents));
 }
 
 // The player sizes its video on resize only, and a stylesheet alone fires none.
@@ -94,6 +138,7 @@ function create({ resume, openMini }) {
     // Once only: an SPA navigation fires dom-ready again.
     resume = null;
     if (where === 'stage') setStage(true);
+    layOut(wc, true);
   });
 
   // A reload drops the injected poller together with its last track.
@@ -109,17 +154,7 @@ function create({ resume, openMini }) {
     view.setBackgroundColor(onSite(url) ? DARK : '#ffffff');
   });
 
-  wc.setWindowOpenHandler(({ url }) => {
-    if (isInternal(url)) return { action: 'allow' };
-    openOutside(url);
-    return { action: 'deny' };
-  });
-
-  wc.on('will-navigate', (e, url) => {
-    if (isInternal(url)) return;
-    e.preventDefault();
-    openOutside(url);
-  });
+  guard(wc);
 
   bindKeys(wc, 'pageZoom', openMini);
 }
@@ -132,8 +167,10 @@ function place(kind, bounds) {
     view.webContents.loadURL(START_URL);
   }
   where = kind;
+  placed = kind ? bounds : null;
   setStage(kind === 'stage');
   view.setBounds(kind ? bounds : OUT_OF_SIGHT);
+  layOut(view.webContents);
   if (kind === 'page') view.webContents.focus();
 }
 

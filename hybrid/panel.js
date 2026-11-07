@@ -29,10 +29,11 @@ function queueRow(q, i) {
   // The playing track stays; removing it would only skip ahead.
   const removable = !q.selected && q.itemId !== null;
   el.append(removable ? iconButton('drop', ICON_REMOVE, T.remove, () => removeFromQueue(q)) : div(''));
-  el.addEventListener('click', () => api.queuePlay(i, q.videoId));
+  const playRow = () => api.queuePlay(i, q.videoId).catch(fail);
+  el.addEventListener('click', playRow);
   el.addEventListener('keydown', (e) => {
     if (e.target !== el) return;
-    if (e.key === 'Enter') api.queuePlay(i, q.videoId);
+    if (e.key === 'Enter') playRow();
     else if (e.key === 'Delete' && removable) removeFromQueue(q);
     else return;
     e.preventDefault();
@@ -70,7 +71,7 @@ function queueRow(q, i) {
     if (dragFrom < to) to -= 1;
     const from = dragFrom;
     dragFrom = -1;
-    if (from !== to) api.queueMove(from, to).then(loadQueue);
+    if (from !== to) api.queueMove(from, to).then(loadQueue, () => toast(T.queueFailed));
   });
   return el;
 }
@@ -115,7 +116,11 @@ function showTab(tab) {
   else loadQueue();
 }
 
+// A narrow window lays the card over the stage, where the page's own view would cover it.
+const narrow = matchMedia('(max-width: 760px)');
+
 function toggleQueue(open = $('queue').hidden) {
+  if (open && narrow.matches && slot === 'stage') setSlot(null);
   $('queue').hidden = !open;
   $('queue-toggle').setAttribute('aria-pressed', String(open));
   if (open) showTab(panelTab);
@@ -127,11 +132,22 @@ function toggleQueue(open = $('queue').hidden) {
 let slot = null;
 // The page slot was opened for a consent or sign-in page, not by the user.
 let slotAway = false;
+// A track without a video shows its cover here, whatever the page's layout does with it.
+let stageVideo = true;
 
 function placePlayer() {
-  const el = slot === 'stage' ? $('stage') : slot === 'page' ? $('middle') : null;
+  const el = slot === 'stage' ? (stageVideo ? $('stage') : null) : slot === 'page' ? $('middle') : null;
   const r = el && el.getBoundingClientRect();
   api.playerView(r ? slot : null, r && { x: r.x, y: r.y, width: r.width, height: r.height });
+}
+
+function setStageVideo(video, art) {
+  const img = $('stage-art');
+  if (art && img.getAttribute('src') !== art) img.src = art;
+  img.hidden = video || !art;
+  if (video === stageVideo) return;
+  stageVideo = video;
+  placePlayer();
 }
 
 function setSlot(next, away = false) {
@@ -146,8 +162,10 @@ function setSlot(next, away = false) {
 // Like YouTube Music's player page: the player big, up next beside it.
 function toggleStage(open = slot !== 'stage') {
   setSlot(open ? 'stage' : null);
-  toggleQueue(open);
+  toggleQueue(open && !narrow.matches);
 }
+
+narrow.addEventListener('change', () => narrow.matches && slot === 'stage' && toggleQueue(false));
 
 const slotWatch = new ResizeObserver(placePlayer);
 slotWatch.observe($('stage'));

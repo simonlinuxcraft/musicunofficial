@@ -21,15 +21,17 @@ const HEX32 = /^[0-9a-f]{32}$/i;
 
 // Waiting for the user to allow access in the browser.
 let token = null;
+// The stored session key could not be read (keyring locked or replaced); scrobbles wait meanwhile.
+let locked = false;
 // The track being listened to, with how long it has actually played.
 let cur = null;
 
 const cfg = () => store.settings.lastfm || {};
 // Secret and session key only ever reach the disk encrypted by the system keyring.
-const seal = (s) => safeStorage.encryptString(s).toString('base64');
-function unseal(b) {
+const seal = async (s) => (await safeStorage.encryptStringAsync(s)).toString('base64');
+async function unseal(b) {
   try {
-    return b ? safeStorage.decryptString(Buffer.from(b, 'base64')) : null;
+    return b ? (await safeStorage.decryptStringAsync(Buffer.from(b, 'base64'))).result : null;
   } catch {
     return null;
   }
@@ -37,7 +39,7 @@ function unseal(b) {
 
 async function call(method, params, post) {
   const c = cfg();
-  const secret = unseal(c.secret);
+  const secret = await unseal(c.secret);
   if (!c.key || !secret) throw new Error('LASTFM_NOT_SET_UP');
   const all = { method, api_key: c.key };
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') all[k] = String(v);
@@ -69,8 +71,11 @@ async function connect(key, secret) {
   secret = typeof secret === 'string' ? secret.trim().toLowerCase() : '';
   // Codes, not sentences: the settings page words them in its own language.
   if (!HEX32.test(key) || !HEX32.test(secret)) throw new Error('LASTFM_BAD_KEY');
-  if (!safeStorage.isEncryptionAvailable()) throw new Error('LASTFM_NO_KEYRING');
-  store.settings.lastfm = { key, secret: seal(secret) };
+  // basic_text has a key built into Chromium, which is as good as plain text.
+  if (!(await safeStorage.isAsyncEncryptionAvailable()) || safeStorage.getSelectedStorageBackend() === 'basic_text') {
+    throw new Error('LASTFM_NO_KEYRING');
+  }
+  store.settings.lastfm = { key, secret: await seal(secret) };
   store.saveSettings();
   token = (await call('auth.getToken', {}, false)).token;
   await shell.openExternal('https://www.last.fm/api/auth/?api_key=' + encodeURIComponent(key) + '&token=' + encodeURIComponent(token));
@@ -81,13 +86,16 @@ async function finish() {
   if (!token) throw new Error('LASTFM_NOT_SET_UP');
   const { session } = await call('auth.getSession', { token }, false);
   token = null;
-  store.settings.lastfm = { ...cfg(), session: seal(session.key), name: String(session.name).slice(0, 64) };
+  locked = false;
+  const sealed = await seal(session.key);
+  store.settings.lastfm = { ...cfg(), session: sealed, name: String(session.name).slice(0, 64) };
   store.saveSettings();
 }
 
 function disconnect() {
   token = null;
   cur = null;
+  locked = false;
   delete store.settings.lastfm;
   store.saveSettings();
 }
@@ -95,7 +103,7 @@ function disconnect() {
 const connected = () => !!(cfg().key && cfg().session);
 
 function state() {
-  return { connected: connected(), name: connected() ? cfg().name : null, waiting: !!token };
+  return { connected: connected(), name: connected() ? cfg().name : null, waiting: !!token, locked };
 }
 
 // Scrobbles that failed for a reason that passes (offline, Last.fm down) wait in
@@ -109,8 +117,8 @@ function keep(scrobble) {
 
 let flushing = false;
 async function flush() {
+  const sk = await unseal(cfg().session);
   const c = cfg();
-  const sk = unseal(c.session);
   const { batch, stale } = pendingBatch(c.pending, Date.now());
   if (stale.length) {
     c.pending = c.pending.filter((p) => !stale.includes(p));
@@ -131,8 +139,14 @@ async function flush() {
 }
 
 async function send(method, params) {
-  const sk = unseal(cfg().session);
-  if (!sk) return;
+  const sk = await unseal(cfg().session);
+  if (!sk) {
+    if (!locked) console.log('[lastfm] session key unreadable: keyring locked or replaced');
+    locked = true;
+    if (method === 'track.scrobble') keep(params);
+    return;
+  }
+  locked = false;
   try {
     await call(method, { ...params, sk }, true);
   } catch (e) {
@@ -160,7 +174,8 @@ function announce(c) {
 function onTrack(t) {
   if (!connected()) return;
   const now = Date.now();
-  if (cur && cur.playing) cur.played += (now - cur.tick) / 1000;
+  // Capped: a suspend between two updates is not listening.
+  if (cur && cur.playing) cur.played += Math.min(now - cur.tick, 10000) / 1000;
   if (cur) cur.tick = now;
   // Ads and silence stop the clock but keep the track it belongs to.
   const id = t && !t.ad ? t.videoId || t.title : null;

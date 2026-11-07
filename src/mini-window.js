@@ -6,7 +6,7 @@ const store = require('./store');
 const player = require('./player');
 // The own interface, which the mini player stands in for.
 const front = require('./hybrid-window');
-const { APP_TITLE } = require('./pure');
+const { APP_TITLE, onDisplays } = require('./pure');
 
 const ROOT = path.join(__dirname, '..');
 const SIZE = { width: 344, height: 104 };
@@ -33,11 +33,8 @@ function scheduleSaveBounds() {
 // A saved spot on a monitor that is no longer connected falls back to the default corner.
 function startBounds() {
   const b = store.settings.miniBounds;
-  if (b && Number.isInteger(b.x) && Number.isInteger(b.y)) {
-    const fits = screen.getAllDisplays().some(({ workArea: a }) => {
-      return b.x >= a.x - 50 && b.y >= a.y - 50 && b.x < a.x + a.width - 50 && b.y < a.y + a.height - 50;
-    });
-    if (fits) return { x: b.x, y: b.y };
+  if (b && Number.isInteger(b.x) && Number.isInteger(b.y) && onDisplays(b, screen.getAllDisplays().map((d) => d.workArea))) {
+    return { x: b.x, y: b.y };
   }
   const a = screen.getPrimaryDisplay().workArea;
   return { x: a.x + a.width - SIZE.width - 24, y: a.y + a.height - SIZE.height - 24 };
@@ -67,6 +64,9 @@ function open() {
   });
   mini.setMenuBarVisibility(false);
   mini.loadFile(path.join(ROOT, 'mini', 'index.html'));
+  // A file dropped on the window would otherwise replace it and inherit its preload.
+  mini.webContents.on('will-navigate', (e) => e.preventDefault());
+  mini.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   mini.once('ready-to-show', () => {
     mini.show();
     front.hide();
@@ -92,11 +92,14 @@ function destroy() {
   if (alive()) mini.destroy();
 }
 
-ipcMain.on('mini:restore', () => {
+const fromMini = (e) => alive() && e.sender === mini.webContents;
+
+ipcMain.on('mini:restore', (e) => {
+  if (!fromMini(e)) return;
   front.show();
   close();
 });
-ipcMain.on('mini:quit', () => app.quit());
+ipcMain.on('mini:quit', (e) => fromMini(e) && app.quit());
 
 module.exports = {
   open,

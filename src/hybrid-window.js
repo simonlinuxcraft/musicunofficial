@@ -2,7 +2,7 @@
 
 // Our own UI. The YouTube Music page plays in a view inside this window (src/main-window.js).
 
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, screen, shell } = require('electron');
 const path = require('path');
 const mainWindow = require('./main-window');
 const player = require('./player');
@@ -51,8 +51,10 @@ function onPlayerLoad() {
 function loadBounds() {
   // window-state.json is where the YouTube Music window kept them before this UI.
   const b = store.settings.hybridBounds || store.read('window-state.json');
-  if (b && Number.isInteger(b.width) && Number.isInteger(b.height)) return b;
-  return { ...DEFAULT_SIZE };
+  if (!b || !Number.isInteger(b.width) || !Number.isInteger(b.height)) return { ...DEFAULT_SIZE };
+  // A spot on a display that is gone is dropped; the size stays.
+  const placed = Number.isInteger(b.x) && Number.isInteger(b.y) && pure.onDisplays(b, screen.getAllDisplays().map((d) => d.workArea));
+  return placed ? b : { width: b.width, height: b.height, maximized: b.maximized };
 }
 
 function saveBounds() {
@@ -118,9 +120,12 @@ function create(opts) {
   // Without a tray, hiding would leave the app running with both windows invisible.
   win.on('close', (e) => {
     saveBounds();
-    if (!opts.canHide()) return app.quit();
     e.preventDefault();
-    win.hide();
+    opts.canHide().then((hide) => {
+      if (!alive()) return;
+      if (hide) win.hide();
+      else app.quit();
+    });
   });
 }
 
@@ -149,6 +154,7 @@ function settings() {
     language: store.settings.language || 'system',
     notify: store.settings.notify === true,
     richPresence: player.discordEnabled(),
+    videoQuality: store.settings.videoQuality || 'auto',
     discordAvailable: player.discordAvailable,
     sleep: sleep.state(),
     lastfm: lastfm.state(),
@@ -241,7 +247,11 @@ ipcMain.handle('hybrid:settings', (e) => (fromUs(e) ? settings() : null));
 ipcMain.handle('hybrid:setting', (e, key, value) => {
   if (!fromUs(e)) return null;
   if (key === 'language' && ['system', 'de', 'en'].includes(value)) actions.setLanguage(value);
-  else if (key === 'notify' && typeof value === 'boolean') {
+  else if (key === 'videoQuality' && page.QUALITIES.includes(value)) {
+    store.settings.videoQuality = value;
+    store.saveSettings();
+    page.setQuality(value).catch(() => {});
+  } else if (key === 'notify' && typeof value === 'boolean') {
     store.settings.notify = value;
     store.saveSettings();
     player.sync();
@@ -292,7 +302,7 @@ ipcMain.on('hybrid:window', (e, action) => {
 // null while the page cannot tell, so the UI shows no sign-in button by mistake.
 ipcMain.handle('hybrid:signed-in', async (e) => {
   if (!fromUs(e) || playerAway) return null;
-  const v = await page.inPage("ytcfg.get('LOGGED_IN')");
+  const v = await page.signedIn();
   return typeof v === 'boolean' ? v : null;
 });
 
@@ -309,8 +319,17 @@ ipcMain.on('hybrid:player-view', (e, kind, r) => {
   mainWindow.place(ok ? kind : null, ok ? { x: px(r.x), y: px(r.y), width: px(r.width), height: px(r.height) } : null);
 });
 
+// The player stores the quality only while a track is loaded, so each new track gets it again.
+let qualityFor = null;
+function onTrack(t) {
+  if (!t || t.ad || !t.videoId || t.videoId === qualityFor) return;
+  qualityFor = t.videoId;
+  page.setQuality(store.settings.videoQuality || 'auto').catch(() => {});
+}
+
 module.exports = {
   create,
+  onTrack,
   show,
   hide,
   destroy,

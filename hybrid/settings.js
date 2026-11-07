@@ -107,6 +107,16 @@ function keyList() {
   return box;
 }
 
+const QUALITY_LABELS = [
+  ['hd2160', '2160p'],
+  ['hd1440', '1440p'],
+  ['hd1080', '1080p'],
+  ['hd720', '720p'],
+  ['large', '480p'],
+  ['medium', '360p'],
+  ['tiny', '144p'],
+];
+
 function renderSettings(s) {
   shownSettings = s;
   const box = div('settings');
@@ -127,6 +137,11 @@ function renderSettings(s) {
       checkbox('set-discord', s.richPresence, (v) => set('richPresence', v), !s.discordAvailable),
       s.discordAvailable ? '' : T.setDiscordOff
     ),
+    field(
+      T.setQuality,
+      select('set-quality', [['auto', T.qualityAuto], ...QUALITY_LABELS], s.videoQuality, (v) => set('videoQuality', v)),
+      T.setQualityHint
+    ),
     heading(T.setSleep),
     field(
       T.sleepLabel,
@@ -141,6 +156,7 @@ function renderSettings(s) {
     const row = div('actions');
     row.append(div('', T.lastfmConnected + s.lastfm.name), button(T.lastfmDisconnect, () => lastfmStep(api.lastfmDisconnect)));
     box.append(row);
+    if (s.lastfm.locked) box.append(div('note', T.lastfmLocked));
   } else if (s.lastfm.waiting) {
     const row = div('actions');
     row.append(button(T.lastfmFinish, () => lastfmStep(api.lastfmFinish), true));
