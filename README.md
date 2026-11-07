@@ -71,7 +71,7 @@ catches up.
 | Tray | Closing the window keeps playback running. The icon shows the track and offers play, pause and skip; quit from the tray or with `Ctrl+Q` |
 | Remembers itself | Window size, maximised state, zoom and the last opened page are restored on the next start, the window position too on X11. The last track comes back paused where it stopped, if that was less than a week ago |
 | Stays signed in | The profile survives updates, so an update does not sign you out |
-| Runs anywhere | No `libfuse2` required, works on distributions that stopped shipping it |
+| Installs like any app | A `.deb` for Debian, Ubuntu and their derivatives; new versions install themselves after a password prompt |
 | Dependencies | Electron plus one small pure JavaScript D-Bus library for the media keys |
 
 ## Mini player
@@ -126,9 +126,8 @@ while something is playing. Switching it off clears the presence immediately.
 If Discord is not running, restarts or refuses the connection, the app retries
 quietly every 15 seconds until it gets through.
 
-> Under a strictly confined Snap this cannot work: Discord's local socket sits
-> outside the sandbox and AppArmor blocks the connection. The feature is
-> AppImage only until that changes upstream.
+> There is no Snap for this reason: under strict confinement Discord's local
+> socket sits outside the sandbox and AppArmor blocks the connection.
 
 ## Keyboard shortcuts
 
@@ -154,34 +153,28 @@ Media keys are handled by the desktop through MPRIS and need no configuration.
 
 ## Install
 
-Download the AppImage from the releases page, then:
+Download `musicunofficial_X.Y.Z_amd64.deb` from the releases page. Opening the
+file usually hands it to the software centre, which installs it after asking
+for your password. In a terminal:
 
 ```bash
-chmod +x MusicUnofficial-*.AppImage
-./MusicUnofficial-*.AppImage
+sudo apt install ~/Downloads/musicunofficial_*_amd64.deb
 ```
 
-To get a menu entry and a proper icon, place the AppImage somewhere permanent
-such as `~/Applications` and integrate it with your usual AppImage tool, or
-create a desktop entry with `StartupWMClass=musicunofficial` so the panel can
-match the running window to it.
+Music then shows up in the app menu. `sudo apt remove musicunofficial` takes it
+out again; sign-in and settings stay in `~/.config/musicunofficial`.
 
 ### Updates
 
-The AppImage updates itself from the latest GitHub release. It checks a minute
-after start and every six hours, verifies the download against the sha256
-digest GitHub lists for the release asset, and replaces the file under its
-current name. The new version runs from the next start; Settings > Updates has
-a button to restart right away. Give the file a name without a version, such as
-`~/Applications/MusicUnofficial.AppImage`, so the name stays true after an
-update. Updates need write access to the folder the AppImage is in; a copy
-outside such a folder, a development run or another kind of install never
-updates itself.
+A minute after start and every six hours the app looks for a newer GitHub
+release. It downloads the package, checks it against the sha256 digest GitHub
+lists for it and offers it under Settings > Updates. "Install and restart" asks
+for your password, checks the package once more as root, installs it with dpkg
+and starts the new version. A development run never updates itself.
 
 ### Requirements
 
-Linux x86_64, glibc 2.25 or newer, which covers every current distribution. A
-tray icon requires a status area; on plain GNOME that means the AppIndicator
+Debian, Ubuntu or a distribution based on them, on x86_64. A tray icon requires a status area; on plain GNOME that means the AppIndicator
 extension. Without it the application still runs and closing the window quits
 normally.
 
@@ -190,11 +183,11 @@ normally.
 ```bash
 npm install
 npm test
-npm run build-appimage
+npm run build
 ```
 
-The build swaps in the AppImage type2-runtime so the result starts on systems
-without `libfuse2`. Icons are generated from a single source file:
+The package lands in `dist/musicunofficial_X.Y.Z_amd64.deb`. Icons are generated
+from a single source file:
 
 ```bash
 npm run icons
@@ -204,7 +197,7 @@ Edit `assets/symbol.svg` and run the command to regenerate the application icon,
 the tray icon and the mark in the navigation bar.
 
 For the self-update to pick a release up, tag it `vX.Y.Z` with the version from
-`package.json`, attach `dist/MusicUnofficial-X.Y.Z.AppImage` under exactly that
+`package.json`, attach `dist/musicunofficial_X.Y.Z_amd64.deb` under exactly that
 name and publish it as the latest release, not as a pre-release. The repository
 has to be public, because the app looks the release up without a token.
 
@@ -212,5 +205,4 @@ has to be public, because the app looks the release up without a token.
 
 Source code is MIT, see [LICENSE](LICENSE).
 
-Release artifacts bundle Electron, Chromium and the AppImage runtime under their
-own terms, listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+The package bundles Electron and Chromium under their own terms, listed in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).

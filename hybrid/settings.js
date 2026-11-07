@@ -177,7 +177,10 @@ function renderSettings(s) {
   box.append(heading(T.setUpdates), div('note', T.updateVersion + s.update.version + (s.update.on ? '' : '. ' + T.updateManual)));
   if (s.update.ready) {
     const row = div('actions');
-    row.append(div('', T.updateReady + s.update.ready), button(T.updateRestart, api.restart, true));
+    row.append(
+      div('', T.updateReady + s.update.ready),
+      button(T.updateInstall, () => api.installUpdate().then((ok) => ok || toast(T.updateFailed)), true)
+    );
     box.append(row);
   }
   box.append(heading(T.setKeys), keyList());
