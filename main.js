@@ -39,6 +39,15 @@ function showMain() {
   hybrid.show();
 }
 
+// Electron keeps a tray icon nothing shows when no tray host runs (GNOME without
+// the AppIndicator extension), and a hidden window would have no way back. X11
+// may still have a legacy tray, so only Wayland asks the bus.
+async function canHide() {
+  if (!tray.exists()) return false;
+  if (!process.env.WAYLAND_DISPLAY) return true;
+  return (await mpris.nameHasOwner('org.kde.StatusNotifierWatcher')) !== false;
+}
+
 function toggle() {
   if (hybrid.isShown()) hybrid.hide();
   else showMain();
@@ -98,7 +107,7 @@ app.whenReady().then(() => {
   notify.init(() => mainWindow.isFocused() || hybrid.isFocused() || mini.isOpen());
   mpris.start({ raise: showMain, quit: () => app.quit(), command: player.command, control: (action, arg) => page.control(action, arg).catch(() => null) });
   mainWindow.create({ resume, openMini: mini.open });
-  hybrid.create({ openMini: mini.open, canHide: tray.exists, setLanguage });
+  hybrid.create({ openMini: mini.open, canHide, setLanguage });
   try {
     tray.create({ toggle, openMini: mini.open });
   } catch (e) {

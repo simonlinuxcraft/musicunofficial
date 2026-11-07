@@ -2,10 +2,15 @@
 
 // Talking to the YouTube Music page in the player window: its own InnerTube
 // client, its navigation, its player bar and its queue. Used by the hybrid UI
-// and by MPRIS, which also runs in the normal mode.
+// and by MPRIS, which also runs in the normal mode. The page side is inject/bridge.js.
 
+const fs = require('fs');
+const path = require('path');
 const mainWindow = require('./main-window');
 const pure = require('./pure');
+
+const BRIDGE = fs.readFileSync(path.join(__dirname, '..', 'inject', 'bridge.js'), 'utf8');
+const ANSWER_MS = 35000;
 
 // The first request comes right at startup, while the page is still loading.
 const READY =
@@ -14,10 +19,6 @@ const READY =
   ' if (a && a.networkManager) return ok(a);' +
   " if (Date.now() - t0 > 30000) return no(new Error('YouTube Music did not finish loading'));" +
   ' setTimeout(poll, 200); })(); })';
-
-// A destroyed or navigating page can leave a script promise unsettled, and the UI on "Loading" for good.
-const giveUp = (ms) =>
-  new Promise((ok, no) => setTimeout(() => no(new Error('YouTube Music did not answer')), ms));
 
 // Whichever of the events comes first; the other listeners go with it.
 function firstOf(wc, events, ms) {
@@ -40,59 +41,30 @@ async function inPage(code) {
   if (!wc) throw new Error('player window is gone');
   // A script sent into the document that is about to be replaced dies with it.
   // dom-ready may already be past while the page still loads, so its end counts too.
-  if (wc.isLoadingMainFrame()) await firstOf(wc, ['dom-ready', 'did-stop-loading', 'destroyed'], 35000);
-  return Promise.race([wc.mainFrame.executeJavaScript(READY + '.then((app) => ' + code + ')'), giveUp(35000)]);
+  if (wc.isLoadingMainFrame()) await firstOf(wc, ['dom-ready', 'did-stop-loading', 'destroyed'], ANSWER_MS);
+  // A destroyed or navigating page can leave a script promise unsettled, and the UI on "Loading" for good.
+  let timer;
+  const giveUp = new Promise((ok, no) => {
+    timer = setTimeout(() => no(new Error('YouTube Music did not answer')), ANSWER_MS);
+  });
+  try {
+    return await Promise.race([wc.mainFrame.executeJavaScript(READY + '.then((app) => ' + code + ')'), giveUp]);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
-// The page's own network manager signs the request for the logged-in account.
+// One function of inject/bridge.js. Arguments go in as JSON, never as code.
+const call = (fn, ...args) => inPage('{ const b = ' + BRIDGE + '\n; return b.' + fn + '(app, ...' + JSON.stringify(args) + '); }');
+
 // ponytail: an internal of the page; a plain fetch to /youtubei/v1 with a SAPISIDHASH header if it goes away.
-const innertube = (endpoint, body) =>
-  inPage('app.networkManager.fetch(' + JSON.stringify(endpoint) + ', ' + JSON.stringify(body) + ')');
+const innertube = (endpoint, body) => call('fetch', endpoint, body);
+const navigate = (endpoint) => call('navigate', endpoint);
+const signedIn = () => call('signedIn');
 
-// The SPA's own navigation event: switches track in place and builds the queue, no reload.
-const navigate = (endpoint) =>
-  inPage(
-    "app.dispatchEvent(new CustomEvent('yt-navigate', " +
-      '{ bubbles: true, composed: true, detail: { endpoint: ' +
-      JSON.stringify(endpoint) +
-      ' } }))'
-  ).then(() => undefined);
+// What the UI and MPRIS may do through the player bar.
+const ACTIONS = ['shuffle', 'repeat', 'mute', 'like', 'dislike', 'volume', 'repeatTo', 'shuffleTo', 'avSong', 'avVideo', 'skipAd'];
 
-// ponytail: the page's own controls by class (aria labels follow the UI language), so it keeps its state; breaks when YouTube renames them.
-const BAR = 'ytmusic-player-bar';
-const MINI = 'ytmusic-app-layout > ytmusic-miniplayer';
-const press = (sel) => 'document.querySelector(' + JSON.stringify(sel) + ').click();';
-const SHUFFLE = `${BAR} .shuffle, ${MINI} .ytmusicPlayerControlsShuffleButton button, ytmusic-player-controls .shuffle`;
-const REPEAT = `${BAR} .repeat, ${MINI} .ytmusicPlayerControlsRepeatButton button, ytmusic-player-controls .repeat`;
-const QUEUE_STATE = "document.querySelector('ytmusic-player-queue').queue.store.getState().queue";
-// Null until inject/nowplaying.js is in a new document; its next poll reports the state anyway.
-const CONTROLS = "typeof __ytmControls === 'function' ? __ytmControls() : null";
-const wait = 'await new Promise((r) => setTimeout(r, 120));';
-const ACTIONS = {
-  shuffle: () => press(SHUFFLE),
-  repeat: () => press(REPEAT),
-  mute: () => press(`${BAR} .volume, ${MINI} .ytMusicMiniPlayerMuteButton button`),
-  like: () => press(`${BAR} #like-button-renderer button, ${MINI} like-button-view-model button`),
-  dislike: () =>
-    `(document.querySelectorAll('${BAR} #like-button-renderer button')[1] || document.querySelector('${MINI} dislike-button-view-model button')).click();`,
-  // The classic bar's slider takes the value on change, the redesigned one on input.
-  volume: (v) =>
-    `const s = document.querySelector('${BAR} #volume-slider, ${MINI} .ytSliderShapeVerticalSlider'); s.value = ` +
-    v +
-    "; if (s.tagName === 'INPUT') s.dispatchEvent(new Event('input', { bubbles: true }));" +
-    " s.dispatchEvent(new CustomEvent('change', { bubbles: true, composed: true }));",
-  // MPRIS sets a state rather than toggling; the bar only toggles, so click until it matches.
-  repeatTo: (mode) =>
-    'for (let i = 0; i < 3 && ' + QUEUE_STATE + '.repeatMode !== ' + JSON.stringify(mode) + '; i++) { ' + press(REPEAT) + ' ' + wait + ' }',
-  shuffleTo: (on) => 'if (!!' + QUEUE_STATE + '.shuffleEnabled !== ' + !!on + ') ' + press(SHUFFLE),
-  avSong: () => "document.querySelector('ytmusic-av-toggle .song-button').click();",
-  avVideo: () => "document.querySelector('ytmusic-av-toggle .video-button').click();",
-  // Only YouTube's own skip button, which it shows once an ad may be skipped.
-  skipAd: () =>
-    "const b = document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button'); if (b) b.click();",
-};
-
-// Arguments are checked here because the code is spliced into the page as text.
 function actionArg(action, arg) {
   if (action === 'volume') return typeof arg === 'number' && Number.isFinite(arg) ? Math.min(100, Math.max(0, Math.round(arg))) : null;
   if (action === 'repeatTo') return ['NONE', 'ALL', 'ONE'].includes(arg) ? arg : null;
@@ -100,161 +72,46 @@ function actionArg(action, arg) {
   return true;
 }
 
-const readControls = () => inPage(CONTROLS).then(pure.sanitizeControls);
+// Null until inject/nowplaying.js is in a new document; its next poll reports the state anyway.
+const readControls = () => inPage("typeof __ytmControls === 'function' ? __ytmControls() : null").then(pure.sanitizeControls);
 
 async function control(action, arg) {
-  if (!Object.hasOwn(ACTIONS, action)) return null;
+  if (!ACTIONS.includes(action)) return null;
   const value = actionArg(action, arg);
   if (value === null) return null;
-  await inPage('(async () => { ' + ACTIONS[action](value) + ' })()');
+  await call('control', action, value);
   // The bar updates its own state a tick after the click.
   await new Promise((ok) => setTimeout(ok, 250));
   return readControls();
 }
 
-// Rows as the page shows them. A track with a music video sits in a wrapper with
-// both versions, and the one not chosen by the song/video switch is under [hidden].
-const ROWS =
-  "[...document.querySelectorAll('ytmusic-player-queue ytmusic-player-queue-item')]" +
-  ".filter((el) => !el.closest('ytmusic-playlist-panel-video-wrapper-renderer > [hidden]'))";
-const TOP = "((el) => { const row = el.closest('#contents > *'); return row ? [...row.parentElement.children].indexOf(row) : -1; })";
+const nowLinks = () => call('nowLinks').then(pure.sanitizeLinks);
+const queue = () => call('queue').then(pure.sanitizeQueue);
+const queuePlay = (index, videoId) => call('queuePlay', index, videoId);
+const queueRemove = (itemId) => call('queueRemove', itemId);
+const queueMove = (from, to) => call('queueMove', from, to);
 
-// Store index of the playing track. After a shuffle the store keeps the previous
-// track's index (and selected flag) until the next track, so the player decides.
-const CURRENT =
-  "(() => { const p = document.querySelector('#movie_player'); const id = p && p.getVideoData ? p.getVideoData().video_id : '';" +
-  ' const sel = ' +
-  QUEUE_STATE +
-  '.selectedItemIndex; const tops = ' +
-  ROWS +
-  '.filter((el) => el.data && el.data.videoId === id).map(' +
-  TOP +
-  '); return tops.length && !tops.includes(sel) ? tops[0] : sel; })()';
-
-// Artist and album links under the title; the redesigned bar has no hrefs, the playing queue entry has the endpoints.
-const NOW_LINKS =
-  // The classic layout has a second bar in its player page; one is enough.
-  `(() => { const bar = document.querySelector('${BAR}'); const a = bar ? [...bar.querySelectorAll('.byline a')] : [];` +
-  " if (a.length) return a.map((x) => ({ text: x.textContent, href: x.getAttribute('href') }));" +
-  ' const q = ' +
-  QUEUE_STATE +
-  '; const it = q.items[' +
-  CURRENT +
-  '] || {};' +
-  ' const r = it.playlistPanelVideoRenderer || (it.playlistPanelVideoWrapperRenderer && it.playlistPanelVideoWrapperRenderer.primaryRenderer.playlistPanelVideoRenderer) || {};' +
-  ' return ((r.longBylineText && r.longBylineText.runs) || []).filter((x) => x.navigationEndpoint && x.navigationEndpoint.browseEndpoint)' +
-  ".map((x) => ({ text: x.text, href: 'browse/' + x.navigationEndpoint.browseEndpoint.browseId })); })()";
-const nowLinks = () => inPage(NOW_LINKS).then(pure.sanitizeLinks);
-
-// The queue as the page renders it; long queues load further rows as they play.
-// `top` is the row's place in the reorderable list (-1 for autoplay suggestions),
-// `itemId` the id the queue removes it by. The rows' own selected attribute can
-// stay on tracks played before, so the playing row comes from CURRENT.
-const QUEUE =
-  '(() => { const sel = ' +
-  CURRENT +
-  '; return ' +
-  ROWS +
-  '.map((el) => {' +
-  " const d = el.data || {}; const t = (x) => ((x && x.runs) || []).map((r) => r.text).join('');" +
-  ' const th = (d.thumbnail && d.thumbnail.thumbnails) || [];' +
-  ' const pic = th.find((x) => x.width >= 96) || th[th.length - 1];' +
-  ' const top = ' +
-  TOP +
-  '(el);' +
-  ' const w = d.navigationEndpoint && d.navigationEndpoint.watchEndpoint;' +
-  ' return { videoId: d.videoId, title: t(d.title), artist: t(d.shortBylineText || d.longBylineText),' +
-  " length: t(d.lengthText), thumb: pic ? pic.url : '', selected: top >= 0 ? top === sel : el.hasAttribute('selected')," +
-  ' top, itemId: w ? w.index : null }; }); })()';
-const queue = () => inPage(QUEUE).then(pure.sanitizeQueue);
-
-// The row's own play button jumps inside the current queue and keeps its order,
-// which a fresh navigation to the track would rebuild.
-function queuePlay(index, videoId) {
-  return inPage(
-    '(() => { const rows = ' +
-      ROWS +
-      '; const id = ' +
-      JSON.stringify(videoId) +
-      '; let row = rows[' +
-      index +
-      '];' +
-      ' if (!row || !row.data || row.data.videoId !== id) row = rows.find((r) => r.data && r.data.videoId === id);' +
-      " if (row) row.querySelector('#play-button').click(); })()"
-  ).then(() => undefined);
-}
-
-// The queue's own removal, which also skips on if it is the current track and
-// keeps YouTube's server-side copy of the queue in step.
-const queueRemove = (itemId) =>
-  inPage("document.querySelector('ytmusic-player-queue').queue.removeItem(" + JSON.stringify(String(itemId)) + ')').then(
-    () => undefined
-  );
-
-// What the page's drag and drop does: move the row in the list, then let the
-// queue's drop handler read the new order and pass it on to the server.
-const queueMove = (from, to) =>
-  inPage(
-    "(() => { const qel = document.querySelector('ytmusic-player-queue'); const rows = [...qel.querySelectorAll('#contents > *')];" +
-      ' const from = ' +
-      from +
-      ', to = ' +
-      to +
-      ';' +
-      ' if (!rows[from] || !rows[to] || from === to) return false;' +
-      ' const node = rows[from]; node.parentElement.insertBefore(node, from < to ? rows[to].nextSibling : rows[to]);' +
-      ' qel.onDrop({ detail: { dragEl: node } }); return true; })()'
-  );
-
-// "Play next" and "add to queue". The page's own command for this only shows a
-// toast in a hidden window and leaves the queue as it was, so the items are
-// fetched the way the page does and put into its queue store directly.
-// ponytail: internal store action of the page; breaks if YouTube renames ADD_ITEMS.
 const QUEUE_POSITIONS = ['INSERT_AFTER_CURRENT_VIDEO', 'INSERT_AT_END'];
-const QUEUE_ADD = (target, position) =>
-  '(async () => {' +
-  " const q = document.querySelector('ytmusic-player-queue'); const st = q.queue.store.getState().queue;" +
-  ' if (!st.items.length) return 0;' +
-  ' const res = await app.networkManager.fetch("/music/get_queue", Object.assign({ queueContextParams: st.queueContextParams,' +
-  ' queueInsertPosition: ' +
-  JSON.stringify(position) +
-  ' }, ' +
-  JSON.stringify(target.videoId ? { videoIds: [target.videoId] } : { playlistId: target.playlistId }) +
-  '));' +
-  ' const items = ((res && res.queueDatas) || []).map((d) => d.content).filter(Boolean);' +
-  ' const now = q.queue.store.getState().queue;' +
-  ' const sel = now.items.length ? ' +
-  CURRENT +
-  ' : -1;' +
-  ' const index = ' +
-  JSON.stringify(position) +
-  " === 'INSERT_AFTER_CURRENT_VIDEO' && sel >= 0 ? sel + 1 : now.items.length;" +
-  " q.dispatch({ type: 'ADD_ITEMS', payload: { nextQueueItemId: now.nextQueueItemId, index, items, shuffleEnabled: false, shouldAssignIds: true } });" +
-  ' return items.length; })()';
 
-// Resolves to how many items went in; with nothing playing yet the target just starts.
+// How many items went in, 0 when YouTube sent none (the queue stays as it was),
+// -1 when nothing was playing yet and the target simply started.
 async function queueAdd(target, position) {
-  const added = await inPage(QUEUE_ADD(target, position));
-  if (added) return added;
+  const added = await call('queueAdd', target, position);
+  if (added !== -1) return added;
   await navigate(
     target.videoId ? { watchEndpoint: { videoId: target.videoId } } : { watchPlaylistEndpoint: { playlistId: target.playlistId } }
   );
   return -1;
 }
 
-// The player stores it (yt-player-quality, about a year) only once a track plays or pauses, so hybrid-window sets it per track.
+// hybrid-window sets it per track, see setQuality in inject/bridge.js.
 const QUALITIES = ['auto', 'hd2160', 'hd1440', 'hd1080', 'hd720', 'large', 'medium', 'tiny'];
-const setQuality = (q) =>
-  inPage(
-    "(async () => { const p = document.getElementById('movie_player');" +
-      ' for (let i = 0; i < 50 && ![1, 2].includes(p.getPlayerState()); i++) await new Promise((r) => setTimeout(r, 200));' +
-      ' p.setPlaybackQualityRange(' + JSON.stringify(q) + ', ' + JSON.stringify(q) + '); })()'
-  );
+const setQuality = (q) => call('setQuality', q);
 
 module.exports = {
-  inPage,
   innertube,
   navigate,
+  signedIn,
   control,
   readControls,
   nowLinks,

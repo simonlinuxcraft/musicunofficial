@@ -29,10 +29,11 @@ function queueRow(q, i) {
   // The playing track stays; removing it would only skip ahead.
   const removable = !q.selected && q.itemId !== null;
   el.append(removable ? iconButton('drop', ICON_REMOVE, T.remove, () => removeFromQueue(q)) : div(''));
-  el.addEventListener('click', () => api.queuePlay(i, q.videoId));
+  const playRow = () => api.queuePlay(i, q.videoId).catch(fail);
+  el.addEventListener('click', playRow);
   el.addEventListener('keydown', (e) => {
     if (e.target !== el) return;
-    if (e.key === 'Enter') api.queuePlay(i, q.videoId);
+    if (e.key === 'Enter') playRow();
     else if (e.key === 'Delete' && removable) removeFromQueue(q);
     else return;
     e.preventDefault();
@@ -70,7 +71,7 @@ function queueRow(q, i) {
     if (dragFrom < to) to -= 1;
     const from = dragFrom;
     dragFrom = -1;
-    if (from !== to) api.queueMove(from, to).then(loadQueue);
+    if (from !== to) api.queueMove(from, to).then(loadQueue, () => toast(T.queueFailed));
   });
   return el;
 }

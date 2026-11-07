@@ -26,6 +26,7 @@ const {
   pendingBatch,
   scrobbleBatchParams,
   primaryArtist,
+  onDisplays,
   lastfmSignature,
 } = require('../src/pure');
 
@@ -362,6 +363,16 @@ test('takes the first artist of a joined line', () => {
   assert.equal(primaryArtist('HUNTR/X, EJAE, AUDREY NUNA'), 'HUNTR/X');
   assert.equal(primaryArtist('Daft Punk feat. Pharrell Williams'), 'Daft Punk');
   assert.equal(primaryArtist('Nysa'), 'Nysa');
+  assert.equal(primaryArtist('Lil Nas X feat. Jack Harlow'), 'Lil Nas X');
+});
+
+test('keeps a window spot only while a display is still there', () => {
+  const areas = [{ x: 0, y: 0, width: 1920, height: 1080 }, { x: 1920, y: 0, width: 2560, height: 1440 }];
+  assert.ok(onDisplays({ x: 100, y: 100 }, areas));
+  assert.ok(onDisplays({ x: 3000, y: 900 }, areas));
+  assert.ok(onDisplays({ x: -40, y: 10 }, areas));
+  assert.ok(!onDisplays({ x: 5000, y: 100 }, areas));
+  assert.ok(!onDisplays({ x: 100, y: 1200 }, [areas[0]]));
 });
 
 test('signs Last.fm calls over the sorted parameters', () => {

@@ -190,12 +190,13 @@ for (const action of ['shuffle', 'repeat', 'like', 'dislike', 'mute']) {
   });
 }
 // Both versions of a track sit in the queue; the switch picks which one plays.
-$('av-song').addEventListener('click', () => api.control('avSong').then(() => !$('queue').hidden && loadQueue()));
+const quiet = () => {};
+$('av-song').addEventListener('click', () => api.control('avSong').then(() => !$('queue').hidden && loadQueue(), quiet));
 $('av-video').addEventListener('click', () => {
   toggleStage(true);
-  api.control('avVideo').then(loadQueue);
+  api.control('avVideo').then(loadQueue, quiet);
 });
-$('skip-ad').addEventListener('click', () => api.control('skipAd'));
+$('skip-ad').addEventListener('click', () => api.control('skipAd').catch(quiet));
 // Live while dragging. One request at a time; whatever the slider says when it
 // returns goes next, so a fast drag never queues up a backlog of stale values.
 let volumeBusy = false;

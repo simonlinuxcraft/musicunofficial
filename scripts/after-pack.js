@@ -17,27 +17,24 @@ exports.default = async function afterPack(context) {
   const wrapper = `#!/bin/bash
 DIR="$(dirname "$(readlink -f "$0")")"
 
-# Snap-Terminals (z.B. alacritty als Snap) vererben GIO_MODULE_DIR auf einen
-# Pfad, der hier nicht existiert. Unset, damit glib-basierte Nebenpfade nicht
-# auf GDummyTlsBackend zurueckfallen. Chromium selbst ist davon unabhaengig.
-# Laeuft die App SELBST als Snap, zeigt die Variable auf den Snap-eigenen
-# Modulpfad und muss stehen bleiben, sonst faellt genau dort TLS aus.
+# A terminal running as a snap passes on a GIO_MODULE_DIR that does not exist
+# here, and glib falls back to GDummyTlsBackend. Inside a snap it is right and stays.
 [ -z "$SNAP" ] && unset GIO_MODULE_DIR
 
-# Nativ Wayland statt XWayland: XWayland meldet bei Monitoren mit hoher
-# Bildrate eine falsche Rate (gemessen 20,08 Hz an 320-Hz-Panels), Chromium
-# zeichnet dann nur 20 Bilder/s. Preis: unter GNOME-Wayland setzt die App
-# keine Fensterpositionen und kein "immer im Vordergrund" (Mini-Player).
-# Switch muss VOR Electron-Init am argv stehen, deshalb hier im Wrapper.
+# Native Wayland: XWayland reports a wrong refresh rate on high refresh panels
+# (20.08 Hz on 320 Hz) and Chromium draws at it. The cost: on GNOME Wayland no
+# window positions and no always-on-top for the mini player. Must be on argv before Electron starts.
 WL_ARGS=()
 if [ -n "$WAYLAND_DISPLAY" ] && [ "$XDG_SESSION_TYPE" = "wayland" ]; then
   WL_ARGS=(--ozone-platform=wayland)
 fi
 
-case " $* " in
-  *" --no-sandbox "*) exec "$DIR/${exeName}.bin" "\${WL_ARGS[@]}" "$@" ;;
-  *) exec "$DIR/${exeName}.bin" --no-sandbox "\${WL_ARGS[@]}" "$@" ;;
-esac
+# chrome-sandbox cannot be setuid inside an AppImage, so the sandbox needs user
+# namespaces. Where they are blocked (Ubuntu 24.04+ AppArmor default) Chromium would abort.
+SB_ARGS=()
+unshare -Ur true 2>/dev/null || SB_ARGS=(--no-sandbox)
+
+exec "$DIR/${exeName}.bin" "\${SB_ARGS[@]}" "\${WL_ARGS[@]}" "$@"
 `;
 
   fs.writeFileSync(realPath, wrapper, { mode: 0o755 });

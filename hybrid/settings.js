@@ -156,6 +156,7 @@ function renderSettings(s) {
     const row = div('actions');
     row.append(div('', T.lastfmConnected + s.lastfm.name), button(T.lastfmDisconnect, () => lastfmStep(api.lastfmDisconnect)));
     box.append(row);
+    if (s.lastfm.locked) box.append(div('note', T.lastfmLocked));
   } else if (s.lastfm.waiting) {
     const row = div('actions');
     row.append(button(T.lastfmFinish, () => lastfmStep(api.lastfmFinish), true));

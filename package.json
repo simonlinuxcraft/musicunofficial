@@ -10,7 +10,7 @@
   },
   "scripts": {
     "start": "electron .",
-    "dev": "unset ELECTRON_RUN_AS_NODE GIO_MODULE_DIR; electron . --no-sandbox --ozone-platform-hint=auto",
+    "dev": "unset ELECTRON_RUN_AS_NODE GIO_MODULE_DIR; electron . $(unshare -Ur true 2>/dev/null || echo --no-sandbox) --ozone-platform-hint=auto",
     "test": "node --test",
     "smoke": "node scripts/smoke.js",
     "build": "electron-builder --linux && node scripts/swap-runtime.js",
@@ -67,7 +67,7 @@
     }
   },
   "devDependencies": {
-    "electron": "^41.7.1",
+    "electron": "^45.2.3",
     "electron-builder": "^26.15.2"
   },
   "desktopName": "musicunofficial.desktop",

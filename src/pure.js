@@ -369,6 +369,12 @@ function sanitizeLinks(raw) {
   return out;
 }
 
+// Whether a saved window spot is still on a connected display (work areas), with
+// 50 px of slack so a window dragged half off an edge keeps its place.
+function onDisplays(b, areas) {
+  return areas.some((a) => b.x >= a.x - 50 && b.y >= a.y - 50 && b.x < a.x + a.width - 50 && b.y < a.y + a.height - 50);
+}
+
 // Last.fm counts a play once half the track, or four minutes of it, have been
 // heard, and only for tracks longer than 30 seconds.
 function scrobbleDue(playedSeconds, durationSeconds) {
@@ -383,9 +389,10 @@ function replayed(scrobbled, lastPosition, position) {
 
 // The first name of a joined artist line ("A und B", "A & B", "A, B", "A feat. B").
 // Only a fallback: a duo called "A & B" is split too, the player bar's links are not.
+// No " x ": it would cut "Lil Nas X feat. B" down to "Lil Nas".
 function primaryArtist(line) {
   const s = typeof line === 'string' ? line.trim() : '';
-  return s.split(/\s+(?:und|and|&|feat\.?|ft\.?|x)\s+|,\s*/i)[0].trim() || s;
+  return s.split(/\s+(?:und|and|&|feat\.?|ft\.?)\s+|,\s*/i)[0].trim() || s;
 }
 
 // api_sig as Last.fm defines it: parameter names and values sorted by name and
@@ -479,6 +486,7 @@ module.exports = {
   parseSuggestions,
   parsePlaylistOptions,
   sanitizeLinks,
+  onDisplays,
   scrobbleDue,
   replayed,
   primaryArtist,

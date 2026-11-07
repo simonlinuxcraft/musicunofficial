@@ -14,10 +14,15 @@ function read(name) {
   }
 }
 
+// Through a temp file: a crash mid-write would leave half a file, and read() would drop all settings.
 function write(name, value) {
+  const f = file(name);
   try {
-    fs.writeFileSync(file(name), JSON.stringify(value));
-  } catch {}
+    fs.writeFileSync(f + '.tmp', JSON.stringify(value));
+    fs.renameSync(f + '.tmp', f);
+  } catch (e) {
+    console.log('[store] ' + name + ': ' + e.message);
+  }
 }
 
 // richPresence replaces "discord", which an old bug switched off by itself.

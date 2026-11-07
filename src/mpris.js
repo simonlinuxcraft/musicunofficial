@@ -215,13 +215,20 @@ function start(opts) {
     return;
   }
   // Unhandled, a dropped bus connection would take the main process down with it.
+  // error and end can both come for one connection, hence the check.
+  const mine = bus;
+  const drop = () => {
+    if (bus !== mine) return;
+    bus = null;
+    // Clients on a new connection have been told nothing yet.
+    for (const k in told) delete told[k];
+    setTimeout(() => start(actions), 10000).unref();
+  };
   bus.connection.on('error', (e) => {
     console.log('[mpris] ' + e.message);
-    bus = null;
+    drop();
   });
-  bus.connection.on('end', () => {
-    bus = null;
-  });
+  bus.connection.on('end', drop);
   bus.exportInterface(root, PATH, ROOT_IFACE);
   bus.exportInterface(player, PATH, PLAYER_IFACE);
   // A second copy beside this one (a dev run next to the installed app) takes an
@@ -233,4 +240,16 @@ function start(opts) {
   update(track);
 }
 
-module.exports = { start, update, metadata, active: () => !!bus };
+// On this module's bus since it is open anyway. null when it cannot ask, so "no" stays a real answer.
+function nameHasOwner(name) {
+  return new Promise((ok) => {
+    if (!bus) return ok(null);
+    const t = setTimeout(() => ok(null), 1000);
+    bus.nameHasOwner(name, (err, has) => {
+      clearTimeout(t);
+      ok(err ? null : !!has);
+    });
+  });
+}
+
+module.exports = { start, update, metadata, nameHasOwner, active: () => !!bus };

@@ -93,7 +93,14 @@ async function main() {
   const env = { ...process.env, XDG_CONFIG_HOME: PROFILE };
   delete env.ELECTRON_RUN_AS_NODE;
   const electron = require(path.join(ROOT, 'node_modules', 'electron'));
-  const app = spawn(electron, ['.', '--no-sandbox', '--ozone-platform-hint=auto', '--remote-debugging-port=' + PORT], {
+  // Like the AppImage wrapper: sandboxed wherever user namespaces allow it.
+  let sandbox = [];
+  try {
+    execFileSync('unshare', ['-Ur', 'true'], { stdio: 'ignore' });
+  } catch {
+    sandbox = ['--no-sandbox'];
+  }
+  const app = spawn(electron, ['.', ...sandbox, '--ozone-platform-hint=auto', '--remote-debugging-port=' + PORT], {
     cwd: ROOT,
     env,
     stdio: 'ignore',

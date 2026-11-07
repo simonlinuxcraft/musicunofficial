@@ -418,8 +418,9 @@ $('menu').addEventListener('keydown', (e) => {
 async function queueAdd(target, position, done) {
   try {
     const n = await api.queueAdd(target, position);
-    // -1: nothing was playing, so the target simply started.
+    // -1: nothing was playing, so the target simply started. 0: YouTube sent nothing to add.
     if (n > 0) toast(done);
+    else if (n === 0) toast(T.queueFailed);
     if (n && !$('queue').hidden) loadQueue();
   } catch {
     toast(T.queueFailed);

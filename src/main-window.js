@@ -68,14 +68,36 @@ function injectAll(wc, resume) {
   wc.insertCSS(CSS).catch(log('css'));
   run(NOWPLAYING).then(player.sync).catch(log('nowplaying'));
   if (resume) {
+    const unmute = () => !wc.isDestroyed() && wc.setAudioMuted(false);
+    // A new document kills resume.js, and its promise then never settles.
+    wc.once('did-navigate', unmute);
     run(RESUME.replaceAll('__RESUME_DATA__', () => JSON.stringify(resume)))
       .catch(log('resume'))
-      .finally(() => !wc.isDestroyed() && wc.setAudioMuted(false));
+      .finally(unmute);
   }
 }
 
 function openOutside(url) {
   if (isWebLink(url)) shell.openExternal(url);
+}
+
+// will-navigate misses server redirects, and popups bring none of the parent's listeners.
+function guard(wc) {
+  // Main frame only: ads and Google's cookie frames redirect across hosts all the time.
+  const check = (e, url) => {
+    if (e.isMainFrame === false || isInternal(url)) return;
+    e.preventDefault();
+    console.log('[nav] sent outside: ' + (URL.parse(url)?.host || 'invalid url'));
+    openOutside(url);
+  };
+  wc.on('will-navigate', check);
+  wc.on('will-redirect', check);
+  wc.setWindowOpenHandler(({ url }) => {
+    if (isInternal(url)) return { action: 'allow' };
+    openOutside(url);
+    return { action: 'deny' };
+  });
+  wc.on('did-create-window', (child) => guard(child.webContents));
 }
 
 // The player sizes its video on resize only, and a stylesheet alone fires none.
@@ -132,17 +154,7 @@ function create({ resume, openMini }) {
     view.setBackgroundColor(onSite(url) ? DARK : '#ffffff');
   });
 
-  wc.setWindowOpenHandler(({ url }) => {
-    if (isInternal(url)) return { action: 'allow' };
-    openOutside(url);
-    return { action: 'deny' };
-  });
-
-  wc.on('will-navigate', (e, url) => {
-    if (isInternal(url)) return;
-    e.preventDefault();
-    openOutside(url);
-  });
+  guard(wc);
 
   bindKeys(wc, 'pageZoom', openMini);
 }
