@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+  "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>simonlinuxcraft</vendor>
+  <action id="io.github.simonlinuxcraft.musicunofficial.update">
+    <description>Install a Music update</description>
+    <description xml:lang="de">Ein Update für Music installieren</description>
+    <message>Music needs your password to install its update.</message>
+    <message xml:lang="de">Music braucht Ihr Passwort, um das Update zu installieren.</message>
+    <icon_name>musicunofficial</icon_name>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/opt/MusicUnofficial/resources/update-helper</annotate>
+  </action>
+</policyconfig>

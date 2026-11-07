@@ -29,10 +29,10 @@ if [ -n "$WAYLAND_DISPLAY" ] && [ "$XDG_SESSION_TYPE" = "wayland" ]; then
   WL_ARGS=(--ozone-platform=wayland)
 fi
 
-# chrome-sandbox cannot be setuid inside an AppImage, so the sandbox needs user
-# namespaces. Where they are blocked (Ubuntu 24.04+ AppArmor default) Chromium would abort.
+# The deb's AppArmor profile allows user namespaces, and where the kernel has none
+# its postinst makes chrome-sandbox setuid. Only with neither would Chromium abort.
 SB_ARGS=()
-unshare -Ur true 2>/dev/null || SB_ARGS=(--no-sandbox)
+[ -u "$DIR/chrome-sandbox" ] || unshare -Ur true 2>/dev/null || SB_ARGS=(--no-sandbox)
 
 exec "$DIR/${exeName}.bin" "\${SB_ARGS[@]}" "\${WL_ARGS[@]}" "$@"
 `;

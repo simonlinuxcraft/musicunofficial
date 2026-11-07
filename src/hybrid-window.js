@@ -290,7 +290,7 @@ ipcMain.on('hybrid:lastfm-account', (e) => {
   if (fromUs(e)) shell.openExternal('https://www.last.fm/api/account/create');
 });
 
-ipcMain.on('hybrid:restart', (e) => fromUs(e) && update.restart());
+ipcMain.handle('hybrid:install-update', (e) => (fromUs(e) ? update.install() : false));
 
 ipcMain.on('hybrid:window', (e, action) => {
   if (!fromUs(e)) return;

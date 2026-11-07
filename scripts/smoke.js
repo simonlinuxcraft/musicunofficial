@@ -93,7 +93,7 @@ async function main() {
   const env = { ...process.env, XDG_CONFIG_HOME: PROFILE };
   delete env.ELECTRON_RUN_AS_NODE;
   const electron = require(path.join(ROOT, 'node_modules', 'electron'));
-  // Like the AppImage wrapper: sandboxed wherever user namespaces allow it.
+  // Like the launch wrapper: sandboxed wherever user namespaces allow it.
   let sandbox = [];
   try {
     execFileSync('unshare', ['-Ur', 'true'], { stdio: 'ignore' });

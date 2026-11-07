@@ -1,6 +1,6 @@
 {
   "name": "musicunofficial",
-  "version": "0.0.7",
+  "version": "0.0.8",
   "description": "Unofficial desktop wrapper for the YouTube Music player",
   "main": "main.js",
   "license": "MIT",
@@ -13,9 +13,7 @@
     "dev": "unset ELECTRON_RUN_AS_NODE GIO_MODULE_DIR; electron . $(unshare -Ur true 2>/dev/null || echo --no-sandbox) --ozone-platform-hint=auto",
     "test": "node --test",
     "smoke": "node scripts/smoke.js",
-    "build": "electron-builder --linux && node scripts/swap-runtime.js",
-    "build-appimage": "electron-builder --linux AppImage && node scripts/swap-runtime.js",
-    "build-deb": "electron-builder --linux deb",
+    "build": "electron-builder --linux deb",
     "icons": "node scripts/gen-icons.js"
   },
   "build": {
@@ -24,7 +22,7 @@
     "afterPack": "./scripts/after-pack.js",
     "linux": {
       "target": [
-        "AppImage"
+        "deb"
       ],
       "icon": "icon.png",
       "category": "AudioVideo",
@@ -67,9 +65,21 @@
       "!node_modules/**/{.github,.idea,.vscode,.nyc_output,.eslintrc*,.prettierrc*,.editorconfig,.travis.yml,.gitignore,.gitattributes,.npmignore,tsconfig*.json,jest.config*,karma.conf*,webpack.config*,rollup.config*,gulpfile*,Gruntfile*}",
       "!node_modules/**/*.{md,ts,map,d.ts}"
     ],
-    "appImage": {
-      "artifactName": "MusicUnofficial-${version}.AppImage",
-      "executableArgs": []
+    "publish": null,
+    "extraResources": [
+      {
+        "from": "deb/update-helper",
+        "to": "update-helper"
+      }
+    ],
+    "deb": {
+      "recommends": [
+        "libappindicator3-1",
+        "pkexec"
+      ],
+      "fpm": [
+        "deb/io.github.simonlinuxcraft.musicunofficial.policy=/usr/share/polkit-1/actions/io.github.simonlinuxcraft.musicunofficial.policy"
+      ]
     }
   },
   "devDependencies": {
