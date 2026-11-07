@@ -10,6 +10,7 @@ const store = require('./store');
 const page = require('./page');
 const sleep = require('./sleep');
 const lastfm = require('./lastfm');
+const update = require('./update');
 const pure = require('./pure');
 const { bindKeys } = require('./keys');
 
@@ -158,6 +159,7 @@ function settings() {
     discordAvailable: player.discordAvailable,
     sleep: sleep.state(),
     lastfm: lastfm.state(),
+    update: update.state(),
   };
 }
 
@@ -288,6 +290,8 @@ ipcMain.on('hybrid:lastfm-account', (e) => {
   if (fromUs(e)) shell.openExternal('https://www.last.fm/api/account/create');
 });
 
+ipcMain.on('hybrid:restart', (e) => fromUs(e) && update.restart());
+
 ipcMain.on('hybrid:window', (e, action) => {
   if (!fromUs(e)) return;
   if (action === 'mini') actions.openMini();
@@ -338,4 +342,5 @@ module.exports = {
   isShown: () => alive() && win.isVisible() && !win.isMinimized(),
   isFocused: () => alive() && win.isFocused(),
   webContents: () => (alive() ? win.webContents : null),
+  updateReady: (version) => alive() && win.webContents.send('hybrid:update-ready', version),
 };

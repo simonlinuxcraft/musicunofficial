@@ -464,6 +464,16 @@ function sanitizeQueue(raw) {
   return out;
 }
 
+// Plain x.y.z only; a tag in any other form is never newer.
+function isNewer(latest, current) {
+  const parts = (v) => (/^\d+\.\d+\.\d+$/.test(v) ? v.split('.').map(Number) : null);
+  const a = parts(latest);
+  const b = parts(current);
+  if (!a || !b) return false;
+  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] > b[i];
+  return false;
+}
+
 module.exports = {
   APP_TITLE,
   isInternal,
@@ -496,4 +506,5 @@ module.exports = {
   scrobbleBatchParams,
   CONTINUATION,
   BROWSE_ID,
+  isNewer,
 };

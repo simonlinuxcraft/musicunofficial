@@ -164,6 +164,18 @@ such as `~/Applications` and integrate it with your usual AppImage tool, or
 create a desktop entry with `StartupWMClass=musicunofficial` so the panel can
 match the running window to it.
 
+### Updates
+
+The AppImage updates itself from the latest GitHub release. It checks a minute
+after start and every six hours, verifies the download against the sha256
+digest GitHub lists for the release asset, and replaces the file under its
+current name. The new version runs from the next start; Settings > Updates has
+a button to restart right away. Give the file a name without a version, such as
+`~/Applications/MusicUnofficial.AppImage`, so the name stays true after an
+update. Updates need write access to the folder the AppImage is in; a copy
+outside such a folder, a development run or another kind of install never
+updates itself.
+
 ### Requirements
 
 Linux x86_64, glibc 2.25 or newer, which covers every current distribution. A
@@ -188,6 +200,11 @@ npm run icons
 
 Edit `assets/symbol.svg` and run the command to regenerate the application icon,
 the tray icon and the mark in the navigation bar.
+
+For the self-update to pick a release up, tag it `vX.Y.Z` with the version from
+`package.json`, attach `dist/MusicUnofficial-X.Y.Z.AppImage` under exactly that
+name and publish it as the latest release, not as a pre-release. The repository
+has to be public, because the app looks the release up without a token.
 
 ## Licence
 

@@ -13,6 +13,7 @@ const page = require('./src/page');
 const sleep = require('./src/sleep');
 const notify = require('./src/notify');
 const lastfm = require('./src/lastfm');
+const update = require('./src/update');
 require('./src/i18n');
 
 // Pinned so a rename cannot move the profile and sign the user out. Must run
@@ -113,6 +114,7 @@ app.whenReady().then(() => {
   } catch (e) {
     console.log('[tray] unavailable: ' + e.message);
   }
+  update.start(hybrid.updateReady);
 });
 
 // No window-all-closed handler: with a tray, close only hides; without one,

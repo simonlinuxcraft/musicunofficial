@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld('hybrid', {
   playerView: (kind, rect) => ipcRenderer.send('hybrid:player-view', kind, rect),
   signedIn: () => ipcRenderer.invoke('hybrid:signed-in'),
   signIn: () => ipcRenderer.send('hybrid:sign-in'),
+  restart: () => ipcRenderer.send('hybrid:restart'),
+  onUpdateReady: (cb) => ipcRenderer.on('hybrid:update-ready', (_e, version) => cb(version)),
   onTrack: (cb) => ipcRenderer.on('track:update', (_e, track) => cb(track)),
   request: () => ipcRenderer.send('track:request'),
   command: (cmd, arg) => ipcRenderer.send('track:command', cmd, arg),
