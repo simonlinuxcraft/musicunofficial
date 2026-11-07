@@ -63,7 +63,8 @@
       "!node_modules/**/*.{md,ts,map,d.ts}"
     ],
     "appImage": {
-      "artifactName": "MusicUnofficial-${version}.AppImage"
+      "artifactName": "MusicUnofficial-${version}.AppImage",
+      "executableArgs": []
     }
   },
   "devDependencies": {
