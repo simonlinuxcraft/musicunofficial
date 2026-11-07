@@ -96,7 +96,7 @@ const root = {
   CanQuit: true,
   CanRaise: true,
   HasTrackList: false,
-  Identity: 'MusicUnofficial',
+  Identity: 'Music',
   DesktopEntry: 'musicunofficial',
   SupportedUriSchemes: [],
   SupportedMimeTypes: [],

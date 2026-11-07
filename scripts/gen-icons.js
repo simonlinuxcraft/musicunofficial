@@ -12,7 +12,7 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
-const WORDMARK = 'MusicUnofficial';
+const WORDMARK = 'Music';
 const TILE = '#0f0f0f';
 
 const symbol = fs.readFileSync(path.join(ROOT, 'assets', 'symbol.svg'), 'utf8');
