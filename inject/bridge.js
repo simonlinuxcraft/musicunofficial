@@ -162,7 +162,7 @@
       const res = await app.networkManager.fetch('/music/get_queue', {
         queueContextParams: st.queueContextParams,
         queueInsertPosition: position,
-        ...(target.videoId ? { videoIds: [target.videoId] } : { playlistId: target.playlistId }),
+        ...(target.videoIds ? { videoIds: target.videoIds } : target.videoId ? { videoIds: [target.videoId] } : { playlistId: target.playlistId }),
       });
       const items = (res?.queueDatas || []).map((d) => d.content).filter(Boolean);
       if (!items.length) return 0;

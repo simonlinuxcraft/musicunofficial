@@ -43,7 +43,8 @@ function activate(item) {
 
 function coverOf(item) {
   const box = div('cover');
-  box.append(thumb(item.thumb));
+  // Album tracks have no cover of their own; YouTube Music numbers them instead.
+  box.append(!item.thumb && item.index ? div('index', item.index) : thumb(item.thumb));
   if (item.watch) {
     // Does what the row does, so pointer only: no extra tab stop or announcement.
     const b = iconButton('cover-play', ICON_PLAY, T.playAll, () => activate(item));
@@ -54,10 +55,37 @@ function coverOf(item) {
   return box;
 }
 
+// Ctrl+click picks tracks one by one, Shift+click a run of them, as in a file manager.
+let anchor = null;
+
+function toggleSelect(el, range) {
+  const all = [...el.parentElement.querySelectorAll(':scope > [data-video]')];
+  if (range && all.includes(anchor)) {
+    const [a, b] = [all.indexOf(anchor), all.indexOf(el)].sort((x, y) => x - y);
+    for (const x of all.slice(a, b + 1)) x.classList.add('selected');
+    return;
+  }
+  el.classList.toggle('selected');
+  anchor = el;
+}
+
+const selection = () => [...document.querySelectorAll('#list .selected')].map((el) => el.item);
+
+function clearSelection() {
+  for (const el of document.querySelectorAll('#list .selected')) el.classList.remove('selected');
+  anchor = null;
+}
+document.addEventListener('keydown', (e) => e.key === 'Escape' && clearSelection());
+
 function bindItem(el, item) {
+  el.item = item;
   el.tabIndex = 0;
   el.setAttribute('role', 'button');
-  el.addEventListener('click', () => activate(item));
+  el.addEventListener('click', (e) => {
+    if (item.watch && (e.ctrlKey || e.shiftKey)) return toggleSelect(el, e.shiftKey);
+    clearSelection();
+    activate(item);
+  });
   el.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter' || e.target !== el) return;
     e.preventDefault();
@@ -65,9 +93,11 @@ function bindItem(el, item) {
   });
   el.addEventListener('contextmenu', (e) => {
     e.preventDefault();
+    const many = el.classList.contains('selected') ? selection() : [];
+    if (many.length < 2) clearSelection();
     const r = el.getBoundingClientRect();
     // A keyboard-opened menu has no pointer position.
-    openMenu(item, e.clientX || r.left + 48, e.clientY || r.bottom);
+    openMenu(many.length > 1 ? manyEntries(many) : menuEntries(item), e.clientX || r.left + 48, e.clientY || r.bottom);
   });
   if (item.watch) {
     el.dataset.video = item.watch.videoId;
@@ -78,7 +108,7 @@ function bindItem(el, item) {
 const moreButton = (item) =>
   iconButton('more', ICON_MORE, T.more, (e) => {
     const r = e.currentTarget.getBoundingClientRect();
-    openMenu(item, r.left, r.bottom);
+    openMenu(menuEntries(item), r.left, r.bottom);
   });
 
 function row(item) {
@@ -188,7 +218,15 @@ async function show(next) {
   status(page.items.length ? '' : T.empty);
   // Play and shuffle only where the page is a list of its own (playlist, album), which the shuffle entry marks.
   const first = page.items.find((i) => i.watch);
-  $('actions').hidden = !(page.shuffle && first);
+  const playable = !!(page.shuffle && first);
+  const more = pageEntries(page).length > 0;
+  $('play-all').hidden = $('shuffle-all').hidden = !playable;
+  $('page-more').hidden = !more;
+  $('actions').hidden = !playable && !more;
+  $('page-more').onclick = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    openMenu(pageEntries(page), r.left, r.bottom);
+  };
   $('play-all').onclick = () => first && play({ watchEndpoint: first.watch }, first.watch.videoId);
   $('shuffle-all').onclick = () => page.shuffle && play({ watchPlaylistEndpoint: page.shuffle });
   $('list').append(...page.sections.map(renderSection));
@@ -268,9 +306,13 @@ for (const action of ['mini', 'minimize', 'maximize', 'close']) {
 api.onMaximized((on) => document.documentElement.classList.toggle('maximized', !!on));
 
 // Shown only while signed out; it goes once the page is back with an account.
+let signedIn = null;
+
 async function checkAccount() {
-  const signedIn = await api.signedIn().catch(() => null);
+  signedIn = await api.signedIn().catch(() => null);
   $('sign-in').hidden = signedIn !== false;
+  // Subscribing needs the account, so the page menu may only now have entries.
+  if (view && view.page && !view.render) $('page-more').hidden = !pageEntries(view.page).length;
 }
 $('sign-in').addEventListener('click', api.signIn);
 checkAccount();
@@ -340,11 +382,33 @@ function nameOf(item, browseId) {
   return p ? p.text : item.subtitle || item.title;
 }
 
+// Library changes all go through one call; `done` is the toast on success.
+async function change(c, done) {
+  const ok = await api.change(c).catch(() => false);
+  toast(ok ? done : T.actionFailed);
+  // Pages kept for Back may show what just changed; they load fresh instead.
+  if (ok) for (const s of stack) s.page = null;
+  return ok;
+}
+
+function libraryEntry(lib, add) {
+  if (!lib || !(lib.saved ? lib.unsave : lib.save)) return;
+  add(lib.saved ? T.unsaveLib : T.saveLib, async () => {
+    if (await change(lib.saved ? lib.unsave : lib.save, lib.saved ? T.unsavedLib : T.savedLib)) lib.saved = !lib.saved;
+  });
+}
+
+function copyLink(item) {
+  const url = item.watch ? 'https://music.youtube.com/watch?v=' + item.watch.videoId : 'https://music.youtube.com/browse/' + item.browseId;
+  navigator.clipboard.writeText(url).then(() => toast(T.linkCopied), fail);
+}
+
+// `here`: the track is already playing or queued, so playing it again would rebuild the queue.
 function menuEntries(item) {
   const out = [];
   const add = (label, run) => out.push([label, run]);
-  if (item.watch) add(T.playAll, () => activate(item));
-  else {
+  if (item.watch && !item.here) add(T.playAll, () => activate(item));
+  else if (!item.watch) {
     add(T.open, () => activate(item));
     if (item.play) add(T.playAll, () => play(item.play));
   }
@@ -354,19 +418,94 @@ function menuEntries(item) {
     add(T.playNext, () => queueAdd(item.queue, 'INSERT_AFTER_CURRENT_VIDEO', T.addedNext));
     add(T.addQueue, () => queueAdd(item.queue, 'INSERT_AT_END', T.addedQueue));
   }
-  if (item.watch) add(T.addPlaylist, () => saveToPlaylist(item));
+  if (item.watch) add(T.addPlaylist, () => saveToPlaylist([item.watch.videoId]));
+  libraryEntry(item.library, add);
+  if (item.remove) add(T.removeFromPl, () => removeFromPlaylist([item]));
   if (item.artistId && item.artistId !== item.browseId) add(T.goArtist, () => openPage(nameOf(item, item.artistId), item.artistId));
   if (item.albumId && item.albumId !== item.browseId) add(T.goAlbum, () => openPage(nameOf(item, item.albumId), item.albumId));
+  add(T.copyLink, () => copyLink(item));
+  if (item.notInterested && signedIn) add(T.notInterested, () => change(item.notInterested, T.lessOften));
   return out;
+}
+
+// Several selected tracks.
+function manyEntries(items) {
+  const videoIds = items.map((i) => i.watch.videoId);
+  const out = [
+    [T.playNext, () => queueAdd({ videoIds }, 'INSERT_AFTER_CURRENT_VIDEO', T.addedNext)],
+    [T.addQueue, () => queueAdd({ videoIds }, 'INSERT_AT_END', T.addedQueue)],
+    [T.addPlaylist, () => saveToPlaylist(videoIds)],
+  ];
+  if (items.every((i) => i.remove)) out.push([T.removeFromPl, () => removeFromPlaylist(items)]);
+  return out;
+}
+
+// The page's own menu: save or subscribe, and editing a playlist of the account's own.
+function pageEntries(page) {
+  const out = [];
+  const add = (label, run) => out.push([label, run]);
+  libraryEntry(page.library, add);
+  const sub = page.subscribe;
+  if (sub && signedIn) {
+    add(sub.subscribed ? T.unsubscribe : T.subscribe, async () => {
+      const on = !sub.subscribed;
+      if (await change({ kind: 'subscribe', channelId: sub.channelId, on }, on ? T.subscribed : T.unsubscribed)) sub.subscribed = on;
+    });
+  }
+  const own = page.own;
+  if (!own) return out;
+  add(T.rename, () => renamePlaylist(own));
+  for (const privacy of ['PRIVATE', 'UNLISTED', 'PUBLIC']) {
+    if (privacy === own.privacy) continue;
+    add(T['priv' + privacy], async () => {
+      if (await change({ kind: 'privacy', playlistId: own.playlistId, privacy }, T.changed)) own.privacy = privacy;
+    });
+  }
+  add(T.deletePl, () => deletePlaylist(own));
+  return out;
+}
+
+// Each waits on YouTube; a page left in the meantime is not touched.
+async function removeFromPlaylist(items) {
+  const v = view;
+  const rows = items.map((i) => i.remove);
+  if (!(await change({ kind: 'remove', playlistId: rows[0].playlistId, rows }, T.removedFromPl))) return;
+  v.page = null;
+  if (view === v) show(v);
+}
+
+async function renamePlaylist(own) {
+  const v = view;
+  const title = await ask(T.rename, v.title);
+  if (!title || !(await change({ kind: 'rename', playlistId: own.playlistId, title }, T.changed))) return;
+  v.title = title;
+  if (view === v) $('heading').textContent = title;
+}
+
+async function deletePlaylist(own) {
+  const v = view;
+  if (!confirm(T.deleteAsk) || !(await change({ kind: 'delete', playlistId: own.playlistId }, T.deleted)) || view !== v) return;
+  if (stack.length) show(stack.pop());
+  else restoreRoot();
+}
+
+// A one-line text prompt; resolves to the trimmed text, or null when cancelled.
+function ask(title, value) {
+  const d = $('ask-dialog');
+  $('ask-title').textContent = title;
+  $('ask-input').value = value;
+  d.returnValue = '';
+  d.showModal();
+  return new Promise((ok) => d.addEventListener('close', () => ok(d.returnValue === 'ok' ? $('ask-input').value.trim() : null), { once: true }));
 }
 
 let menuFocus = null;
 
-function openMenu(item, x, y) {
+function openMenu(entries, x, y) {
   const m = $('menu');
   menuFocus = document.activeElement;
   m.replaceChildren(
-    ...menuEntries(item).map(([label, run]) => {
+    ...entries.map(([label, run]) => {
       const b = document.createElement('button');
       b.setAttribute('role', 'menuitem');
       b.textContent = label;
@@ -419,23 +558,43 @@ async function queueAdd(target, position, done) {
 
 // Save to playlist, in a native modal dialog.
 
-async function saveToPlaylist(item) {
+const ICON_LIST = 'M15 6H3v2h12zm0 4H3v2h12zM3 16h8v-2H3zM17 6v8.18c-.31-.11-.65-.18-1-.18-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3V8h3V6z';
+
+function playlistCover(url) {
+  if (url) return thumb(url);
+  const box = document.createElement('span');
+  box.className = 'pl-icon';
+  box.append(svg(ICON_LIST));
+  return box;
+}
+
+async function saveToPlaylist(videoIds) {
+  if (!videoIds.length) return;
   const d = $('pl-dialog');
-  const videoId = item.watch.videoId;
   $('pl-list').replaceChildren();
   $('pl-status').textContent = T.loading;
+  $('pl-create').hidden = signedIn === false;
+  $('pl-create').onclick = async () => {
+    d.close();
+    const title = await ask(T.newPlaylist, '');
+    if (title) change({ kind: 'create', title, videoIds }, T.savedTo + title);
+  };
   d.showModal();
-  const lists = await api.playlists(videoId).catch(() => []);
+  const lists = await api.playlists(videoIds[0]).catch(() => null);
   if (!d.open) return;
-  $('pl-status').textContent = lists.length ? '' : T.noPlaylists;
+  // Signed out, YouTube refuses the request; that is the sign-in hint, not a failure.
+  if (!lists || (!lists.length && signedIn === false)) return ($('pl-status').textContent = signedIn === false ? T.noPlaylists : T.actionFailed);
+  $('pl-status').textContent = '';
   $('pl-list').append(
     ...lists.map((p) => {
       const b = document.createElement('button');
-      b.textContent = p.title;
-      b.addEventListener('click', async () => {
+      const text = div('text');
+      text.append(div('title', p.title));
+      if (p.subtitle) text.append(div('sub', p.subtitle));
+      b.append(playlistCover(p.thumb), text);
+      b.addEventListener('click', () => {
         d.close();
-        const ok = await api.playlistAdd(p.playlistId, videoId).catch(() => false);
-        toast(ok ? T.savedTo + p.title : T.saveFailed);
+        change({ kind: 'add', playlistId: p.playlistId, videoIds }, T.savedTo + p.title);
       });
       return b;
     })

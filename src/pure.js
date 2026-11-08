@@ -10,6 +10,9 @@ const LIST_ID = /^[A-Za-z0-9_-]{2,64}$/;
 const BROWSE_ID = /^[A-Za-z0-9_-]{2,128}$/;
 const PARAMS = /^[A-Za-z0-9%_=-]{1,100}$/;
 const CONTINUATION = /^[A-Za-z0-9%_=-]{8,4000}$/;
+const TOKEN = /^[A-Za-z0-9%_=-]{8,1000}$/;
+const SET_VIDEO_ID = /^[A-Za-z0-9_-]{1,64}$/;
+const PRIVACY = ['PRIVATE', 'UNLISTED', 'PUBLIC'];
 
 const REPEAT_MODES = ['NONE', 'ALL', 'ONE'];
 const LIKE_STATES = ['LIKE', 'DISLIKE', 'INDIFFERENT'];
@@ -165,14 +168,76 @@ function sanitizeEndpoint(raw) {
   return list ? { watchPlaylistEndpoint: list } : null;
 }
 
-// What "play next" and "add to queue" put in: one track or a whole list.
+// What "play next" and "add to queue" put in: one track, several (a selection) or a whole list.
 function sanitizeQueueTarget(raw) {
   if (!raw || typeof raw !== 'object') return null;
+  const ids = videoIds(raw.videoIds);
+  if (ids) return { videoIds: ids };
   const videoId = matching(raw.videoId, VIDEO_ID);
   if (videoId) return { videoId };
   const playlistId = matching(raw.playlistId, LIST_ID);
   return playlistId ? { playlistId } : null;
 }
+
+// A library change named by one of YouTube's own endpoints: a feedback token
+// (save a song, not interested) or a like on a list (save an album or playlist).
+function changeOf(raw) {
+  const feedback = matching(raw?.feedbackEndpoint?.feedbackToken, TOKEN);
+  if (feedback) return { kind: 'feedback', feedback };
+  const like = raw?.likeEndpoint;
+  const playlistId = matching(like?.target?.playlistId, LIST_ID);
+  return playlistId && ['LIKE', 'INDIFFERENT'].includes(like.status) ? { kind: 'like', like: playlistId, status: like.status } : null;
+}
+
+// A save-to-library toggle. Signed out, saving is a sign-in prompt, so save is null.
+function libraryToggle(t, save, unsave) {
+  const out = { saved: t.isToggled === true, save: changeOf(save), unsave: changeOf(unsave) };
+  return out.save || out.unsave ? out : null;
+}
+
+const videoIds = (v) => (Array.isArray(v) && v.length && v.length <= 500 && v.every((id) => matching(id, VIDEO_ID)) ? v : null);
+const editPlaylist = (playlistId, actions) => ['/browse/edit_playlist', { playlistId, actions }];
+
+// The InnerTube call for one change the UI asks for, as [endpoint, body], or null
+// when anything in it is off. Only these calls leave the UI.
+const changeRequest = (c) => buildChange(c) || null;
+
+function buildChange(c) {
+  if (!c || typeof c !== 'object') return null;
+  const list = matching(c.playlistId, LIST_ID);
+  const ids = videoIds(c.videoIds);
+  const title = typeof c.title === 'string' ? c.title.trim().slice(0, 150) : '';
+  switch (c.kind) {
+    case 'feedback':
+      return matching(c.feedback, TOKEN) && ['/feedback', { feedbackTokens: [c.feedback] }];
+    case 'like':
+      if (!matching(c.like, LIST_ID) || !['LIKE', 'INDIFFERENT'].includes(c.status)) return null;
+      return [c.status === 'LIKE' ? '/like/like' : '/like/removelike', { target: { playlistId: c.like } }];
+    case 'subscribe':
+      if (!matching(c.channelId, BROWSE_ID)) return null;
+      return [c.on ? '/subscription/subscribe' : '/subscription/unsubscribe', { channelIds: [c.channelId] }];
+    case 'create':
+      return title && ids && ['/playlist/create', { title, privacyStatus: 'PRIVATE', videoIds: ids }];
+    case 'add':
+      return list && ids && editPlaylist(list, ids.map((id) => ({ action: 'ACTION_ADD_VIDEO', addedVideoId: id })));
+    case 'remove': {
+      const rows = Array.isArray(c.rows) && c.rows.length <= 500 ? c.rows : [];
+      if (!list || !rows.length || !rows.every((r) => matching(r?.videoId, VIDEO_ID) && matching(r?.setVideoId, SET_VIDEO_ID))) return null;
+      return editPlaylist(list, rows.map((r) => ({ action: 'ACTION_REMOVE_VIDEO', removedVideoId: r.videoId, setVideoId: r.setVideoId })));
+    }
+    case 'rename':
+      return list && title && editPlaylist(list, [{ action: 'ACTION_SET_PLAYLIST_NAME', playlistName: title }]);
+    case 'privacy':
+      return list && pick(c.privacy, PRIVACY) && editPlaylist(list, [{ action: 'ACTION_SET_PLAYLIST_PRIVACY', playlistPrivacy: c.privacy }]);
+    case 'delete':
+      return list && ['/playlist/delete', { playlistId: list }];
+  }
+  return null;
+}
+
+// Error answers carry an error object, playlist edits a status, feedback a flag per token.
+const changeDone = (res) =>
+  !!res && !res.error && (!res.status || res.status === 'STATUS_SUCCEEDED') && (res.feedbackResponses || []).every((r) => r?.isProcessed !== false);
 
 // Tracks and cards of a browse or search response, grouped by shelf, plus the
 // header's shuffle entry and the next page token. Walks the whole tree because
@@ -183,6 +248,9 @@ function parseItems(json) {
   let section = null;
   let shuffle = null;
   let next = null;
+  let library = null;
+  let subscribe = null;
+  let own = null;
   const runsOf = (t) => (Array.isArray(t?.runs) ? t.runs.filter((r) => typeof r?.text === 'string') : []);
   const text = (t) => runsOf(t).map((r) => r.text).join('').trim().slice(0, 256);
   const browseOf = (b) => matching(b?.browseId, BROWSE_ID);
@@ -199,13 +267,22 @@ function parseItems(json) {
     runsOf(t).map((r) => ({ text: r.text.slice(0, 256), browseId: browseOf(r.navigationEndpoint?.browseEndpoint) }));
   const menuOf = (m, item) => {
     for (const entry of m?.menuRenderer?.items || []) {
+      const t = entry?.toggleMenuServiceItemRenderer;
+      if (t?.defaultIcon?.iconType === 'BOOKMARK_BORDER') item.library = libraryToggle(t, t.defaultServiceEndpoint, t.toggledServiceEndpoint);
       const v = entry && (entry.menuNavigationItemRenderer || entry.menuServiceItemRenderer);
       const icon = v?.icon?.iconType;
       const nav = v?.navigationEndpoint || {};
       const service = v?.serviceEndpoint || {};
       if (icon === 'MUSIC_SHUFFLE') item.shuffle = item.shuffle || sanitizeEndpoint(nav);
       else if (icon === 'MIX') item.radio = item.radio || sanitizeEndpoint(nav);
-      else if (service.queueAddEndpoint) item.queue = item.queue || sanitizeQueueTarget(service.queueAddEndpoint.queueTarget);
+      else if (icon === 'NOT_INTERESTED') item.notInterested = changeOf(service);
+      else if (service.playlistEditEndpoint) {
+        const a = (service.playlistEditEndpoint.actions || []).find((x) => x?.action === 'ACTION_REMOVE_VIDEO');
+        const playlistId = matching(service.playlistEditEndpoint.playlistId, LIST_ID);
+        if (playlistId && matching(a?.setVideoId, SET_VIDEO_ID) && matching(a.removedVideoId, VIDEO_ID)) {
+          item.remove = { playlistId, setVideoId: a.setVideoId, videoId: a.removedVideoId };
+        }
+      } else if (service.queueAddEndpoint) item.queue = item.queue || sanitizeQueueTarget(service.queueAddEndpoint.queueTarget);
       else if (pageType(nav.browseEndpoint) === 'MUSIC_PAGE_TYPE_ARTIST') item.artistId = item.artistId || browseOf(nav.browseEndpoint);
       else if (pageType(nav.browseEndpoint) === 'MUSIC_PAGE_TYPE_ALBUM') item.albumId = item.albumId || browseOf(nav.browseEndpoint);
     }
@@ -226,13 +303,17 @@ function parseItems(json) {
   const overlayPlay = (o) => o?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint;
   const shelfTitle = (sh) => text(sh.title) || text(Object.values(sh.header || {})[0]?.title);
   // A list row, a card or the top result. menuOf() and push() fill in the rest.
-  const entry = ({ title, subtitle, parts, thumb, card = false, watch, browse, play }) => ({
+  const entry = ({ index = '', title, subtitle, parts, thumb, card = false, watch, browse, play }) => ({
     play: sanitizeEndpoint(play),
     shuffle: null,
     radio: null,
     queue: null,
     artistId: null,
     albumId: null,
+    library: null,
+    notInterested: null,
+    remove: null,
+    index,
     title,
     subtitle,
     parts,
@@ -243,6 +324,14 @@ function parseItems(json) {
   });
   const walk = (o) => {
     if (!o || typeof o !== 'object') return;
+    // The page's own buttons: save to library, subscribe, and the editor of a playlist of the account's own.
+    const tb = o.toggleButtonRenderer;
+    if (!library && tb?.defaultIcon?.iconType === 'BOOKMARK_BORDER') {
+      library = libraryToggle(tb, tb.defaultServiceEndpoint || tb.defaultNavigationEndpoint, tb.toggledServiceEndpoint || tb.toggledNavigationEndpoint);
+    }
+    const sb = o.subscribeButtonRenderer;
+    if (!subscribe && matching(sb?.channelId, BROWSE_ID)) subscribe = { channelId: sb.channelId, subscribed: sb.subscribed === true };
+    if (!own && o.musicPlaylistEditHeaderRenderer) own = { privacy: pick(o.musicPlaylistEditHeaderRenderer.privacy, PRIVACY) };
     if (!shuffle && o.icon?.iconType === 'MUSIC_SHUFFLE') shuffle = sanitizePlaylistWatch(o.navigationEndpoint?.watchPlaylistEndpoint);
     if (!next) {
       const token = o.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token || o.nextContinuationData?.continuation;
@@ -260,8 +349,9 @@ function parseItems(json) {
       const rowWatch = li.playlistItemData && { videoId: li.playlistItemData.videoId };
       const watch = sanitizeWatch(play?.watchEndpoint || titleWatch || rowWatch);
       const links = parts(cols[1]);
-      for (const f of fixed) links.push({ text: ' • ', browseId: null }, { text: f, browseId: null });
+      for (const f of fixed) links.push(...(links.length ? [{ text: ' • ', browseId: null }] : []), { text: f, browseId: null });
       const item = entry({
+        index: text(li.index),
         title: text(cols[0]),
         subtitle: links.map((r) => r.text).join('').trim(),
         parts: links,
@@ -312,7 +402,7 @@ function parseItems(json) {
     }
   };
   walk(json);
-  return { items: out, sections: sections.filter((x) => x.items.length), shuffle, next };
+  return { items: out, sections: sections.filter((x) => x.items.length), shuffle, next, library, subscribe, own };
 }
 
 // The "Lyrics" tab of a /next response points at a page of its own.
@@ -370,6 +460,16 @@ function parsePlaylistOptions(json) {
   };
   walk(json);
   return out;
+}
+
+// The dialog's options with cover and subtitle from the library's playlist page,
+// which has them; the add-to-playlist answer has titles only.
+function withCovers(options, library) {
+  const byId = new Map((library?.items || []).map((i) => [i.browseId, i]));
+  return options.map((o) => {
+    const i = byId.get('VL' + o.playlistId);
+    return { ...o, thumb: i ? i.thumb : '', subtitle: i ? i.subtitle : '' };
+  });
 }
 
 // Artist and album links read out of the page's player bar, as relative hrefs.
@@ -499,6 +599,9 @@ module.exports = {
   sanitizeWatch,
   sanitizeEndpoint,
   sanitizeQueueTarget,
+  changeRequest,
+  changeDone,
+  withCovers,
   sanitizeControls,
   sanitizeQueue,
   parseItems,

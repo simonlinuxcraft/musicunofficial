@@ -15,10 +15,13 @@ const {
   sanitizeQueue,
   sanitizeEndpoint,
   sanitizeQueueTarget,
+  changeRequest,
+  changeDone,
   lyricsBrowseId,
   parseLyrics,
   parseSuggestions,
   parsePlaylistOptions,
+  withCovers,
   sanitizeLinks,
   scrobbleDue,
   replayed,
@@ -266,7 +269,89 @@ test('pulls tracks and cards out of an InnerTube response', () => {
   assert.equal(card.thumb, 'https://x/226.jpg');
   assert.deepEqual(card.play, { watchPlaylistEndpoint: { playlistId: 'RDCLAK5uy_x', params: 'wAEB' } });
   assert.deepEqual(card.shuffle, { watchPlaylistEndpoint: { playlistId: 'RDCLAK5uy_x', params: 'wAEB8gECGAE%3D' } });
-  assert.deepEqual(parseItems(null), { items: [], sections: [], shuffle: null, next: null });
+  assert.deepEqual(parseItems(null), { items: [], sections: [], shuffle: null, next: null, library: null, subscribe: null, own: null });
+});
+
+test('reads library toggles, removal, subscribe and the own-playlist editor', () => {
+  const toggle = (isToggled, save) => ({
+    toggleMenuServiceItemRenderer: {
+      defaultIcon: { iconType: 'BOOKMARK_BORDER' },
+      defaultServiceEndpoint: save,
+      toggledServiceEndpoint: { feedbackEndpoint: { feedbackToken: 'AB9zremove' } },
+      isToggled,
+    },
+  });
+  const row = (menu) => ({
+    musicResponsiveListItemRenderer: {
+      flexColumns: [{ musicResponsiveListItemFlexColumnRenderer: { text: { runs: [{ text: 'Within' }] } } }],
+      playlistItemData: { videoId: 'iNjGNNoUjkk' },
+      menu: { menuRenderer: { items: menu } },
+    },
+  });
+  const page = parseItems({
+    header: {
+      musicEditablePlaylistDetailHeaderRenderer: { editHeader: { musicPlaylistEditHeaderRenderer: { privacy: 'UNLISTED' } } },
+      subscribeButtonRenderer: { channelId: 'UCdaft', subscribed: true },
+      toggleButtonRenderer: {
+        defaultIcon: { iconType: 'BOOKMARK_BORDER' },
+        defaultServiceEndpoint: { likeEndpoint: { status: 'LIKE', target: { playlistId: 'OLAK5uy_x' } } },
+        toggledServiceEndpoint: { likeEndpoint: { status: 'INDIFFERENT', target: { playlistId: 'OLAK5uy_x' } } },
+      },
+    },
+    contents: [
+      row([
+        toggle(false, { feedbackEndpoint: { feedbackToken: 'AB9zsave1' } }),
+        {
+          menuServiceItemRenderer: {
+            serviceEndpoint: {
+              playlistEditEndpoint: { playlistId: 'PLown', actions: [{ action: 'ACTION_REMOVE_VIDEO', setVideoId: '61AC30', removedVideoId: 'iNjGNNoUjkk' }] },
+            },
+          },
+        },
+        { menuServiceItemRenderer: { icon: { iconType: 'NOT_INTERESTED' }, serviceEndpoint: { feedbackEndpoint: { feedbackToken: 'AB9znotint' } } } },
+      ]),
+      // Signed out, saving is a sign-in prompt.
+      row([toggle(false, { modalEndpoint: {} })]),
+    ],
+  });
+  assert.deepEqual(page.own, { privacy: 'UNLISTED' });
+  assert.deepEqual(page.subscribe, { channelId: 'UCdaft', subscribed: true });
+  assert.deepEqual(page.library, {
+    saved: false,
+    save: { kind: 'like', like: 'OLAK5uy_x', status: 'LIKE' },
+    unsave: { kind: 'like', like: 'OLAK5uy_x', status: 'INDIFFERENT' },
+  });
+  const [a, b] = page.items;
+  assert.deepEqual(a.library.save, { kind: 'feedback', feedback: 'AB9zsave1' });
+  assert.deepEqual(a.remove, { playlistId: 'PLown', setVideoId: '61AC30', videoId: 'iNjGNNoUjkk' });
+  assert.deepEqual(a.notInterested, { kind: 'feedback', feedback: 'AB9znotint' });
+  assert.equal(b.library.save, null);
+  assert.equal(b.remove, null);
+});
+
+test('builds only well-formed library changes', () => {
+  const v = 'iNjGNNoUjkk';
+  assert.deepEqual(changeRequest({ kind: 'create', title: ' Mix ', videoIds: [v] }), ['/playlist/create', { title: 'Mix', privacyStatus: 'PRIVATE', videoIds: [v] }]);
+  assert.deepEqual(changeRequest({ kind: 'add', playlistId: 'PLx', videoIds: [v] }), [
+    '/browse/edit_playlist',
+    { playlistId: 'PLx', actions: [{ action: 'ACTION_ADD_VIDEO', addedVideoId: v }] },
+  ]);
+  assert.deepEqual(changeRequest({ kind: 'remove', playlistId: 'PLx', rows: [{ videoId: v, setVideoId: '61AC' }] })[1].actions, [
+    { action: 'ACTION_REMOVE_VIDEO', removedVideoId: v, setVideoId: '61AC' },
+  ]);
+  assert.deepEqual(changeRequest({ kind: 'like', like: 'OLAK5uy_x', status: 'INDIFFERENT' }), ['/like/removelike', { target: { playlistId: 'OLAK5uy_x' } }]);
+  assert.deepEqual(changeRequest({ kind: 'subscribe', channelId: 'UCdaft', on: true }), ['/subscription/subscribe', { channelIds: ['UCdaft'] }]);
+  assert.deepEqual(changeRequest({ kind: 'delete', playlistId: 'PLx' }), ['/playlist/delete', { playlistId: 'PLx' }]);
+  assert.equal(changeRequest({ kind: 'create', title: '  ', videoIds: [v] }), null);
+  assert.equal(changeRequest({ kind: 'add', playlistId: 'PLx', videoIds: ['bad'] }), null);
+  assert.equal(changeRequest({ kind: 'privacy', playlistId: 'PLx', privacy: 'SECRET' }), null);
+  assert.equal(changeRequest({ kind: 'remove', playlistId: 'PLx', rows: [{ videoId: v }] }), null);
+  assert.equal(changeRequest({ kind: 'eval' }), null);
+  assert.equal(changeDone({ status: 'STATUS_SUCCEEDED' }), true);
+  assert.equal(changeDone({ error: { code: 401 } }), false);
+  assert.equal(changeDone(null), false);
+  assert.equal(changeDone({ feedbackResponses: [{ isProcessed: false }] }), false);
+  assert.equal(changeRequest({ kind: 'like', like: 'OLAK5uy_x', status: 'DISLIKE' }), null);
 });
 
 test('only rebuilds endpoints and queue targets from well-formed ids', () => {
@@ -277,6 +362,8 @@ test('only rebuilds endpoints and queue targets from well-formed ids', () => {
   assert.equal(sanitizeEndpoint({ browseEndpoint: { browseId: 'UCx' } }), null);
   assert.deepEqual(sanitizeQueueTarget({ playlistId: 'PLabc', videoId: 'bad' }), { playlistId: 'PLabc' });
   assert.equal(sanitizeQueueTarget({}), null);
+  assert.deepEqual(sanitizeQueueTarget({ videoIds: ['iNjGNNoUjkk', 'ryr75N0nki0'] }), { videoIds: ['iNjGNNoUjkk', 'ryr75N0nki0'] });
+  assert.equal(sanitizeQueueTarget({ videoIds: ['bad'] }), null);
 });
 
 test('keeps only artist and album links from the player bar', () => {
@@ -324,6 +411,12 @@ test('reads lyrics, suggestions and playlist choices', () => {
     }),
     [{ playlistId: 'PLmine', title: 'Mine' }]
   );
+  const library = { items: [{ browseId: 'VLPLmine', thumb: 'https://x/1.jpg', subtitle: 'Playlist • 12 songs' }] };
+  assert.deepEqual(withCovers([{ playlistId: 'PLmine', title: 'Mine' }, { playlistId: 'PLnew', title: 'New' }], library), [
+    { playlistId: 'PLmine', title: 'Mine', thumb: 'https://x/1.jpg', subtitle: 'Playlist • 12 songs' },
+    { playlistId: 'PLnew', title: 'New', thumb: '', subtitle: '' },
+  ]);
+  assert.deepEqual(withCovers([], null), []);
 });
 
 test('retypes player bar state and queue rows from the page', () => {
