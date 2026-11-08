@@ -100,9 +100,13 @@ const QUEUE_POSITIONS = ['INSERT_AFTER_CURRENT_VIDEO', 'INSERT_AT_END'];
 async function queueAdd(target, position) {
   const added = await call('queueAdd', target, position);
   if (added !== -1) return added;
-  await navigate(
-    target.videoId ? { watchEndpoint: { videoId: target.videoId } } : { watchPlaylistEndpoint: { playlistId: target.playlistId } }
-  );
+  const [first, ...rest] = target.videoIds || [target.videoId];
+  await navigate(first ? { watchEndpoint: { videoId: first } } : { watchPlaylistEndpoint: { playlistId: target.playlistId } });
+  // The rest of a selection follows the first once its queue is there (up to 5 s).
+  for (let i = 0; rest.length && i < 20; i++) {
+    await new Promise((ok) => setTimeout(ok, 250));
+    if ((await call('queueAdd', { videoIds: rest }, 'INSERT_AFTER_CURRENT_VIDEO')) !== -1) break;
+  }
   return -1;
 }
 

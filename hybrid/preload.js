@@ -12,7 +12,7 @@ contextBridge.exposeInMainWorld('hybrid', {
   lyrics: (videoId) => ipcRenderer.invoke('hybrid:lyrics', videoId),
   queueAdd: (target, position) => ipcRenderer.invoke('hybrid:queue-add', target, position),
   playlists: (videoId) => ipcRenderer.invoke('hybrid:playlists', videoId),
-  playlistAdd: (playlistId, videoId) => ipcRenderer.invoke('hybrid:playlist-add', playlistId, videoId),
+  change: (c) => ipcRenderer.invoke('hybrid:change', c),
   nowLinks: () => ipcRenderer.invoke('hybrid:now-links'),
   controls: () => ipcRenderer.invoke('hybrid:controls'),
   control: (action, arg) => ipcRenderer.invoke('hybrid:control', action, arg),

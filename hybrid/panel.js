@@ -31,6 +31,11 @@ function queueRow(q, i) {
   el.append(removable ? iconButton('drop', ICON_REMOVE, T.remove, () => removeFromQueue(q)) : div(''));
   const playRow = () => api.queuePlay(i, q.videoId).catch(fail);
   el.addEventListener('click', playRow);
+  el.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const r = el.getBoundingClientRect();
+    openMenu(menuEntries({ here: true, watch: { videoId: q.videoId } }), e.clientX || r.left + 48, e.clientY || r.bottom);
+  });
   el.addEventListener('keydown', (e) => {
     if (e.target !== el) return;
     if (e.key === 'Enter') playRow();
@@ -76,6 +81,8 @@ function queueRow(q, i) {
   return el;
 }
 
+let queueRows = [];
+
 async function loadQueue() {
   const seq = ++queueSeq;
   let rows = [];
@@ -87,6 +94,7 @@ async function loadQueue() {
     if (rows.length || !track) break;
   }
   $('queue-empty').hidden = rows.length > 0;
+  queueRows = rows;
   $('queue-list').replaceChildren(...rows.map(queueRow));
   const current = $('queue-list').querySelector('[aria-current="true"]');
   if (current) current.scrollIntoView({ block: 'nearest' });
@@ -179,8 +187,26 @@ slotWatch.observe($('stage'));
 slotWatch.observe($('middle'));
 
 $('art-btn').addEventListener('click', () => toggleStage());
+let nowMenuSeq = 0;
+$('now').addEventListener('contextmenu', async (e) => {
+  e.preventDefault();
+  if (!track || track.ad || !track.videoId) return;
+  const seq = ++nowMenuSeq;
+  const r = $('now').getBoundingClientRect();
+  const [x, y] = [e.clientX || r.left, e.clientY || r.top];
+  const videoId = track.videoId;
+  const parts = await api.nowLinks().catch(() => []);
+  // A newer click or a track change while the links loaded wins.
+  if (seq !== nowMenuSeq || track?.videoId !== videoId) return;
+  const id = (prefix) => parts.find((p) => p.browseId.startsWith(prefix))?.browseId;
+  const item = { here: true, watch: { videoId }, parts, artistId: id('UC'), albumId: id('MPRE') };
+  item.radio = { watchEndpoint: { videoId, playlistId: 'RDAMVM' + videoId } };
+  openMenu(menuEntries(item), x, y);
+});
 $('title').addEventListener('click', () => toggleStage());
 $('queue-toggle').addEventListener('click', () => toggleQueue());
 $('queue-close').addEventListener('click', () => toggleQueue(false));
+// Everything the list shows, autoplay suggestions included.
+$('queue-save').addEventListener('click', () => saveToPlaylist(queueRows.map((q) => q.videoId)));
 $('tab-queue').addEventListener('click', () => showTab('queue'));
 $('tab-lyrics').addEventListener('click', () => showTab('lyrics'));

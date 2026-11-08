@@ -162,11 +162,14 @@ function settings() {
   };
 }
 
-const EMPTY_PAGE = { items: [], sections: [], shuffle: null, next: null };
+const EMPTY_PAGE = { items: [], sections: [], shuffle: null, next: null, library: null, subscribe: null, own: null };
 
 ipcMain.handle('hybrid:browse', (e, id) => {
   if (!fromUs(e) || typeof id !== 'string' || !BROWSE_ID.test(id)) return EMPTY_PAGE;
-  return page.innertube('/browse', { browseId: id }).then(parseItems);
+  return page
+    .innertube('/browse', { browseId: id })
+    .then(parseItems)
+    .then((p) => (p.own && id.startsWith('VL') ? { ...p, own: { ...p.own, playlistId: id.slice(2) } } : { ...p, own: null }));
 });
 
 ipcMain.handle('hybrid:search', (e, query) => {
@@ -214,17 +217,15 @@ ipcMain.handle('hybrid:queue-move', (e, from, to) => {
 // Needs a signed-in account; YouTube answers with an error otherwise.
 ipcMain.handle('hybrid:playlists', (e, videoId) => {
   if (!fromUs(e) || !pure.sanitizeWatch({ videoId })) return [];
-  return page.innertube('/playlist/get_add_to_playlist', { videoIds: [videoId] }).then(pure.parsePlaylistOptions);
+  return Promise.all([
+    page.innertube('/playlist/get_add_to_playlist', { videoIds: [videoId] }).then(pure.parsePlaylistOptions),
+    page.innertube('/browse', { browseId: 'FEmusic_liked_playlists' }).then(parseItems, () => null),
+  ]).then(([options, library]) => pure.withCovers(options, library));
 });
 
-ipcMain.handle('hybrid:playlist-add', async (e, playlistId, videoId) => {
-  const target = pure.sanitizeQueueTarget({ playlistId });
-  if (!fromUs(e) || !target || !pure.sanitizeWatch({ videoId })) return false;
-  const res = await page.innertube('/browse/edit_playlist', {
-    playlistId: target.playlistId,
-    actions: [{ action: 'ACTION_ADD_VIDEO', addedVideoId: videoId }],
-  });
-  return !!res && res.status === 'STATUS_SUCCEEDED';
+ipcMain.handle('hybrid:change', async (e, change) => {
+  const req = fromUs(e) && pure.changeRequest(change);
+  return !!req && pure.changeDone(await page.innertube(...req));
 });
 
 ipcMain.handle('hybrid:now-links', (e) => (fromUs(e) ? page.nowLinks() : []));

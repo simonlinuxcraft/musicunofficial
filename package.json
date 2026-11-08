@@ -1,6 +1,6 @@
 {
   "name": "musicunofficial",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "Unofficial desktop wrapper for the YouTube Music player",
   "main": "main.js",
   "license": "MIT",
@@ -25,7 +25,7 @@
         "deb"
       ],
       "icon": "icon.png",
-      "category": "AudioVideo",
+      "category": "AudioVideo;Audio;Player",
       "synopsis": "Unofficial desktop wrapper for the YouTube Music player",
       "description": "Runs the YouTube Music player (music.youtube.com) in its own window with tray support, media key integration and a frameless interface. Not affiliated with, endorsed by, or sponsored by Google or YouTube.",
       "maintainer": "simonlinuxcraft",
@@ -33,7 +33,9 @@
       "executableName": "musicunofficial",
       "desktop": {
         "entry": {
-          "Name": "Music"
+          "Name": "Music",
+          "GenericName": "Music Player",
+          "Keywords": "music;player;youtube;audio;songs;playlist;"
         }
       }
     },

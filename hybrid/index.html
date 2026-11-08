@@ -16,10 +16,11 @@
         --dim: #9a9a9a;
         --accent: #ff0033;
         --font: 'Adwaita Sans', Cantarell, Inter, Ubuntu, system-ui, sans-serif;
-        /* Native parts (suggestion list, scrollbars, dialog) in dark too. */
+        /* Native parts (suggestion list, dialog) in dark too. */
         color-scheme: dark;
       }
-      * { margin: 0; padding: 0; box-sizing: border-box; }
+      /* No scrollbars anywhere; wheel, touchpad and keys still scroll. */
+      * { margin: 0; padding: 0; box-sizing: border-box; scrollbar-width: none; }
       html, body { height: 100%; }
       body {
         display: grid;
@@ -44,12 +45,17 @@
         padding: 10px 8px 10px 16px;
         border-bottom: 1px solid var(--line);
         -webkit-app-region: drag;
+        /* A grid row would otherwise grow to its content and push the window buttons out. */
+        min-width: 0;
       }
       header button, header input { -webkit-app-region: no-drag; }
-      header button { padding: 7px 12px; border-radius: 18px; color: var(--dim); }
+      header button { flex: 0 0 auto; padding: 7px 12px; border-radius: 18px; color: var(--dim); }
       header button:hover, header button[aria-current='true'] { color: var(--fg); background: var(--raise); }
       #back { padding: 7px; }
-      #search { position: relative; flex: 1 1 160px; max-width: 420px; margin-left: auto; -webkit-app-region: no-drag; }
+      /* A narrow window scrolls the entries sideways instead of wrapping them under each other. */
+      nav { display: flex; flex: 0 1 auto; min-width: 0; overflow-x: auto; }
+      nav button { flex: 0 0 auto; white-space: nowrap; }
+      #search { position: relative; flex: 1 1 160px; min-width: 120px; max-width: 420px; margin-left: auto; -webkit-app-region: no-drag; }
       #search > svg { position: absolute; left: 12px; top: 50%; width: 18px; height: 18px; transform: translateY(-50%); color: var(--dim); }
       input[type='search'] {
         width: 100%;
@@ -120,7 +126,7 @@
       #av { display: flex; flex: 0 0 auto; margin: 0 4px; border: 1px solid #3a3a3a; border-radius: 14px; overflow: hidden; }
       #av button { padding: 4px 10px; font-size: 12px; color: var(--dim); }
       #av button[aria-pressed='true'] { background: var(--fg); color: #000; }
-      #winctl { display: flex; gap: 2px; margin-left: 8px; }
+      #winctl { display: flex; flex: 0 0 auto; gap: 2px; margin-left: 8px; }
       #winctl button { display: grid; place-items: center; width: 32px; height: 32px; padding: 0; border-radius: 50%; }
       #winctl svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1.2; }
       #winctl #win-mini svg .solid { fill: currentColor; stroke: none; }
@@ -146,6 +152,7 @@
       }
       #actions button:hover { background: #262626; }
       #play-all { background: var(--fg) !important; color: #000; }
+      #page-more { padding: 8px !important; }
       #status { color: var(--dim); margin: 0 8px 12px; max-width: 60ch; user-select: text; }
       #status:empty { display: none; }
       #status button { color: var(--fg); text-decoration: underline; }
@@ -173,9 +180,11 @@
         contain-intrinsic-size: auto 60px;
       }
       .item:hover, .item:focus-visible { background: var(--raise); }
+      .item.selected, .tile.selected { background: #2a2a2a; box-shadow: inset 3px 0 var(--accent); }
       .item.current .title, .tile.current .title { color: var(--accent); font-weight: 600; }
       .thumb { display: block; width: 100%; height: 100%; border-radius: 4px; object-fit: cover; background: var(--raise); }
       .cover { position: relative; width: 48px; height: 48px; }
+      .cover .index { display: grid; place-items: center; height: 100%; color: var(--dim); font-variant-numeric: tabular-nums; }
       .text { min-width: 0; }
       .title, .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .sub { color: var(--dim); font-size: 13px; }
@@ -214,7 +223,6 @@
         overflow-x: auto;
         scroll-padding-inline: calc(var(--gap) / 2);
         scroll-snap-type: x proximity;
-        scrollbar-width: none;
       }
       .grid { grid-template-columns: repeat(var(--n), minmax(0, 1fr)); row-gap: 24px; }
       .tile { position: relative; min-width: 0; cursor: pointer; scroll-snap-align: start; border-radius: 8px; }
@@ -234,6 +242,8 @@
         border-radius: 12px;
         background: #1c1c1c;
         box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+        max-height: calc(100vh - 16px);
+        overflow-y: auto;
       }
       #menu button { display: block; width: 100%; padding: 9px 12px; border-radius: 8px; text-align: left; }
       #menu button:hover, #menu button:focus-visible { background: #2c2c2c; outline: none; }
@@ -242,19 +252,34 @@
         margin: auto;
         width: min(420px, 90vw);
         max-height: 70vh;
+        overflow: hidden;
         padding: 20px 12px 12px;
-        border: 1px solid #333;
+        border: 1px solid #262626;
         border-radius: 12px;
-        background: #1c1c1c;
+        background: #0c0c0c;
         color: var(--fg);
+        box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
       }
-      dialog::backdrop { background: rgba(0, 0, 0, 0.6); }
+      dialog::backdrop { background: rgba(0, 0, 0, 0.7); }
       dialog h2 { font-size: 18px; margin: 0 8px 12px; }
       #pl-status { color: var(--dim); margin: 0 8px 12px; }
       #pl-status:empty { display: none; }
-      #pl-list { max-height: 50vh; overflow-y: auto; }
-      #pl-list button { display: block; width: 100%; padding: 9px 8px; border-radius: 6px; text-align: left; }
-      #pl-list button:hover { background: #2a2a2a; }
+      /* Only the list scrolls, the title and buttons stay. */
+      #pl-dialog[open] { display: flex; flex-direction: column; }
+      #pl-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+      #pl-list button, #pl-create { display: flex; align-items: center; gap: 12px; width: 100%; padding: 6px 8px; border-radius: 8px; text-align: left; }
+      #pl-list button:hover, #pl-create:hover { background: #1c1c1c; }
+      #pl-list .thumb, .pl-icon { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 6px; object-fit: cover; background: #1c1c1c; }
+      #pl-list .text { min-width: 0; }
+      #pl-list .title, #pl-list .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #pl-list .sub { color: var(--dim); font-size: 12px; }
+      #pl-create { margin-top: 4px; }
+      .pl-icon { display: grid; place-items: center; color: var(--fg); }
+      #ask-input { display: block; width: calc(100% - 16px); margin: 0 8px 16px; padding: 8px 10px; border: 1px solid #333; border-radius: 6px; background: #161616; color: var(--fg); }
+      /* OK comes first in the markup, so Enter in the field confirms; shown on the right. */
+      #ask-buttons { display: flex; flex-direction: row-reverse; gap: 8px; margin: 0 8px; }
+      #ask-buttons button { padding: 7px 16px; border-radius: 18px; background: var(--raise); }
+      #ask-buttons button[value='ok'] { background: var(--fg); color: #000; }
       #up-dialog { width: min(440px, 90vw); padding: 24px; border-color: var(--line); background: #212121; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6); }
       #up-dialog h2 { margin: 0 0 2px; font-size: 20px; }
       #up-version { color: var(--dim); font-size: 13px; margin: 0 0 16px; }
@@ -304,10 +329,11 @@
       #queue-head [role='tab'] { padding: 6px 14px; border-radius: 16px; background: #222; color: var(--dim); }
       #queue-head [role='tab']:hover { color: var(--fg); background: #2c2c2c; }
       #queue-head [role='tab'][aria-selected='true'] { background: var(--fg); color: #000; }
-      #queue-close { display: grid; place-items: center; width: 32px; height: 32px; margin-left: auto; border-radius: 50%; color: var(--dim); }
-      #queue-close:hover { background: #2c2c2c; color: var(--fg); }
+      .queue-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--dim); }
+      .queue-icon:hover { background: #2c2c2c; color: var(--fg); }
+      #queue-save { margin-left: auto; }
       #queue-pane { display: flex; flex-direction: column; min-height: 0; }
-      #queue-list, #lyrics-pane { overflow-y: auto; scrollbar-width: thin; scrollbar-color: #3a3a3a transparent; }
+      #queue-list, #lyrics-pane { overflow-y: auto; }
       #queue-list { padding: 6px 6px 12px; }
       #lyrics-pane { padding: 14px 22px 28px; user-select: text; }
       #lyrics { white-space: pre-line; font-size: 16px; line-height: 1.75; }
@@ -533,6 +559,9 @@
             <button id="shuffle-all">
               <svg viewBox="0 0 24 24"><path d="M10.59 9.17 5.41 4 4 5.41l5.17 5.17zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4zm.33 9.41-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04z" /></svg><span data-t="shuffle"></span>
             </button>
+            <button id="page-more" data-tip="more">
+              <svg viewBox="0 0 24 24"><path d="M12 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4m0 2a2 2 0 1 0 0 4 2 2 0 0 0 0-4m0 6a2 2 0 1 0 0 4 2 2 0 0 0 0-4" /></svg>
+            </button>
           </div>
           <p id="status"></p>
           <div id="list"></div>
@@ -544,7 +573,10 @@
         <div id="queue-head" role="tablist">
           <button id="tab-queue" role="tab" aria-selected="true" data-t="queue"></button>
           <button id="tab-lyrics" role="tab" aria-selected="false" data-t="lyrics"></button>
-          <button id="queue-close" data-tip="closeQueue">
+          <button id="queue-save" class="queue-icon" data-tip="saveQueue">
+            <svg viewBox="0 0 24 24"><path d="M14 10H3v2h11zm0-4H3v2h11zm4 8v-4h-2v4h-4v2h4v4h2v-4h4v-2zM3 16h7v-2H3z" /></svg>
+          </button>
+          <button id="queue-close" class="queue-icon" data-tip="closeQueue">
             <svg viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" /></svg>
           </button>
         </div>
@@ -563,7 +595,20 @@
         <h2 data-t="addPlaylist"></h2>
         <p id="pl-status"></p>
         <div id="pl-list"></div>
+        <button id="pl-create">
+          <span class="pl-icon"><svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6z" /></svg></span><span data-t="newPlaylist"></span>
+        </button>
         <button id="pl-cancel" data-t="cancel"></button>
+      </dialog>
+      <dialog id="ask-dialog">
+        <form method="dialog">
+          <h2 id="ask-title"></h2>
+          <input id="ask-input" maxlength="150" required />
+          <div id="ask-buttons">
+            <button value="ok" data-t="ok"></button>
+            <button value="" formnovalidate data-t="cancel"></button>
+          </div>
+        </form>
       </dialog>
       <dialog id="up-dialog">
         <h2 data-t="updateTitle"></h2>

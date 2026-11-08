@@ -33,9 +33,11 @@ const KEYS = {
   '-': () => volumeBy(-5),
   m: () => $('mute').click(),
   l: () => $('like').click(),
+  d: () => $('dislike').click(),
+  p: () => !track.ad && track.videoId && saveToPlaylist([track.videoId]),
 };
 // Held down, these would fire again and again.
-const ONCE = [' ', 'm', 'l'];
+const ONCE = [' ', 'm', 'l', 'd', 'p'];
 document.addEventListener('keydown', (e) => {
   if (e.ctrlKey || e.altKey || e.metaKey) return;
   if (e.target.closest('input, select, textarea, [contenteditable], dialog, #menu')) return;
