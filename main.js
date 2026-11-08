@@ -113,7 +113,7 @@ app.whenReady().then(() => {
   } catch (e) {
     console.log('[tray] unavailable: ' + e.message);
   }
-  update.start(hybrid.updateReady);
+  update.start(hybrid.updateEvent);
 });
 
 // No window-all-closed handler: with a tray, close only hides; without one,

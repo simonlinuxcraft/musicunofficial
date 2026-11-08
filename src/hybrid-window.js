@@ -291,6 +291,7 @@ ipcMain.on('hybrid:lastfm-account', (e) => {
   if (fromUs(e)) shell.openExternal('https://www.last.fm/api/account/create');
 });
 
+ipcMain.handle('hybrid:check-update', (e) => (fromUs(e) ? update.check() : 'error'));
 ipcMain.handle('hybrid:install-update', (e) => (fromUs(e) ? update.install() : false));
 
 ipcMain.on('hybrid:window', (e, action) => {
@@ -344,5 +345,9 @@ module.exports = {
   isShown: () => alive() && win.isVisible() && !win.isMinimized(),
   isFocused: () => alive() && win.isFocused(),
   webContents: () => (alive() ? win.webContents : null),
-  updateReady: (version) => alive() && win.webContents.send('hybrid:update-ready', version),
+  updateEvent: (event, data) => {
+    if (!alive()) return false;
+    win.webContents.send('hybrid:update', event, data);
+    return true;
+  },
 };

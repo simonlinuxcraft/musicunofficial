@@ -255,6 +255,21 @@
       #pl-list { max-height: 50vh; overflow-y: auto; }
       #pl-list button { display: block; width: 100%; padding: 9px 8px; border-radius: 6px; text-align: left; }
       #pl-list button:hover { background: #2a2a2a; }
+      #up-dialog { width: min(440px, 90vw); padding: 24px; border-color: var(--line); background: #212121; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6); }
+      #up-dialog h2 { margin: 0 0 2px; font-size: 20px; }
+      #up-version { color: var(--dim); font-size: 13px; margin: 0 0 16px; }
+      #up-text { margin: 0; line-height: 1.45; }
+      #up-bar { display: block; width: 100%; height: 4px; margin: 14px 0 0; border: 0; border-radius: 2px; -webkit-appearance: none; appearance: none; }
+      #up-bar::-webkit-progress-bar { background: var(--raise); border-radius: 2px; }
+      #up-bar::-webkit-progress-value { background: var(--accent); border-radius: 2px; transition: width 0.2s; }
+      #up-bar:indeterminate::-webkit-progress-bar { background: linear-gradient(90deg, var(--raise) 35%, var(--accent) 50%, var(--raise) 65%) 0 0 / 300% 100%; animation: up-slide 1.4s linear infinite; }
+      @keyframes up-slide { from { background-position: 100% 0; } to { background-position: 0 0; } }
+      #up-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+      #up-bar[hidden], #up-actions[hidden] { display: none; }
+      #up-actions .btn { padding: 8px 18px; border-radius: 18px; color: var(--fg); }
+      #up-actions .btn:hover { background: var(--raise); }
+      #up-actions .btn.primary { background: var(--fg); color: #000; }
+      #up-actions .btn.primary:hover { background: #d9d9d9; }
       #pl-cancel { display: block; margin: 12px 8px 0 auto; padding: 7px 14px; border-radius: 18px; background: var(--raise); }
 
       #toast {
@@ -549,6 +564,16 @@
         <p id="pl-status"></p>
         <div id="pl-list"></div>
         <button id="pl-cancel" data-t="cancel"></button>
+      </dialog>
+      <dialog id="up-dialog">
+        <h2 data-t="updateTitle"></h2>
+        <p id="up-version"></p>
+        <p id="up-text"></p>
+        <progress id="up-bar" hidden></progress>
+        <div id="up-actions">
+          <button id="up-later" class="btn" data-t="updateLater"></button>
+          <button id="up-install" class="btn primary" data-t="updateInstall" autofocus></button>
+        </div>
       </dialog>
     </div>
 

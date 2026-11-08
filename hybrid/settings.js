@@ -170,12 +170,10 @@ function renderSettings(s) {
     box.append(intro, field(T.lastfmKey, key), field(T.lastfmSecret, secret), row);
   }
   box.append(heading(T.setUpdates), div('note', T.updateVersion + s.update.version + (s.update.on ? '' : '. ' + T.updateManual)));
-  if (s.update.ready) {
+  if (s.update.on) {
     const row = div('actions');
-    row.append(
-      div('', T.updateReady + s.update.ready),
-      button(T.updateInstall, () => api.installUpdate().then((ok) => ok || toast(T.updateFailed)), true)
-    );
+    row.append(button(T.updateCheck, checkUpdate));
+    if (s.update.available) row.append(button(T.updateInstall, () => api.settings().then((now) => offerUpdate(now.update)), true));
     box.append(row);
   }
   box.append(heading(T.setKeys), keyList());
@@ -184,7 +182,55 @@ function renderSettings(s) {
 
 $('open-settings').addEventListener('click', openSettings);
 
-api.onUpdateReady((version) => {
-  toast(T.updateReady + version);
-  if (onSettings()) api.settings().then(redraw);
+// Update dialog: offer, then download with a bar, then the password prompt and the restart.
+
+function checkUpdate() {
+  api.checkUpdate().then((result) => {
+    if (result === 'available') api.settings().then((s) => (redraw(s), offerUpdate(s.update)));
+    else toast(result === 'current' ? T.updateCurrent : T.updateCheckFailed);
+  });
+}
+
+function downloading(text) {
+  $('up-actions').hidden = true;
+  $('up-bar').hidden = false;
+  $('up-text').textContent = text;
+}
+
+// Opens or refreshes the dialog from the main-process state, so a reopened
+// dialog shows a download that is still running.
+function offerUpdate(u) {
+  const d = $('up-dialog');
+  $('up-version').textContent = T.updateVersion + u.available;
+  if (u.busy) {
+    downloading(T.updateDownloading + (u.progress === null ? '' : Math.round(u.progress * 100) + ' %'));
+    if (u.progress === null) $('up-bar').removeAttribute('value');
+    else $('up-bar').value = u.progress;
+  } else if ($('up-actions').hidden || !d.open) {
+    $('up-text').textContent = T.updateBody;
+    $('up-bar').hidden = true;
+    $('up-actions').hidden = false;
+  }
+  if (!d.open) d.showModal();
+}
+
+$('up-later').addEventListener('click', () => $('up-dialog').close());
+// Escape stays out while the download runs; the dialog is the only sign of it.
+$('up-dialog').addEventListener('cancel', (e) => $('up-actions').hidden && e.preventDefault());
+$('up-install').addEventListener('click', async () => {
+  downloading(T.updateDownloading);
+  $('up-bar').removeAttribute('value');
+  const ok = await api.installUpdate().catch(() => false);
+  $('up-dialog').close();
+  if (!ok) toast(T.updateFailed);
+});
+
+api.onUpdate((event, data) => {
+  if (event === 'available') return api.settings().then((s) => (redraw(s), offerUpdate(s.update)));
+  if (event === 'installing') return downloading(T.updateInstalling);
+  if (event !== 'progress') return;
+  const bar = $('up-bar');
+  if (data === null) bar.removeAttribute('value');
+  else bar.value = data;
+  $('up-text').textContent = T.updateDownloading + (data === null ? '' : Math.round(data * 100) + ' %');
 });
