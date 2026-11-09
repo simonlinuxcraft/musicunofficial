@@ -18,6 +18,8 @@ const {
 
 const API = 'https://ws.audioscrobbler.com/2.0/';
 const HEX32 = /^[0-9a-f]{32}$/i;
+// A hanging request would hold its scrobble and the pending queue forever.
+const CALL_MS = 20 * 1000;
 
 // Waiting for the user to allow access in the browser.
 let token = null;
@@ -48,11 +50,12 @@ async function call(method, params, post) {
   const body = new URLSearchParams(all).toString();
   let res;
   try {
+    const signal = AbortSignal.timeout(CALL_MS);
     res = post
-      ? await net.fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body })
-      : await net.fetch(API + '?' + body);
+      ? await net.fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body, signal })
+      : await net.fetch(API + '?' + body, { signal });
   } catch (e) {
-    // Offline or no route: worth another try later.
+    // Offline, no route or timed out: worth another try later.
     e.retry = true;
     throw e;
   }
