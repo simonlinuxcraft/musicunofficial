@@ -7,11 +7,11 @@
 const { WebContentsView, shell } = require('electron');
 const path = require('path');
 const player = require('./player');
-const { isInternal, isWebLink, onSite, rateLimit } = require('./pure');
+const { isInternal, isWebLink, onSite, rateLimit, watchUrl, SITE } = require('./pure');
 const { bindKeys } = require('./keys');
 
 const ROOT = path.join(__dirname, '..');
-const START_URL = 'https://music.youtube.com/';
+const START_URL = SITE;
 // YouTube Music's own page background, so the view does not flash while it loads.
 const DARK = '#030303';
 // One pixel in the window corner, where page and UI are the same #030303. At
@@ -54,13 +54,6 @@ let placed = null;
 let stageCss = null;
 
 const live = () => (view && !view.webContents.isDestroyed() ? view.webContents : null);
-
-// Ids are validated by sanitizeResume; encoded anyway so a format change cannot add parameters.
-function watchUrl(r) {
-  let u = 'https://music.youtube.com/watch?v=' + encodeURIComponent(r.videoId);
-  if (r.list) u += '&list=' + encodeURIComponent(r.list);
-  return u;
-}
 
 // Through mainFrame: webContents.executeJavaScript holds the code back until the
 // page has finished loading.
@@ -129,7 +122,7 @@ function create({ resume, openMini }) {
   const load = (url) => {
     if (resume) {
       wc.setAudioMuted(true);
-      url = watchUrl(resume);
+      url = watchUrl(resume.videoId, resume.list);
     }
     // A failed load rejects; did-fail-load handles it.
     wc.loadURL(url || START_URL).catch(() => {});

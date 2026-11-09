@@ -10,6 +10,8 @@ const {
   sanitizeTrack,
   positionNow,
   rateLimit,
+  validSetting,
+  watchUrl,
   sanitizeResume,
   parseItems,
   sanitizeControls,
@@ -534,4 +536,23 @@ test('rateLimit allows max calls per window, then recovers', () => {
   const ok = rateLimit(3, 60000);
   assert.deepEqual([ok(0), ok(1), ok(2), ok(3)], [true, true, true, false]);
   assert.equal(ok(60004), true);
+});
+
+test('validSetting takes only the values the settings page offers', () => {
+  const q = ['auto', '1080p'];
+  assert.ok(validSetting('language', 'de', q));
+  assert.ok(!validSetting('language', 'fr', q));
+  assert.ok(validSetting('videoQuality', '1080p', q));
+  assert.ok(!validSetting('videoQuality', '8k', q));
+  assert.ok(validSetting('notify', false, q));
+  assert.ok(!validSetting('richPresence', 'true', q));
+  assert.ok(validSetting('sleep', 30, q));
+  assert.ok(!validSetting('sleep', '30', q));
+  assert.ok(!validSetting('lastfm', {}, q));
+  assert.ok(!validSetting('__proto__', true, q));
+});
+
+test('watchUrl encodes the id and the list', () => {
+  assert.equal(watchUrl('abc'), 'https://music.youtube.com/watch?v=abc');
+  assert.equal(watchUrl('a&b', 'PL1'), 'https://music.youtube.com/watch?v=a%26b&list=PL1');
 });

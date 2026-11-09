@@ -134,6 +134,13 @@ async function main() {
     }, 90000, 1000);
     report(!!loaded, 'hybrid UI loads its home page', loaded ? loaded + ' entries' : 'nothing after 90 s');
 
+    // A value the settings page does not offer changes nothing; a valid one sticks.
+    const set = await evaluate(
+      'hybrid/index.html',
+      "(async () => { const before = (await window.hybrid.settings()).notify; const bad = await window.hybrid.setting('notify', 'yes'); const good = await window.hybrid.setting('notify', !before); await window.hybrid.setting('notify', before); return bad.notify === before && good.notify === !before; })()"
+    );
+    report(set === true, 'settings take valid values only');
+
     bus = await until(() => ownName(app.pid), 10000);
     report(!!bus, 'MPRIS player registered', bus || 'no name owned by this copy');
 

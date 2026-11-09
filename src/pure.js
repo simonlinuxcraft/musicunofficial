@@ -37,6 +37,26 @@ function onSite(url) {
   return URL.parse(url)?.hostname === 'music.youtube.com';
 }
 
+const SITE = 'https://music.youtube.com/';
+
+// Ids are validated before they get here; encoded anyway so a format change cannot add parameters.
+function watchUrl(videoId, list) {
+  let u = SITE + 'watch?v=' + encodeURIComponent(videoId);
+  if (list) u += '&list=' + encodeURIComponent(list);
+  return u;
+}
+
+const SLEEP_CHOICES = ['off', 'track', 15, 30, 45, 60, 90];
+
+// Whether the settings page may set key to value. Quality names come from the page.
+function validSetting(key, value, qualities) {
+  if (key === 'language') return ['system', 'de', 'en'].includes(value);
+  if (key === 'videoQuality') return qualities.includes(value);
+  if (key === 'notify' || key === 'richPresence') return typeof value === 'boolean';
+  if (key === 'sleep') return SLEEP_CHOICES.includes(value);
+  return false;
+}
+
 // What may leave the app through the system's handler. Any other scheme from the
 // page could start a local program registered for it.
 function isWebLink(url) {
@@ -599,6 +619,9 @@ function isNewer(latest, current) {
 
 module.exports = {
   APP_TITLE,
+  SITE,
+  watchUrl,
+  validSetting,
   rateLimit,
   isInternal,
   onSite,
