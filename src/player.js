@@ -61,7 +61,8 @@ function sync() {
 // while nothing consumes the track.
 function capture() {
   const wc = mainWc();
-  if (!wc) return;
+  // A crashed page takes the call and never answers.
+  if (!wc || wc.isCrashed()) return;
   wc.mainFrame
     .executeJavaScript('window.__ytmSnapshot && window.__ytmSnapshot()')
     .then((snap) => {
@@ -81,16 +82,23 @@ function takeResume() {
   return sanitizeResume(saved);
 }
 
-// Written synchronously at quit. Asking the renderer then could hang on a stuck page.
-function saveResume() {
-  if (!lastResume) return;
-  store.settings.resume = {
+// The last captured track at its projected position, or null.
+function resumePoint() {
+  if (!lastResume) return null;
+  return {
     videoId: lastResume.videoId,
     list: lastResume.list,
     position: positionNow(lastResume),
     duration: lastResume.duration,
     savedAt: Date.now(),
   };
+}
+
+// Written synchronously at quit. Asking the renderer then could hang on a stuck page.
+function saveResume() {
+  const r = resumePoint();
+  if (!r) return;
+  store.settings.resume = r;
   store.saveSettings();
 }
 
@@ -139,6 +147,7 @@ module.exports = {
   setTrack,
   command,
   takeResume,
+  resumePoint,
   setDiscord,
   FAST_POLL,
   SLOW_POLL,

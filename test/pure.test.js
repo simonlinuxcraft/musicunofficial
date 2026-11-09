@@ -9,6 +9,7 @@ const {
   keyAction,
   sanitizeTrack,
   positionNow,
+  rateLimit,
   sanitizeResume,
   parseItems,
   sanitizeControls,
@@ -527,4 +528,10 @@ test('numbers batch scrobble parameters per entry', () => {
     ]),
     { 'artist[0]': 'A', 'track[0]': 'T', 'artist[1]': 'B', 'track[1]': 'U' }
   );
+});
+
+test('rateLimit allows max calls per window, then recovers', () => {
+  const ok = rateLimit(3, 60000);
+  assert.deepEqual([ok(0), ok(1), ok(2), ok(3)], [true, true, true, false]);
+  assert.equal(ok(60004), true);
 });

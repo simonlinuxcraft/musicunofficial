@@ -8,7 +8,7 @@ const { WebContentsView, shell } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const player = require('./player');
-const { isInternal, isWebLink, onSite } = require('./pure');
+const { isInternal, isWebLink, onSite, rateLimit } = require('./pure');
 const { bindKeys } = require('./keys');
 
 const ROOT = path.join(__dirname, '..');
@@ -171,6 +171,20 @@ function create({ resume, openMini }) {
     clearTimeout(retry);
   });
   wc.on('did-stop-loading', player.sync);
+
+  // Killed (out of memory, GPU fault): load it again at the last captured spot.
+  const mayRestart = rateLimit(3, 60000);
+  wc.on('render-process-gone', (e, d) => {
+    console.log('[page] renderer gone: ' + d.reason);
+    player.setTrack(null);
+    stageCss = null;
+    if (d.reason === 'clean-exit' || !mayRestart()) return;
+    setTimeout(() => {
+      if (wc.isDestroyed()) return;
+      resume = player.resumePoint();
+      load();
+    }, 1000);
+  });
 
   // Google's consent page sets no background of its own and would show dark text on DARK.
   // A new document also starts without the stage CSS.

@@ -98,6 +98,13 @@ function create(opts) {
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 
+  // A frameless window without its page has no buttons left; bring the page back.
+  const mayReload = pure.rateLimit(3, 60000);
+  win.webContents.on('render-process-gone', (e, d) => {
+    console.log('[ui] renderer gone: ' + d.reason);
+    if (d.reason !== 'clean-exit' && mayReload()) setTimeout(() => alive() && win.webContents.reload(), 1000);
+  });
+
   bindKeys(win.webContents, 'uiZoom', opts.openMini);
 
   const sendMax = () => alive() && win.webContents.send('hybrid:maximized', win.isMaximized());

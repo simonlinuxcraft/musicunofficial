@@ -115,6 +115,16 @@ function sanitizeTrack(raw) {
   };
 }
 
+// True while at most max calls fell into the last windowMs, so a renderer that
+// crashes on load is not restarted forever.
+function rateLimit(max, windowMs) {
+  let times = [];
+  return (now = Date.now()) => {
+    times = times.filter((t) => now - t < windowMs).concat(now);
+    return times.length <= max;
+  };
+}
+
 // Position projected to right now. Only advances while playing, and never runs
 // past the end of the track.
 function positionNow(track, now = Date.now()) {
@@ -589,6 +599,7 @@ function isNewer(latest, current) {
 
 module.exports = {
   APP_TITLE,
+  rateLimit,
   isInternal,
   onSite,
   isWebLink,
