@@ -20,6 +20,9 @@ const DARK = '#030303';
 const OUT_OF_SIGHT = { x: 0, y: 0, width: 1, height: 1 };
 // Below about 616 px YouTube Music switches to its mobile layout, which has no like button or volume.
 const DESKTOP_WIDTH = 720;
+// Retry after a failed load (offline at login, DNS down), doubling up to a minute.
+const RETRY_MS = 5000;
+const RETRY_MAX_MS = 60000;
 
 // Out of sight a small desktop page; a narrower stage keeps that layout, scaled down to fit.
 function emulation() {
@@ -124,15 +127,35 @@ function create({ resume, openMini }) {
 
   // Muted until resume.js settles, so an ad or autoplay cannot blast sound first.
   // The watch URL pins the exact track by id.
-  if (resume) {
-    wc.setAudioMuted(true);
-    wc.loadURL(watchUrl(resume));
-  } else {
-    wc.loadURL(START_URL);
-  }
+  const load = (url) => {
+    if (resume) {
+      wc.setAudioMuted(true);
+      url = watchUrl(resume);
+    }
+    // A failed load rejects; did-fail-load handles it.
+    wc.loadURL(url || START_URL).catch(() => {});
+  };
+  load();
+
+  // Chromium's error page fires dom-ready and did-finish-load like a real page, so
+  // a failed load is remembered until the next navigation and retried with backoff.
+  let failed = false;
+  let retryMs = RETRY_MS;
+  let retry = null;
+  wc.on('did-fail-load', (e, code, desc, url, isMainFrame) => {
+    // -3 ERR_ABORTED: another navigation took over.
+    if (!isMainFrame || code === -3) return;
+    failed = true;
+    console.log('[page] load failed: ' + desc + ', again in ' + retryMs / 1000 + ' s');
+    clearTimeout(retry);
+    retry = setTimeout(() => !wc.isDestroyed() && load(isInternal(url) ? url : START_URL), retryMs);
+    retryMs = Math.min(retryMs * 2, RETRY_MAX_MS);
+  });
 
   // dom-ready, not did-finish-load: lands the CSS before Polymer builds the nav bar, so the stock logo never flashes.
   wc.on('dom-ready', () => {
+    if (failed) return;
+    retryMs = RETRY_MS;
     injectAll(wc, resume);
     // Once only: an SPA navigation fires dom-ready again.
     resume = null;
@@ -142,7 +165,10 @@ function create({ resume, openMini }) {
 
   // A reload drops the injected poller together with its last track.
   wc.on('did-start-navigation', (e, url, isInPlace, isMainFrame) => {
-    if (isMainFrame && !isInPlace) player.setTrack(null);
+    if (!isMainFrame || isInPlace) return;
+    player.setTrack(null);
+    failed = false;
+    clearTimeout(retry);
   });
   wc.on('did-stop-loading', player.sync);
 

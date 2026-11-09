@@ -13,6 +13,7 @@
     "dev": "unset ELECTRON_RUN_AS_NODE GIO_MODULE_DIR; electron . $(unshare -Ur true 2>/dev/null || echo --no-sandbox) --ozone-platform-hint=auto",
     "test": "node --test",
     "smoke": "node scripts/smoke.js",
+    "smoke:offline": "node scripts/smoke-offline.js",
     "build": "electron-builder --linux deb",
     "icons": "node scripts/gen-icons.js"
   },
