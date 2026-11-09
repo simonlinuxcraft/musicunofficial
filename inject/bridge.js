@@ -10,14 +10,29 @@
   const press = (sel) => $(sel).click();
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // By class, not aria label: the labels follow the UI language.
-  const SHUFFLE = `${BAR} .shuffle, ${MINI} .ytmusicPlayerControlsShuffleButton button, ytmusic-player-controls .shuffle`;
   const REPEAT = `${BAR} .repeat, ${MINI} .ytmusicPlayerControlsRepeatButton button, ytmusic-player-controls .repeat`;
   const queueEl = () => $('ytmusic-player-queue');
   const queueState = () => queueEl().queue.store.getState().queue;
   const runs = (x) => (x?.runs || []).map((r) => r.text).join('');
 
+  // The page's own shuffle: flips the flag at once, then waits for the server's shuffled queue.
+  // Clicks during that wait would cross the replies, so they are dropped. Queues started here
+  // have no shuffle endpoint and the server call fails; shuffle locally then.
+  const toggleShuffle = async () => {
+    if (window.__ytmShuffling) return;
+    window.__ytmShuffling = true;
+    const q = queueEl().queue;
+    try {
+      await q.shuffle();
+    } catch {
+      if (queueState().shuffleEnabled) q.store.dispatch({ type: 'SHUFFLE', payload: current() });
+    } finally {
+      window.__ytmShuffling = false;
+    }
+  };
+
   const ACTIONS = {
-    shuffle: () => press(SHUFFLE),
+    shuffle: toggleShuffle,
     repeat: () => press(REPEAT),
     mute: () => press(`${BAR} .volume, ${MINI} .ytMusicMiniPlayerMuteButton button`),
     like: () => press(`${BAR} #like-button-renderer button, ${MINI} like-button-view-model button`),
@@ -38,7 +53,7 @@
       }
     },
     shuffleTo: (on) => {
-      if (!!queueState().shuffleEnabled !== on) press(SHUFFLE);
+      if (!!queueState().shuffleEnabled !== on) return toggleShuffle();
     },
     avSong: () => press('ytmusic-av-toggle .song-button'),
     avVideo: () => press('ytmusic-av-toggle .video-button'),

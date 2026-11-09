@@ -185,7 +185,14 @@ for (const id of ['previous', 'playpause', 'next']) {
 }
 for (const action of ['shuffle', 'repeat', 'like', 'dislike', 'mute']) {
   $(action).addEventListener('click', async () => {
+    const b = $(action);
+    // Shuffle waits on the server for a second or so; show it at once and take no clicks meanwhile.
+    if (action === 'shuffle') {
+      b.disabled = true;
+      b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true'));
+    }
     applyControls(await api.control(action).catch(() => null));
+    b.disabled = false;
     // Shuffle reorders the queue in place.
     if (action === 'shuffle' && !$('queue').hidden && panelTab === 'queue') loadQueue();
   });
