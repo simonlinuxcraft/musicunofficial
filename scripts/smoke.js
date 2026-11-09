@@ -29,7 +29,8 @@ async function until(fn, ms, step = 500) {
   const end = Date.now() + ms;
   while (Date.now() < end) {
     try {
-      const v = await fn();
+      // A crashed page keeps its target and never answers.
+      const v = await Promise.race([fn(), sleep(5000)]);
       if (v) return v;
     } catch {}
     await sleep(step);
@@ -56,7 +57,8 @@ async function evaluate(match, expression) {
       ws.onmessage = (m) => {
         const d = JSON.parse(m.data);
         if (d.id !== 1) return;
-        if (d.result.exceptionDetails) no(new Error(d.result.exceptionDetails.text));
+        if (d.error) no(new Error(d.error.message));
+        else if (d.result.exceptionDetails) no(new Error(d.result.exceptionDetails.text));
         else ok(d.result.result.value);
       };
       ws.send(JSON.stringify({ id: 1, method: 'Runtime.evaluate', params: { expression, awaitPromise: true, returnByValue: true } }));
@@ -64,6 +66,20 @@ async function evaluate(match, expression) {
   } finally {
     ws.close();
   }
+}
+
+// Page.crash never answers; the renderer is gone before it could.
+async function crash(match) {
+  const t = await target(match);
+  if (!t) throw new Error('no page ' + match);
+  const ws = new WebSocket(t.webSocketDebuggerUrl);
+  await new Promise((ok, no) => {
+    ws.onopen = ok;
+    ws.onerror = no;
+  });
+  ws.send(JSON.stringify({ id: 1, method: 'Page.crash' }));
+  await sleep(500);
+  ws.close();
 }
 
 function gdbus(...args) {
@@ -103,7 +119,7 @@ async function main() {
   const app = spawn(electron, ['.', ...sandbox, '--ozone-platform-hint=auto', '--remote-debugging-port=' + PORT], {
     cwd: ROOT,
     env,
-    stdio: 'ignore',
+    stdio: ['ignore', process.env.SMOKE_LOG ? 'inherit' : 'ignore', 'ignore'],
   });
   const exited = new Promise((r) => app.once('exit', r));
 
@@ -117,6 +133,13 @@ async function main() {
       return evaluate('hybrid/index.html', "document.querySelectorAll('.tile, .item').length");
     }, 90000, 1000);
     report(!!loaded, 'hybrid UI loads its home page', loaded ? loaded + ' entries' : 'nothing after 90 s');
+
+    // A value the settings page does not offer changes nothing; a valid one sticks.
+    const set = await evaluate(
+      'hybrid/index.html',
+      "(async () => { const before = (await window.hybrid.settings()).notify; const bad = await window.hybrid.setting('notify', 'yes'); const good = await window.hybrid.setting('notify', !before); await window.hybrid.setting('notify', before); return bad.notify === before && good.notify === !before; })()"
+    );
+    report(set === true, 'settings take valid values only');
 
     bus = await until(() => ownName(app.pid), 10000);
     report(!!bus, 'MPRIS player registered', bus || 'no name owned by this copy');
@@ -153,6 +176,14 @@ async function main() {
       }, 20000);
       report(!!after, 'MPRIS Next skips to another track', after || 'still ' + before);
     }
+
+    // A killed renderer comes back by itself. The track only when a capture (every 12 s) caught it.
+    await crash('music.youtube.com');
+    const back = await until(() => evaluate('music.youtube.com', "!!document.getElementById('movie_player') && location.pathname"), 30000, 1000);
+    report(!!back, 'a crashed player page loads again', back || 'nothing after 30 s');
+    await crash('hybrid/index.html');
+    const ui = await until(() => evaluate('hybrid/index.html', "document.querySelectorAll('.tile, .item').length"), 30000, 1000);
+    report(!!ui, 'a crashed UI loads again', ui ? ui + ' entries' : 'nothing after 30 s');
   } catch (e) {
     report(false, 'run', e.message);
   }

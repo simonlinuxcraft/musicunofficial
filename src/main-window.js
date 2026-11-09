@@ -5,14 +5,13 @@
 // video), or whole for sign-in and whatever the interface lacks.
 
 const { WebContentsView, shell } = require('electron');
-const fs = require('fs');
 const path = require('path');
 const player = require('./player');
-const { isInternal, isWebLink, onSite } = require('./pure');
+const { isInternal, isWebLink, onSite, rateLimit, watchUrl, SITE } = require('./pure');
 const { bindKeys } = require('./keys');
 
 const ROOT = path.join(__dirname, '..');
-const START_URL = 'https://music.youtube.com/';
+const START_URL = SITE;
 // YouTube Music's own page background, so the view does not flash while it loads.
 const DARK = '#030303';
 // One pixel in the window corner, where page and UI are the same #030303. At
@@ -20,6 +19,9 @@ const DARK = '#030303';
 const OUT_OF_SIGHT = { x: 0, y: 0, width: 1, height: 1 };
 // Below about 616 px YouTube Music switches to its mobile layout, which has no like button or volume.
 const DESKTOP_WIDTH = 720;
+// Retry after a failed load (offline at login, DNS down), doubling up to a minute.
+const RETRY_MS = 5000;
+const RETRY_MAX_MS = 60000;
 
 // Out of sight a small desktop page; a narrower stage keeps that layout, scaled down to fit.
 function emulation() {
@@ -39,7 +41,7 @@ function layOut(wc, again = false) {
   if (e) wc.enableDeviceEmulation(e);
   else wc.disableDeviceEmulation();
 }
-const inject = (name) => fs.readFileSync(path.join(ROOT, 'inject', name), 'utf8');
+const inject = require('./inject');
 const CSS = inject('style.css');
 const STAGE_CSS = inject('stage.css');
 const NOWPLAYING = inject('nowplaying.js');
@@ -52,13 +54,6 @@ let placed = null;
 let stageCss = null;
 
 const live = () => (view && !view.webContents.isDestroyed() ? view.webContents : null);
-
-// Ids are validated by sanitizeResume; encoded anyway so a format change cannot add parameters.
-function watchUrl(r) {
-  let u = 'https://music.youtube.com/watch?v=' + encodeURIComponent(r.videoId);
-  if (r.list) u += '&list=' + encodeURIComponent(r.list);
-  return u;
-}
 
 // Through mainFrame: webContents.executeJavaScript holds the code back until the
 // page has finished loading.
@@ -124,15 +119,35 @@ function create({ resume, openMini }) {
 
   // Muted until resume.js settles, so an ad or autoplay cannot blast sound first.
   // The watch URL pins the exact track by id.
-  if (resume) {
-    wc.setAudioMuted(true);
-    wc.loadURL(watchUrl(resume));
-  } else {
-    wc.loadURL(START_URL);
-  }
+  const load = (url) => {
+    if (resume) {
+      wc.setAudioMuted(true);
+      url = watchUrl(resume.videoId, resume.list);
+    }
+    // A failed load rejects; did-fail-load handles it.
+    wc.loadURL(url || START_URL).catch(() => {});
+  };
+  load();
+
+  // Chromium's error page fires dom-ready and did-finish-load like a real page, so
+  // a failed load is remembered until the next navigation and retried with backoff.
+  let failed = false;
+  let retryMs = RETRY_MS;
+  let retry = null;
+  wc.on('did-fail-load', (e, code, desc, url, isMainFrame) => {
+    // -3 ERR_ABORTED: another navigation took over.
+    if (!isMainFrame || code === -3) return;
+    failed = true;
+    console.log('[page] load failed: ' + desc + ', again in ' + retryMs / 1000 + ' s');
+    clearTimeout(retry);
+    retry = setTimeout(() => !wc.isDestroyed() && load(isInternal(url) ? url : START_URL), retryMs);
+    retryMs = Math.min(retryMs * 2, RETRY_MAX_MS);
+  });
 
   // dom-ready, not did-finish-load: lands the CSS before Polymer builds the nav bar, so the stock logo never flashes.
   wc.on('dom-ready', () => {
+    if (failed) return;
+    retryMs = RETRY_MS;
     injectAll(wc, resume);
     // Once only: an SPA navigation fires dom-ready again.
     resume = null;
@@ -142,9 +157,26 @@ function create({ resume, openMini }) {
 
   // A reload drops the injected poller together with its last track.
   wc.on('did-start-navigation', (e, url, isInPlace, isMainFrame) => {
-    if (isMainFrame && !isInPlace) player.setTrack(null);
+    if (!isMainFrame || isInPlace) return;
+    player.setTrack(null);
+    failed = false;
+    clearTimeout(retry);
   });
   wc.on('did-stop-loading', player.sync);
+
+  // Killed (out of memory, GPU fault): load it again at the last captured spot.
+  const mayRestart = rateLimit(3, 60000);
+  wc.on('render-process-gone', (e, d) => {
+    console.log('[page] renderer gone: ' + d.reason);
+    player.setTrack(null);
+    stageCss = null;
+    if (d.reason === 'clean-exit' || !mayRestart()) return;
+    setTimeout(() => {
+      if (wc.isDestroyed()) return;
+      resume = player.resumePoint();
+      load();
+    }, 1000);
+  });
 
   // Google's consent page sets no background of its own and would show dark text on DARK.
   // A new document also starts without the stage CSS.

@@ -4,14 +4,13 @@
 // src/page.js uses the file as an expression.
 // ponytail: internals of the page (control classes, the queue element and its store); they break when YouTube renames them.
 (() => {
-  const BAR = 'ytmusic-player-bar';
-  const MINI = 'ytmusic-app-layout > ytmusic-miniplayer';
+  const { BAR, MINI, QUEUE, SKIP_AD } = __SELECTORS__;
   const $ = (sel) => document.querySelector(sel);
   const press = (sel) => $(sel).click();
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   // By class, not aria label: the labels follow the UI language.
   const REPEAT = `${BAR} .repeat, ${MINI} .ytmusicPlayerControlsRepeatButton button, ytmusic-player-controls .repeat`;
-  const queueEl = () => $('ytmusic-player-queue');
+  const queueEl = () => $(QUEUE);
   const queueState = () => queueEl().queue.store.getState().queue;
   const runs = (x) => (x?.runs || []).map((r) => r.text).join('');
 
@@ -59,7 +58,7 @@
     avVideo: () => press('ytmusic-av-toggle .video-button'),
     // Only YouTube's own skip button, which it shows once an ad may be skipped.
     skipAd: () => {
-      const b = $('.ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button');
+      const b = $(SKIP_AD);
       if (b) b.click();
     },
   };
@@ -67,7 +66,7 @@
   // Rows as the page shows them. A track with a music video sits in a wrapper with
   // both versions, and the one not chosen by the song/video switch is under [hidden].
   const rows = () =>
-    [...document.querySelectorAll('ytmusic-player-queue ytmusic-player-queue-item')].filter(
+    [...document.querySelectorAll(`${QUEUE} ytmusic-player-queue-item`)].filter(
       (el) => !el.closest('ytmusic-playlist-panel-video-wrapper-renderer > [hidden]')
     );
   // The row's place in the reorderable list, -1 for autoplay suggestions.

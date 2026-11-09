@@ -20,7 +20,6 @@ const ROOT = path.join(__dirname, '..');
 const DEFAULT_SIZE = { width: 1100, height: 760 };
 // What the UI may do through the player bar; MPRIS has its own set-to-state actions.
 const UI_ACTIONS = ['shuffle', 'repeat', 'mute', 'like', 'dislike', 'volume', 'avSong', 'avVideo', 'skipAd'];
-const SLEEP_CHOICES = ['off', 'track', 15, 30, 45, 60, 90];
 
 let win = null;
 let actions = null;
@@ -97,6 +96,13 @@ function create(opts) {
   // A file dropped on the window would otherwise replace the UI and inherit its preload.
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  // A frameless window without its page has no buttons left; bring the page back.
+  const mayReload = pure.rateLimit(3, 60000);
+  win.webContents.on('render-process-gone', (e, d) => {
+    console.log('[ui] renderer gone: ' + d.reason);
+    if (d.reason !== 'clean-exit' && mayReload()) setTimeout(() => alive() && win.webContents.reload(), 1000);
+  });
 
   bindKeys(win.webContents, 'uiZoom', opts.openMini);
 
@@ -248,19 +254,21 @@ ipcMain.handle('hybrid:settings', (e) => (fromUs(e) ? settings() : null));
 
 ipcMain.handle('hybrid:setting', (e, key, value) => {
   if (!fromUs(e)) return null;
-  if (key === 'language' && ['system', 'de', 'en'].includes(value)) {
+  // Anything else changes nothing; the page redraws from the current settings.
+  if (!pure.validSetting(key, value, page.QUALITIES)) return settings();
+  if (key === 'language') {
     actions.setLanguage(value);
-  } else if (key === 'videoQuality' && page.QUALITIES.includes(value)) {
+  } else if (key === 'videoQuality') {
     store.settings.videoQuality = value;
     store.saveSettings();
     page.setQuality(value).catch(() => {});
-  } else if (key === 'notify' && typeof value === 'boolean') {
+  } else if (key === 'notify') {
     store.settings.notify = value;
     store.saveSettings();
     player.sync();
-  } else if (key === 'richPresence' && typeof value === 'boolean') {
+  } else if (key === 'richPresence') {
     player.setDiscord(value);
-  } else if (key === 'sleep' && SLEEP_CHOICES.includes(value)) {
+  } else if (key === 'sleep') {
     sleep.set(value);
     player.sync();
   }

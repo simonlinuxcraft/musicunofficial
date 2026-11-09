@@ -6,7 +6,7 @@
 // without the app's icon, and it only appears once the page has played unmuted.
 
 const dbus = require('@homebridge/dbus-native');
-const { positionNow } = require('./pure');
+const { positionNow, watchUrl } = require('./pure');
 
 const NAME = 'org.mpris.MediaPlayer2.musicunofficial';
 const PATH = '/org/mpris/MediaPlayer2';
@@ -82,7 +82,7 @@ function metadata(t) {
   if (t.album) m.push(['xesam:album', ['s', t.album]]);
   if (t.art) m.push(['mpris:artUrl', ['s', t.art]]);
   if (t.duration > 0) m.push(['mpris:length', ['x', Math.round(t.duration * US)]]);
-  if (t.videoId) m.push(['xesam:url', ['s', 'https://music.youtube.com/watch?v=' + t.videoId]]);
+  if (t.videoId) m.push(['xesam:url', ['s', watchUrl(t.videoId)]]);
   return m;
 }
 

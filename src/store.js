@@ -6,10 +6,17 @@ const path = require('path');
 
 const file = (name) => path.join(app.getPath('userData'), name);
 
+// An unreadable file is moved aside, so the next write does not wipe what is left in it.
 function read(name) {
+  const f = file(name);
   try {
-    return JSON.parse(fs.readFileSync(file(name), 'utf8'));
-  } catch {
+    return JSON.parse(fs.readFileSync(f, 'utf8'));
+  } catch (e) {
+    if (e.code === 'ENOENT') return null;
+    console.log('[store] ' + name + ' unreadable, kept as ' + name + '.broken: ' + e.message);
+    try {
+      fs.renameSync(f, f + '.broken');
+    } catch {}
     return null;
   }
 }

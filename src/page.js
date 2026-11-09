@@ -3,12 +3,10 @@
 // Talking to the YouTube Music page in the player window: its own InnerTube
 // client, its navigation, its player bar and its queue. The page side is inject/bridge.js.
 
-const fs = require('fs');
-const path = require('path');
 const mainWindow = require('./main-window');
 const pure = require('./pure');
 
-const BRIDGE = fs.readFileSync(path.join(__dirname, '..', 'inject', 'bridge.js'), 'utf8');
+const BRIDGE = require('./inject')('bridge.js');
 const ANSWER_MS = 35000;
 
 // The first request comes right at startup, while the page is still loading.
