@@ -2,10 +2,9 @@
   if (window.__ytmNowPlaying) return 'already mounted';
   window.__ytmNowPlaying = true;
 
-  const BAR = 'ytmusic-player-bar';
-  const MINI = 'ytmusic-app-layout > ytmusic-miniplayer';
+  const { BAR, MINI, QUEUE, SKIP_AD } = __SELECTORS__;
   const moviePlayer = () => document.getElementById('movie_player');
-  const queueStore = () => document.querySelector('ytmusic-player-queue')?.queue?.store?.getState();
+  const queueStore = () => document.querySelector(QUEUE)?.queue?.store?.getState();
 
   // Metadata comes from mediaSession, not from the DOM, so it survives layout changes.
   // An ad or a preview can add a second <video>: prefer the playing one, then any with a duration.
@@ -89,7 +88,7 @@
       muted = !!p.isMuted();
     }
     const av = document.querySelector('ytmusic-av-toggle');
-    const skip = document.querySelector('.ytp-skip-ad-button, .ytp-ad-skip-button-modern, .ytp-ad-skip-button');
+    const skip = document.querySelector(SKIP_AD);
     return {
       shuffle: !!st?.shuffleEnabled,
       repeat: st ? st.repeatMode : null,

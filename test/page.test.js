@@ -28,7 +28,7 @@ beforeEach(() => {
 });
 
 test('the bridge has every function src/page.js calls into', () => {
-  const bridge = vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'inject', 'bridge.js'), 'utf8'), {});
+  const bridge = vm.runInNewContext(require('../src/inject')('bridge.js'), {});
   const called = [...fs.readFileSync(path.join(__dirname, '..', 'src', 'page.js'), 'utf8').matchAll(/call\('(\w+)'/g)].map((m) => m[1]);
   for (const fn of called) assert.equal(typeof bridge[fn], 'function', fn);
 });

@@ -5,7 +5,6 @@
 // video), or whole for sign-in and whatever the interface lacks.
 
 const { WebContentsView, shell } = require('electron');
-const fs = require('fs');
 const path = require('path');
 const player = require('./player');
 const { isInternal, isWebLink, onSite, rateLimit } = require('./pure');
@@ -42,7 +41,7 @@ function layOut(wc, again = false) {
   if (e) wc.enableDeviceEmulation(e);
   else wc.disableDeviceEmulation();
 }
-const inject = (name) => fs.readFileSync(path.join(ROOT, 'inject', name), 'utf8');
+const inject = require('./inject');
 const CSS = inject('style.css');
 const STAGE_CSS = inject('stage.css');
 const NOWPLAYING = inject('nowplaying.js');
