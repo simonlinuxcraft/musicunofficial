@@ -21,4 +21,12 @@ test('writes the settings whole, through a temp file that does not stay', () => 
 test('reads a half written file as none instead of throwing', () => {
   fs.writeFileSync(path.join(dir, 'settings.json'), '{"uiZoom": 1, "las');
   assert.equal(store.read('settings.json'), null);
+  // Kept aside, so saving afterwards cannot wipe it.
+  assert.equal(fs.readFileSync(path.join(dir, 'settings.json.broken'), 'utf8'), '{"uiZoom": 1, "las');
+  assert.equal(fs.existsSync(path.join(dir, 'settings.json')), false);
+});
+
+test('a missing file is none and leaves nothing behind', () => {
+  assert.equal(store.read('nothing.json'), null);
+  assert.equal(fs.existsSync(path.join(dir, 'nothing.json.broken')), false);
 });
