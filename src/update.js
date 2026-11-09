@@ -22,6 +22,8 @@ const RELAUNCH = 'while kill -0 "$1" 2>/dev/null; do sleep 0.2; done; exec "$2"'
 const EVERY = 6 * 3600 * 1000;
 const LOOKUP_MS = 30 * 1000;
 const DOWNLOAD_MS = 30 * 60 * 1000;
+// No data for this long ends the download; the dialog blocks the window while it runs.
+const IDLE_MS = Number(process.env.MUSICUNOFFICIAL_UPDATE_IDLE_MS) || 60 * 1000;
 
 // Where the deb puts the app; the polkit policy names the helper by this path.
 const INSTALLED = '/opt/MusicUnofficial';
@@ -92,17 +94,32 @@ async function download(target) {
   ready = null;
   const dest = path.join(app.getPath('temp'), name);
   const part = dest + '.part';
+  // Destroying the source as well: whether an abort reaches a body already streaming is up to net.fetch.
+  const idle = new AbortController();
+  let src = null;
+  let stall = null;
+  const alive = () => {
+    clearTimeout(stall);
+    stall = setTimeout(() => {
+      const e = new Error('download: no data for ' + IDLE_MS / 1000 + ' s');
+      idle.abort(e);
+      if (src) src.destroy(e);
+    }, IDLE_MS);
+  };
   try {
-    const dl = await net.fetch(url, { signal: AbortSignal.timeout(DOWNLOAD_MS) });
+    alive();
+    const dl = await net.fetch(url, { signal: AbortSignal.any([idle.signal, AbortSignal.timeout(DOWNLOAD_MS)]) });
     if (!dl.ok || !dl.body) throw new Error('download: HTTP ' + dl.status);
     const total = Number(dl.headers.get('content-length')) || size;
     const hash = crypto.createHash('sha256');
     let got = 0;
     report(0);
+    src = Readable.fromWeb(dl.body);
     await pipeline(
-      Readable.fromWeb(dl.body),
+      src,
       async function* (chunks) {
         for await (const c of chunks) {
+          alive();
           hash.update(c);
           got += c.length;
           report(total ? Math.min(got / total, 1) : null);
@@ -122,6 +139,7 @@ async function download(target) {
     fs.rmSync(part, { force: true });
     throw e;
   } finally {
+    clearTimeout(stall);
     progress = null;
   }
 }

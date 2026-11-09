@@ -17,6 +17,9 @@ let tag = 'v0.0.7';
 let body = '';
 let claimed = '';
 let downloads = 0;
+// Serves `body`, then holds the connection open without sending more.
+let stall = false;
+process.env.MUSICUNOFFICIAL_UPDATE_IDLE_MS = '200';
 process.env.MUSICUNOFFICIAL_UPDATE_URL = 'https://example.invalid/releases/latest';
 stub('electron', {
   app: { isPackaged: false, getVersion: () => '0.0.6', getPath: () => dir },
@@ -28,7 +31,8 @@ stub('electron', {
         return Response.json({ tag_name: tag, assets });
       }
       downloads++;
-      return new Response(body);
+      if (!stall) return new Response(body);
+      return new Response(new ReadableStream({ start: (c) => c.enqueue(new TextEncoder().encode(body)) }));
     },
   },
 });
@@ -86,6 +90,18 @@ test('a verified package is kept and the bar went from 0 to 1', async () => {
   await update.download();
   assert.equal(downloads, 1);
   assert.ok(fs.existsSync(deb));
+});
+
+test('a download that stops sending gives up and leaves no part file', async () => {
+  fs.rmSync(deb, { force: true });
+  stall = true;
+  try {
+    await assert.rejects(update.download(), /no data/);
+  } finally {
+    stall = false;
+  }
+  assert.ok(!fs.existsSync(deb));
+  assert.ok(!fs.existsSync(deb + '.part'));
 });
 
 test('a release that is no longer newer clears the offer', async () => {
