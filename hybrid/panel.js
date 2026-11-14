@@ -5,6 +5,7 @@
 let queueSeq = 0;
 let panelTab = 'queue';
 let lyricsFor = null;
+let lyricsFailed = false;
 
 const ICON_REMOVE = 'M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z';
 
@@ -100,15 +101,17 @@ async function loadQueue() {
   if (current) current.scrollIntoView({ block: 'nearest' });
 }
 
-async function loadLyrics() {
+// A failed request (page still loading, offline) is tried again when the tab is opened, not on every poll.
+async function loadLyrics(retry = false) {
   const id = track && !track.ad ? track.videoId : null;
-  if (id === lyricsFor) return;
+  if (id === lyricsFor && !(retry && lyricsFailed)) return;
   lyricsFor = id;
   $('lyrics-source').textContent = '';
   $('lyrics').textContent = id ? T.loading : T.noLyrics;
   if (!id) return;
   const l = await api.lyrics(id).catch(() => null);
   if (lyricsFor !== id) return;
+  lyricsFailed = !l;
   $('lyrics').textContent = l && l.text ? l.text : T.noLyrics;
   $('lyrics-source').textContent = (l && l.source) || '';
   $('lyrics-pane').scrollTop = 0;
@@ -120,7 +123,7 @@ function showTab(tab) {
   $('tab-lyrics').setAttribute('aria-selected', String(tab === 'lyrics'));
   $('queue-pane').hidden = tab !== 'queue';
   $('lyrics-pane').hidden = tab !== 'lyrics';
-  if (tab === 'lyrics') loadLyrics();
+  if (tab === 'lyrics') loadLyrics(true);
   else loadQueue();
 }
 
