@@ -9,6 +9,7 @@ const player = require('./player');
 const store = require('./store');
 const page = require('./page');
 const sleep = require('./sleep');
+const tray = require('./tray');
 const lastfm = require('./lastfm');
 const update = require('./update');
 const pure = require('./pure');
@@ -268,6 +269,7 @@ ipcMain.handle('hybrid:setting', (e, key, value) => {
     player.sync();
   } else if (key === 'richPresence') {
     player.setDiscord(value);
+    tray.rebuild();
   } else if (key === 'sleep') {
     sleep.set(value);
     player.sync();

@@ -95,7 +95,6 @@ app.whenReady().then(() => {
     },
     onTrack: (t) => {
       mpris.update(t);
-      tray.setTrack(t);
       sleep.onTrack(t);
       notify.onTrack(t);
       lastfm.onTrack(t);

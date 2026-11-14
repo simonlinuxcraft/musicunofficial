@@ -9,14 +9,18 @@ let minutes = 0;
 let afterTrack = false;
 let trackId = null;
 let current = null;
+let lastPos = 0;
+let ended = false;
 
 function clear() {
-  clearTimeout(timer);
+  clearInterval(timer);
   timer = null;
   endsAt = 0;
   minutes = 0;
   afterTrack = false;
   trackId = null;
+  lastPos = 0;
+  ended = false;
 }
 
 function fire() {
@@ -32,7 +36,8 @@ function set(choice) {
   } else if (typeof choice === 'number') {
     minutes = choice;
     endsAt = Date.now() + choice * 60000;
-    timer = setTimeout(fire, choice * 60000);
+    // Against the wall clock: a timeout stands still while the machine is suspended.
+    timer = setInterval(() => Date.now() >= endsAt && fire(), 10000);
   }
 }
 
@@ -44,8 +49,11 @@ function onTrack(t) {
   current = t;
   if (!afterTrack || !t || t.ad) return;
   const id = t.videoId || t.title;
+  // Repeat-one plays the same id again: a jump from its last seconds back to the start.
+  if (id === trackId && t.duration > 0 && t.position < Math.min(10, lastPos) && lastPos > t.duration - 10) ended = true;
+  lastPos = t.position;
   if (!trackId) trackId = id;
-  else if (id !== trackId && t.playing) fire();
+  else if ((id !== trackId || ended) && t.playing) fire();
 }
 
 module.exports = {

@@ -8,7 +8,6 @@ const { uiLanguage } = require('./i18n');
 
 let tray = null;
 let actions = null;
-let tip = APP_TITLE;
 
 const STRINGS = {
   en: {
@@ -68,17 +67,10 @@ function create(opts) {
     return;
   }
   tray = new Tray(icon);
+  // Once only: each setToolTip renumbers the Linux tray menu, and a host still on the old ids drops clicks.
   tray.setToolTip(APP_TITLE);
   tray.on('click', actions.toggle);
   rebuild();
 }
 
-// The playing track as the tooltip, so hovering the icon says what is on.
-function setTrack(t) {
-  const next = t && !t.ad ? t.title + (t.artist ? ' - ' + t.artist : '') : APP_TITLE;
-  if (!tray || next === tip) return;
-  tip = next;
-  tray.setToolTip(tip);
-}
-
-module.exports = { create, rebuild, setTrack, exists: () => !!tray };
+module.exports = { create, rebuild, exists: () => !!tray };
