@@ -151,6 +151,8 @@
       like: likeStatus(),
       videoId: videoId(),
       video: hasVideo(v),
+      // Width over height of the playing video, so the big view can frame it without bars.
+      aspect: v.videoWidth > 0 && v.videoHeight > 0 ? v.videoWidth / v.videoHeight : 0,
       ...controls(),
       position: t.position,
       duration: t.duration,

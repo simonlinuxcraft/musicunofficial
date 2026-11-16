@@ -27,10 +27,13 @@ const pageType = (b) => b?.browseEndpointContextSupportedConfigs?.browseEndpoint
 // Google's login flow bounces across accounts.google.com and back, so those
 // hosts have to stay in-app. Everything else is a real outbound link.
 const INTERNAL_HOSTS = ['youtube.com', 'google.com', 'ytimg.com', 'ggpht.com'];
+// After signing in, Google sets the session on the country's domain too (accounts.google.de);
+// sent to the browser, that step leaves the login hanging. Only the accounts host, no other.
+const ACCOUNTS_CC = /^accounts\.google\.(?:[a-z]{2,3}|co\.[a-z]{2}|com\.[a-z]{2})$/;
 
 function isInternal(url) {
   const host = URL.parse(url)?.hostname.toLowerCase();
-  return !!host && INTERNAL_HOSTS.some((h) => host === h || host.endsWith('.' + h));
+  return !!host && (ACCOUNTS_CC.test(host) || INTERNAL_HOSTS.some((h) => host === h || host.endsWith('.' + h)));
 }
 
 // Whether the player page is on YouTube Music itself, not on a consent or sign-in page.
@@ -54,7 +57,7 @@ const SLEEP_CHOICES = ['off', 'track', 15, 30, 45, 60, 90];
 function validSetting(key, value, qualities) {
   if (key === 'language') return ['system', 'de', 'en'].includes(value);
   if (key === 'videoQuality') return qualities.includes(value);
-  if (key === 'notify' || key === 'richPresence') return typeof value === 'boolean';
+  if (key === 'notify' || key === 'richPresence' || key === 'syncedLyrics') return typeof value === 'boolean';
   if (key === 'sleep') return SLEEP_CHOICES.includes(value);
   return false;
 }
@@ -124,6 +127,7 @@ function sanitizeTrack(raw) {
     like: pick(raw.like, LIKE_STATES),
     videoId: matching(raw.videoId, VIDEO_ID),
     video: raw.video === true,
+    aspect: Number.isFinite(raw.aspect) && raw.aspect >= 0.3 && raw.aspect <= 4 ? Math.round(raw.aspect * 1000) / 1000 : 0,
     shuffle: raw.shuffle === true,
     repeat: pick(raw.repeat, REPEAT_MODES) || 'NONE',
     volume: Number.isFinite(raw.volume) ? clampVolume(raw.volume) : 100,
@@ -367,6 +371,14 @@ function parseItems(json) {
   const headerOf = (o) => {
     const l = o.musicResponsiveHeaderRenderer || o.musicDetailHeaderRenderer;
     if (l) {
+      const buttons = Array.isArray(l.buttons) ? l.buttons : [];
+      // The head's own play button, and from its menu shuffle, mix and queueing the whole list.
+      const acts = { shuffle: null, radio: null, queue: null };
+      for (const b of buttons) if (b?.menuRenderer) menuOf(b, acts);
+      const playBtn = buttons.find((b) => b?.musicPlayButtonRenderer)?.musicPlayButtonRenderer;
+      const face = l.facepile?.avatarStackViewModel;
+      const avatars = (Array.isArray(face?.avatars) ? face.avatars : []).flatMap((a) => a?.avatarViewModel?.image?.sources || []);
+      const avatar = avatars.filter((x) => httpsUrl(x?.url)).sort((a, b) => (a.width || 0) - (b.width || 0)).find((x) => x.width >= 48);
       return {
         kind: 'list',
         title: text(l.title),
@@ -375,6 +387,12 @@ function parseItems(json) {
         strap: parts(l.straplineTextOne),
         thumb: thumb(l.thumbnail, 400),
         description: text(l.description?.musicDescriptionShelfRenderer?.description || l.description, 1200),
+        play: sanitizeEndpoint(playBtn?.playNavigationEndpoint),
+        shuffle: acts.shuffle,
+        radio: acts.radio,
+        queue: acts.queue,
+        owner: typeof face?.text?.content === 'string' ? face.text.content.trim().slice(0, 128) : '',
+        ownerThumb: avatar ? avatar.url : thumb(l.straplineThumbnail, 48),
       };
     }
     const a = o.musicImmersiveHeaderRenderer || o.musicVisualHeaderRenderer;
@@ -657,6 +675,35 @@ function replayed(scrobbled, lastPosition, position) {
 // The first name of a joined artist line ("A und B", "A & B", "A, B", "A feat. B").
 // Only a fallback: a duo called "A & B" is split too, the player bar's links are not.
 // No " x ": it would cut "Lil Nas X feat. B" down to "Lil Nas".
+// Timed lyrics in LRC form ("[01:02.34] text") as [{ time, text }] in seconds, in order.
+// Lines without a time stamp (credits, [ar:] tags) are dropped.
+function parseLrc(lrc) {
+  if (typeof lrc !== 'string') return [];
+  const out = [];
+  for (const raw of lrc.slice(0, 200000).split(/\r?\n/)) {
+    const stamps = [...raw.matchAll(/\[(\d{1,3}):(\d{1,2}(?:\.\d{1,3})?)\]/g)];
+    if (!stamps.length) continue;
+    const text = raw.replace(/\[[^\]]*\]/g, '').trim().slice(0, 300);
+    for (const m of stamps) out.push({ time: Number(m[1]) * 60 + Number(m[2]), text });
+  }
+  return out.sort((a, b) => a.time - b.time).slice(0, 3000);
+}
+
+// Of LRCLIB's results the synced one whose length is closest to the playing track,
+// within a few seconds; another recording of the same song would run out of step.
+function pickSynced(results, duration) {
+  const synced = (Array.isArray(results) ? results : [results]).filter((r) => typeof r?.syncedLyrics === 'string' && r.syncedLyrics.trim());
+  if (!(duration > 0)) return synced[0] || null;
+  const gap = (r) => (Number.isFinite(r.duration) ? Math.abs(r.duration - duration) : Infinity);
+  return synced.filter((r) => gap(r) <= 4).sort((a, b) => gap(a) - gap(b))[0] || null;
+}
+
+// A YouTube Music title without the parts lyrics sites leave out: features, "official video" and the like.
+function lyricsTitle(title) {
+  const t = typeof title === 'string' ? title : '';
+  return t.replace(/\s*[([](?:feat\.?|ft\.?|mit|with|official|offizielle[sr]?|music video|video|audio|lyric[s]?|visuali[sz]er)\b[^)\]]*[)\]]/gi, '').trim().slice(0, 200) || t.trim().slice(0, 200);
+}
+
 function primaryArtist(line) {
   const s = typeof line === 'string' ? line.trim() : '';
   return s.split(/\s+(?:und|and|&|feat\.?|ft\.?)\s+|,\s*/i)[0].trim() || s;
@@ -766,6 +813,9 @@ module.exports = {
   parseSuggestions,
   parseAccount,
   PAGE_PARAMS,
+  parseLrc,
+  pickSynced,
+  lyricsTitle,
   parsePlaylistOptions,
   sanitizeLinks,
   onDisplays,

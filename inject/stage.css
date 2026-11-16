@@ -42,3 +42,16 @@ ytmusic-player .fullscreen-button {
 ytmusic-player#player #song-image img {
   object-fit: contain !important;
 }
+
+/* The channel's branding, cards and end screens sit on top of the video; the big view shows the video alone. */
+#movie_player .iv-branding,
+#movie_player .branding-img-container,
+#movie_player .ytp-ce-element,
+#movie_player .ytp-ce-covering-overlay,
+#movie_player .ytp-cards-teaser,
+#movie_player .ytp-cards-button,
+#movie_player .ytp-paid-content-overlay,
+#movie_player .ytp-endscreen-content,
+#movie_player .ytp-pause-overlay {
+  display: none !important;
+}
