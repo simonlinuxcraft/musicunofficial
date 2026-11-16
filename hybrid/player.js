@@ -176,6 +176,7 @@ api.onTrack((t) => {
   $('av-song').setAttribute('aria-pressed', String(!has || t.avMode !== 'OMV_PREFERRED'));
   $('av-video').setAttribute('aria-pressed', String(has && t.avMode === 'OMV_PREFERRED'));
   $('skip-ad').hidden = !(has && t.ad && t.adSkip);
+  setStageAspect(has ? t.aspect : 0);
   setStageVideo(!has || t.video, art);
   document.title = has && !t.ad ? t.title + (t.artist ? ' - ' + t.artist : '') : 'Music';
 

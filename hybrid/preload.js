@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('hybrid', {
   suggest: (input) => ipcRenderer.invoke('hybrid:suggest', input),
   navigate: (endpoint) => ipcRenderer.invoke('hybrid:navigate', endpoint),
   lyrics: (videoId) => ipcRenderer.invoke('hybrid:lyrics', videoId),
+  syncedLyrics: (q) => ipcRenderer.invoke('hybrid:synced-lyrics', q),
   queueAdd: (target, position) => ipcRenderer.invoke('hybrid:queue-add', target, position),
   playlists: (videoId) => ipcRenderer.invoke('hybrid:playlists', videoId),
   change: (c) => ipcRenderer.invoke('hybrid:change', c),

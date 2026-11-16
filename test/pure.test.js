@@ -24,6 +24,9 @@ const {
   parseLyrics,
   parseSuggestions,
   parseAccount,
+  parseLrc,
+  pickSynced,
+  lyricsTitle,
   parsePlaylistOptions,
   withCovers,
   sanitizeLinks,
@@ -42,12 +45,18 @@ test('keeps YouTube Music and the Google login flow in-app', () => {
   assert.ok(isInternal('https://accounts.google.com/ServiceLogin'));
   assert.ok(isInternal('https://www.youtube.com/watch?v=x'));
   assert.ok(isInternal('https://i.ytimg.com/vi/x/hq.jpg'));
+  assert.ok(isInternal('https://accounts.google.de/accounts/SetSID'));
+  assert.ok(isInternal('https://accounts.google.co.uk/accounts/SetSID'));
+  assert.ok(isInternal('https://accounts.google.com.br/accounts/SetSID'));
 });
 
 test('sends everything else to the system browser', () => {
   assert.ok(!isInternal('https://example.com/'));
   assert.ok(!isInternal('https://youtube.com.evil.test/'));
   assert.ok(!isInternal('https://notgoogle.com/'));
+  assert.ok(!isInternal('https://www.google.de/search?q=x'));
+  assert.ok(!isInternal('https://accounts.google.de.evil.test/'));
+  assert.ok(!isInternal('https://accounts.google.example.test/'));
   assert.ok(!isInternal('javascript:alert(1)'));
   assert.ok(!isInternal('not a url'));
 });
@@ -617,6 +626,12 @@ test('reads page heads, chips, see-all links and table columns', () => {
     strap: [{ text: 'Daft Punk', browseId: 'UCdaft' }],
     thumb: 'https://x/544.jpg',
     description: 'Second album.',
+    play: null,
+    shuffle: null,
+    radio: null,
+    queue: null,
+    owner: '',
+    ownerThumb: '',
   });
   assert.deepEqual(page.chips, [
     { text: 'Workout', selected: false, browseId: 'FEmusic_home', params: 'ggMx' },
@@ -685,4 +700,56 @@ test('drops chips whose params fail the check, falls back for a selected chip', 
     },
   });
   assert.deepEqual(page.chips, [{ text: 'On', selected: true, browseId: 'FEmusic_home', params: 'ggMx' }]);
+});
+
+test('reads the play button, menu and owner of a playlist head', () => {
+  const v = 'iNjGNNoUjkk';
+  const page = parseItems({
+    musicResponsiveHeaderRenderer: {
+      title: { runs: [{ text: 'Road trip' }] },
+      buttons: [
+        { musicPlayButtonRenderer: { playNavigationEndpoint: { watchEndpoint: { videoId: v, playlistId: 'PLroad', params: 'x' } } } },
+        {
+          menuRenderer: {
+            items: [
+              { menuNavigationItemRenderer: { icon: { iconType: 'MUSIC_SHUFFLE' }, navigationEndpoint: { watchPlaylistEndpoint: { playlistId: 'PLroad', params: 'wAEB8gECGAE%3D' } } } },
+              { menuNavigationItemRenderer: { icon: { iconType: 'MIX' }, navigationEndpoint: { watchPlaylistEndpoint: { playlistId: 'RDAMPLPLroad', params: 'wAEB' } } } },
+              { menuServiceItemRenderer: { icon: { iconType: 'QUEUE_PLAY_NEXT' }, serviceEndpoint: { queueAddEndpoint: { queueTarget: { playlistId: 'PLroad' } } } } },
+            ],
+          },
+        },
+      ],
+      facepile: { avatarStackViewModel: { text: { content: ' Sam ' }, avatars: [{ avatarViewModel: { image: { sources: [{ url: 'https://x/88.jpg', width: 88 }, { url: 'javascript:1', width: 200 }] } } }] } },
+    },
+  });
+  const h = page.header;
+  assert.deepEqual(h.play, { watchEndpoint: { videoId: v, playlistId: 'PLroad' } });
+  assert.deepEqual(h.shuffle, { watchPlaylistEndpoint: { playlistId: 'PLroad', params: 'wAEB8gECGAE%3D' } });
+  assert.deepEqual(h.radio, { watchPlaylistEndpoint: { playlistId: 'RDAMPLPLroad', params: 'wAEB' } });
+  assert.deepEqual(h.queue, { playlistId: 'PLroad' });
+  assert.equal(h.owner, 'Sam');
+  assert.equal(h.ownerThumb, 'https://x/88.jpg');
+});
+
+test('reads timed lyrics and picks the recording that fits the track', () => {
+  const lrc = '[ar:Someone]\n[00:01.50] First\n[00:10.00][01:10.25]Chorus\nno stamp\n[00:05.00] Second';
+  assert.deepEqual(parseLrc(lrc), [
+    { time: 1.5, text: 'First' },
+    { time: 5, text: 'Second' },
+    { time: 10, text: 'Chorus' },
+    { time: 70.25, text: 'Chorus' },
+  ]);
+  assert.deepEqual(parseLrc(null), []);
+  const rs = [
+    { duration: 240, syncedLyrics: '[00:01.00] a' },
+    { duration: 201, syncedLyrics: '[00:01.00] b' },
+    { duration: 199, syncedLyrics: null, plainLyrics: 'c' },
+  ];
+  assert.equal(pickSynced(rs, 200).syncedLyrics, '[00:01.00] b');
+  assert.equal(pickSynced(rs, 300), null);
+  assert.equal(pickSynced(rs, 0).duration, 240);
+  assert.equal(pickSynced({ duration: 200, syncedLyrics: '[00:01.00] x' }, 200).duration, 200);
+  assert.equal(lyricsTitle('Play Hard (mit Ne-Yo & Akon)'), 'Play Hard');
+  assert.equal(lyricsTitle('Faded (Official Video)'), 'Faded');
+  assert.equal(lyricsTitle('Out Of Touch (71 Digits Edit)'), 'Out Of Touch (71 Digits Edit)');
 });

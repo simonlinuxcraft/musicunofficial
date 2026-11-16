@@ -2,7 +2,7 @@
 
 // Our own UI. The YouTube Music page plays in a view inside this window (src/main-window.js).
 
-const { app, BrowserWindow, ipcMain, screen, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, net, screen, shell } = require('electron');
 const path = require('path');
 const mainWindow = require('./main-window');
 const player = require('./player');
@@ -165,6 +165,7 @@ function settings() {
     language: store.settings.language || 'system',
     notify: store.settings.notify === true,
     richPresence: player.discordEnabled(),
+    syncedLyrics: store.settings.syncedLyrics !== false,
     videoQuality: store.settings.videoQuality || 'auto',
     sleep: sleep.state(),
     lastfm: lastfm.state(),
@@ -211,6 +212,29 @@ ipcMain.handle('hybrid:lyrics', async (e, videoId) => {
   if (!fromUs(e) || !pure.sanitizeWatch({ videoId })) return null;
   const id = pure.lyricsBrowseId(await page.innertube('/next', { videoId }));
   return id ? pure.parseLyrics(await page.innertube('/browse', { browseId: id })) : { text: '', source: '' };
+});
+
+// Timed lyrics from LRCLIB, which YouTube Music does not hand out. Only title, artist,
+// album and length leave the app, and only while the setting is on.
+const LRCLIB = 'https://lrclib.net/api/search?';
+ipcMain.handle('hybrid:synced-lyrics', async (e, q) => {
+  if (!fromUs(e) || store.settings.syncedLyrics === false || !q || typeof q !== 'object') return null;
+  const title = pure.lyricsTitle(q.title);
+  const artist = pure.primaryArtist(typeof q.artist === 'string' ? q.artist.slice(0, 200) : '');
+  const duration = Number.isFinite(q.duration) && q.duration > 0 ? q.duration : 0;
+  if (!title || !artist) return null;
+  try {
+    const res = await net.fetch(LRCLIB + new URLSearchParams({ track_name: title, artist_name: artist }), {
+      headers: { 'User-Agent': 'MusicUnofficial/' + app.getVersion() + ' (https://github.com/simonlinuxcraft/musicunofficial)' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return null;
+    const hit = pure.pickSynced(await res.json(), duration);
+    const lines = hit ? pure.parseLrc(hit.syncedLyrics) : [];
+    return lines.length ? { lines, source: 'LRCLIB' } : null;
+  } catch {
+    return null;
+  }
 });
 
 ipcMain.handle('hybrid:queue-add', (e, raw, position) => {
@@ -276,6 +300,9 @@ ipcMain.handle('hybrid:setting', (e, key, value) => {
   } else if (key === 'richPresence') {
     player.setDiscord(value);
     tray.rebuild();
+  } else if (key === 'syncedLyrics') {
+    store.settings.syncedLyrics = value;
+    store.saveSettings();
   } else if (key === 'sleep') {
     sleep.set(value);
     player.sync();

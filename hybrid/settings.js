@@ -145,6 +145,15 @@ function renderSettings(s) {
       field(T.setNotify, checkbox('set-notify', s.notify, (v) => set('notify', v)), T.setNotifyHint),
       field(T.setDiscord, checkbox('set-discord', s.richPresence, (v) => set('richPresence', v))),
       field(
+        T.setSynced,
+        checkbox('set-synced', s.syncedLyrics, (v) => {
+          // Lyrics fetched under the old setting go, the open views load again.
+          syncedCache.clear();
+          set('syncedLyrics', v).then(trackChanged);
+        }),
+        T.setSyncedHint
+      ),
+      field(
         T.setQuality,
         select('set-quality', [['auto', T.qualityAuto], ...QUALITY_LABELS], s.videoQuality, (v) => set('videoQuality', v)),
         T.setQualityHint

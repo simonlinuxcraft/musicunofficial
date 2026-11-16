@@ -416,6 +416,14 @@ function emptyState(v) {
   return box;
 }
 
+// The head's colour when the cover has none of its own.
+const RED_TINT = '#c4001f';
+// rgb(r g b) with channels close together: black, white or grey.
+function isGrey(rgb) {
+  const c = (rgb.match(/\d+/g) || []).map(Number);
+  return c.length < 3 || Math.max(...c) - Math.min(...c) < 28;
+}
+
 // Head of a playlist, album or artist page.
 function renderHero(h) {
   const hero = $('hero');
@@ -423,6 +431,7 @@ function renderHero(h) {
   main.classList.toggle('has-hero', !!h);
   main.style.removeProperty('--tint');
   if (!h) return;
+  main.style.setProperty('--tint', RED_TINT);
   hero.className = h.kind;
   $('hero-title').textContent = h.title;
   $('hero-desc').textContent = h.description;
@@ -433,13 +442,25 @@ function renderHero(h) {
   const meta = $('hero-meta');
   meta.replaceChildren();
   const bits = [];
-  if (h.strap.length) bits.push(subLine({}, h.strap));
+  // Who made it, with their picture: the album's artist or the playlist's owner.
+  if (h.ownerThumb || h.owner || h.strap.length) {
+    const who = document.createElement('span');
+    who.className = 'who';
+    if (h.ownerThumb) {
+      const img = document.createElement('img');
+      img.alt = '';
+      img.src = h.ownerThumb;
+      who.append(img);
+    }
+    if (h.strap.length) who.append(...subLine({}, h.strap).childNodes);
+    else if (h.owner) who.append(h.owner);
+    bits.push(who);
+  }
   if (h.kind === 'artist' ? h.subtitle : rest.length) bits.push(h.kind === 'artist' ? h.subtitle : rest.join(' \u2022 '));
   if (h.second) bits.push(h.second);
   bits.forEach((b, i) => {
     if (i) meta.append(' \u2022 ');
-    if (typeof b === 'string') meta.append(b);
-    else meta.append(...b.childNodes);
+    meta.append(b);
   });
   if (h.kind === 'artist') {
     hero.style.backgroundImage = h.thumb ? 'url("' + h.thumb.replace(/["\\]/g, encodeURIComponent) + '")' : '';
@@ -450,8 +471,9 @@ function renderHero(h) {
   }
   const v = view;
   if (h.thumb) {
+    // A grey cover, or one served without CORS headers (liked songs), keeps YouTube Music's red.
     coverColor(h.thumb).then(
-      (c) => view === v && main.style.setProperty('--tint', c),
+      (c) => view === v && !isGrey(c) && main.style.setProperty('--tint', c),
       () => {}
     );
   }
@@ -470,7 +492,10 @@ async function show(next) {
   $('heading').hidden = false;
   $('actions').hidden = true;
   $('chips').hidden = true;
+  // The compact bar and the table head's offset belong to the page being left.
   $('sticky').classList.remove('show');
+  main.classList.remove('stuck');
+  main.style.setProperty('--sticky-h', '0px');
   renderHero(null);
   renderTabs(next);
   pagerWatch.disconnect();
@@ -521,24 +546,34 @@ async function show(next) {
   checkMore();
 }
 
+// YouTube Music's own params for "shuffle this playlist", as its playlist menus send them.
+const SHUFFLE_PARAMS = 'wAEB8gECGAE%3D';
+const listOf = (ep) => ep?.watchEndpoint?.playlistId || ep?.watchPlaylistEndpoint?.playlistId || null;
+
 // Play, shuffle, save, subscribe and the page's menu, as buttons under the head.
 function renderActions(page, v) {
-  // Play and shuffle only where the page is a list of its own (playlist, album, artist), which the shuffle entry marks.
+  // Play and shuffle where the page is a list of its own: a playlist, an album, an artist.
+  // The head's own buttons first; a playlist without them (liked songs) gets them built from its id.
   const first = page.items.find((i) => i.watch);
-  const shuffle = page.shuffle ? { watchPlaylistEndpoint: page.shuffle } : page.header?.shuffle || null;
-  const playable = !!(first && shuffle);
+  const h = page.header;
+  const listId = listOf(h?.play) || (v.browseId?.startsWith('VL') ? v.browseId.slice(2) : null);
+  const playEp = h?.play || (first && { watchEndpoint: listId ? { videoId: first.watch.videoId, playlistId: listId } : first.watch });
+  const shuffle =
+    h?.shuffle || (page.shuffle && { watchPlaylistEndpoint: page.shuffle }) || (listId && first ? { watchPlaylistEndpoint: { playlistId: listId, params: SHUFFLE_PARAMS } } : null);
+  const playable = !!first && !!(h || page.shuffle);
   const lib = page.library && (page.library.saved ? page.library.unsave : page.library.save) ? page.library : null;
   const sub = page.subscribe && signedIn !== null ? page.subscribe : null;
   const more = pageEntries(page).length > 0;
   // Find and sort where the page is one list of its own: a playlist, an album, an artist's songs.
   const table = !!page.header && page.items.length > 4 && page.sections.some((s) => isTable(s, v));
-  $('play-all').hidden = $('shuffle-all').hidden = !playable;
+  $('play-all').hidden = !playable;
+  $('shuffle-all').hidden = !playable || !shuffle;
   $('save-lib').hidden = !lib;
   $('subscribe').hidden = !sub;
   $('page-more').hidden = !more;
   $('list-tools').hidden = !table;
   $('actions').hidden = !playable && !lib && !sub && !more && !table;
-  const playFirst = () => first && play({ watchEndpoint: first.watch }, first.watch.videoId);
+  const playFirst = () => playEp && play(playEp, playEp.watchEndpoint?.videoId || first.watch.videoId);
   $('play-all').onclick = $('sticky-play').onclick = playFirst;
   $('sticky-title').textContent = page.header ? page.header.title : v.title;
   $('shuffle-all').onclick = () => play(shuffle);
@@ -671,6 +706,8 @@ new IntersectionObserver(
     const e = entries[0];
     const show = !$('actions').hidden && !$('hero').hidden && !e.isIntersecting && e.boundingClientRect.top < e.rootBounds.top + 10;
     $('sticky').classList.toggle('show', show);
+    // The table head gets a backdrop only once it sits under the bar; before, the page's colour shows through.
+    main.classList.toggle('stuck', show);
     main.style.setProperty('--sticky-h', show ? '64px' : '0px');
   },
   { root: main, threshold: 0 }
@@ -987,8 +1024,15 @@ function manyEntries(items) {
 // The page's own menu: editing a playlist of the account's own. Save and subscribe are buttons.
 function pageEntries(page) {
   const out = [];
-  if (page.header?.radio) out.push({ label: T.radio, icon: ICONS.radio, run: () => play(page.header.radio) });
+  const h = page.header;
+  if (h?.radio) out.push({ label: T.radio, icon: ICONS.radio, run: () => play(h.radio) });
+  if (h?.queue) {
+    out.push({ label: T.playNext, icon: ICONS.next, run: () => queueAdd(h.queue, 'INSERT_AFTER_CURRENT_VIDEO', T.addedNext, h.thumb) });
+    out.push({ label: T.addQueue, icon: ICONS.queue, run: () => queueAdd(h.queue, 'INSERT_AT_END', T.addedQueue, h.thumb) });
+  }
+  if (h && view?.browseId) out.push({ label: T.copyLink, icon: ICONS.link, run: () => copyLink({ browseId: view.browseId }) });
   const own = page.own;
+  if (own) out.push('-');
   if (!own) return out;
   out.push({ label: T.rename, icon: ICONS.edit, run: () => renamePlaylist(own) });
   for (const privacy of ['PRIVATE', 'UNLISTED', 'PUBLIC']) {

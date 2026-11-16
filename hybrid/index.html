@@ -21,7 +21,7 @@
         --fg3: #7a7a7a;
         --accent: #ff0033;
         --font: 'Adwaita Sans', Cantarell, Inter, Ubuntu, system-ui, sans-serif;
-        --tint: #3a3a3a;
+        --tint: #c4001f;
         /* Native parts (suggestion list, dialog) in dark too. */
         color-scheme: dark;
       }
@@ -136,6 +136,8 @@
       .nav-btn .on, .nav-btn[aria-current='true'] .off { display: none; }
       .nav-btn[aria-current='true'] .on { display: block; }
       #lib { display: flex; flex-direction: column; min-height: 0; overflow: hidden; padding-top: 6px; }
+      /* Only the list may shrink; the head, chips and tools keep their height. */
+      #lib-head, #lib-chips, #lib-tools, #lib-note { flex: 0 0 auto; }
       #lib-head { display: flex; align-items: center; justify-content: space-between; padding: 0 8px 0 4px; }
       #lib-new { color: var(--fg2); }
       #lib-chips { display: flex; gap: 8px; padding: 10px 16px 4px; overflow-x: auto; }
@@ -148,7 +150,7 @@
       #lib-sort { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; padding: 4px 6px; border-radius: 6px; color: var(--fg2); font-size: 13px; }
       #lib-sort:hover { color: var(--fg); }
       #lib-sort svg { width: 16px; height: 16px; }
-      #lib-list { overflow-y: auto; padding: 4px 8px 8px; }
+      #lib-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 4px 8px 8px; }
       .lrow { display: flex; align-items: center; gap: 12px; width: 100%; padding: 6px 8px; border-radius: 6px; text-align: left; }
       .lrow:hover { background: var(--s2); }
       .lrow[aria-current='true'] { background: var(--s3); }
@@ -169,7 +171,8 @@
       body.rail .lrow { justify-content: center; padding: 6px 0; }
 
       main { grid-column: 2; position: relative; overflow-y: auto; border-radius: 10px; background: var(--s1); container-type: inline-size; container-name: page; }
-      main.has-hero { background: linear-gradient(180deg, color-mix(in srgb, var(--tint) 34%, var(--s1)) 0, var(--s1) 620px) var(--s1); background-attachment: local; }
+      /* One gradient from the head down into the list, so there is no edge under the head. */
+      main.has-hero { background: linear-gradient(180deg, color-mix(in srgb, var(--tint) 78%, var(--s1)) 0, color-mix(in srgb, var(--tint) 38%, var(--s1)) 340px, var(--s1) 720px) var(--s1); background-attachment: local; }
       #inner { max-width: 1440px; margin: 0 auto; padding: 20px 24px 32px; }
       #inner.fade { animation: page-in 180ms ease-out; }
       @keyframes page-in { from { opacity: 0; transform: translateY(6px); } }
@@ -194,13 +197,15 @@
       #sticky .bigplay { width: 44px; height: 44px; }
       #sticky .bigplay svg { width: 22px; height: 22px; }
 
-      #hero { display: flex; align-items: flex-end; gap: 24px; padding: 32px 24px 24px; background: linear-gradient(180deg, color-mix(in srgb, var(--tint) 85%, #fff 4%), color-mix(in srgb, var(--tint) 50%, var(--s1))); }
-      #hero-art { flex: 0 0 auto; width: clamp(140px, 26cqi, 232px); aspect-ratio: 1; border-radius: 6px; object-fit: cover; box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55); background: var(--s3); }
+      #hero { display: flex; align-items: flex-end; gap: 28px; padding: 40px 24px 28px; }
+      #hero-art { flex: 0 0 auto; width: clamp(140px, 26cqi, 232px); aspect-ratio: 1; border-radius: 8px; object-fit: cover; box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5); background: var(--s3); }
       #hero-text { min-width: 0; }
       #hero-type { font-size: 13px; font-weight: 600; }
       #hero-title { margin: 6px 0 10px; font-size: clamp(30px, 8cqi, 88px); font-weight: 900; line-height: 1.02; letter-spacing: -0.045em; overflow-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; }
       #hero-desc { max-width: 80ch; color: rgba(255, 255, 255, 0.72); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; user-select: text; }
-      #hero-meta { margin-top: 6px; color: rgba(255, 255, 255, 0.85); }
+      #hero-meta { margin-top: 8px; color: rgba(255, 255, 255, 0.85); }
+      #hero-meta .who { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; font-weight: 700; color: #fff; }
+      #hero-meta .who img { width: 24px; height: 24px; border-radius: 50%; object-fit: cover; }
       #hero-meta b { color: #fff; font-weight: 700; }
       #hero.artist { position: relative; display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-end; min-height: clamp(220px, 36vh, 380px); background: var(--s2) center 22% / cover no-repeat; }
       #hero.artist::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0, 0, 0, 0.1) 30%, rgba(0, 0, 0, 0.6)); }
@@ -216,7 +221,7 @@
 
       #chips, #tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
       h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; margin-bottom: 18px; }
-      #actions { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+      #actions { display: flex; align-items: center; gap: 18px; margin-bottom: 22px; }
       .bigplay { display: grid; place-items: center; flex: 0 0 auto; width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: #000; box-shadow: 0 8px 20px rgba(255, 0, 51, 0.22); transition: transform 120ms; }
       .bigplay:hover { transform: scale(1.05); background: #ff1a47; }
       .bigplay svg { width: 28px; height: 28px; }
@@ -289,7 +294,8 @@
       /* Track lists as a table: number, title, album or plays, rating, length. */
       .table { --cols: 32px minmax(0, 1fr) 32px; }
       .thead, .trow { display: grid; grid-template-columns: var(--cols); align-items: center; gap: 16px; padding: 0 12px; }
-      .thead { position: sticky; top: var(--sticky-h, 0px); z-index: 3; height: 36px; margin-bottom: 8px; border-bottom: 1px solid var(--line); background: var(--s1); color: var(--fg2); font-size: 13px; }
+      .thead { position: sticky; top: var(--sticky-h, 0px); z-index: 3; height: 36px; margin-bottom: 8px; border-bottom: 1px solid var(--line); color: var(--fg2); font-size: 13px; transition: background 160ms; }
+      main.stuck .thead, main:not(.has-hero) .thead { background: var(--s1); }
       .thead .r, .trow .r { text-align: right; justify-self: end; }
       .thead svg { width: 16px; height: 16px; }
       .trow { height: 56px; border-radius: 6px; cursor: pointer; content-visibility: auto; contain-intrinsic-size: auto 56px; }
@@ -313,7 +319,8 @@
       .rate { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--fg2); opacity: 0; }
       .rate:hover { color: var(--fg); }
       .rate .on, .rate[aria-pressed='true'] .off { display: none; }
-      .rate[aria-pressed='true'] { opacity: 1; color: var(--fg); }
+      .rate[aria-pressed='true'] { opacity: 1; color: var(--fg2); }
+      .trow:hover .rate[aria-pressed='true'] { color: var(--fg); }
       .rate[aria-pressed='true'] .on { display: block; }
       .trow:hover .rate, .trow:focus-within .rate { opacity: 1; }
       .eq { align-items: flex-end; gap: 2px; height: 14px; }
@@ -573,7 +580,7 @@
       }
 
       /* The now-playing view: blurred cover behind, the cover or video, lyrics beside it. */
-      #stage { grid-column: 2; position: relative; display: grid; grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border-radius: 10px; background: #000; }
+      #stage { grid-column: 2; position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border-radius: 10px; background: #000; }
       #stage-bg { position: absolute; inset: -12%; width: 124%; height: 124%; object-fit: cover; filter: blur(64px) saturate(1.35) brightness(0.5); }
       #stage-top { position: relative; display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px 24px; }
       #stage-label { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 700; color: rgba(255, 255, 255, 0.8); }
@@ -585,10 +592,18 @@
       #stage-artist { margin-top: 4px; font-size: 17px; color: rgba(255, 255, 255, 0.75); }
       #stage-lyrics { max-height: 100%; overflow-y: auto; padding: 24px 0; white-space: pre-line; font-size: 28px; font-weight: 800; line-height: 1.45; letter-spacing: -0.01em; color: rgba(255, 255, 255, 0.86); user-select: text; mask-image: linear-gradient(transparent, #000 24px, #000 calc(100% - 48px), transparent); }
       #stage-lyrics.none { font-size: 17px; font-weight: 600; color: rgba(255, 255, 255, 0.6); }
+      /* Timed lyrics: the line being sung lights up, those sung fade back; a click plays from a line. */
+      .synced { white-space: normal; }
+      .synced p { margin: 0 0 6px; color: rgba(255, 255, 255, 0.5); cursor: pointer; transition: color 220ms, transform 220ms; transform-origin: left center; }
+      .synced p.past { color: rgba(255, 255, 255, 0.3); }
+      .synced p.now { color: #fff; transform: scale(1.02); }
+      .synced p:hover { color: rgba(255, 255, 255, 0.85); }
+      #stage-lyrics.synced { color: inherit; }
       #stage-video { display: none; }
-      #stage.video #stage-body { grid-template-columns: minmax(0, 1fr); padding: 0 12px 12px; }
+      /* A music video as large as the view allows, at its own aspect, so no black bars show. */
+      #stage.video #stage-body { display: flex; align-items: center; justify-content: center; padding: 0 12px 12px; }
       #stage.video #stage-song, #stage.video #stage-lyrics { display: none; }
-      #stage.video #stage-video { display: block; height: 100%; border-radius: 8px; background: #000; }
+      #stage.video #stage-video { display: block; flex: 0 0 auto; width: 640px; height: 360px; background: #000; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55); }
       #av { display: flex; flex: 0 0 auto; padding: 3px; border-radius: 16px; background: rgba(0, 0, 0, 0.35); }
       #av button { padding: 5px 14px; border-radius: 13px; font-size: 13px; font-weight: 600; color: rgba(255, 255, 255, 0.75); }
       #av button[aria-pressed='true'] { background: #fff; color: #000; }
@@ -855,7 +870,7 @@
           <div id="lib-tools" hidden>
             <div id="lib-filter-box">
               <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" /></svg>
-              <input id="lib-filter" type="text" spellcheck="false" autocomplete="off" data-ph="libFilter" data-aria="libFilter" />
+              <input id="lib-filter" type="text" spellcheck="false" autocomplete="off" data-ph="libFilterShort" data-aria="libFilter" />
             </div>
             <button id="lib-sort"><span></span><svg viewBox="0 0 24 24"><path d="M3 18h6v-2H3zM3 6v2h18V6zm0 7h12v-2H3z" /></svg></button>
           </div>
