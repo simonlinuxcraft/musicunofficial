@@ -9,6 +9,8 @@ const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
 const LIST_ID = /^[A-Za-z0-9_-]{2,64}$/;
 const BROWSE_ID = /^[A-Za-z0-9_-]{2,128}$/;
 const PARAMS = /^[A-Za-z0-9%_=-]{1,100}$/;
+// Browse and search params of chips and "see all" links run longer than a watch's.
+const PAGE_PARAMS = /^[A-Za-z0-9%_=-]{1,400}$/;
 const CONTINUATION = /^[A-Za-z0-9%_=-]{8,4000}$/;
 const TOKEN = /^[A-Za-z0-9%_=-]{8,1000}$/;
 const SET_VIDEO_ID = /^[A-Za-z0-9_-]{1,64}$/;
@@ -243,11 +245,18 @@ function buildChange(c) {
     case 'like':
       if (!matching(c.like, LIST_ID) || !['LIKE', 'INDIFFERENT'].includes(c.status)) return null;
       return [c.status === 'LIKE' ? '/like/like' : '/like/removelike', { target: { playlistId: c.like } }];
+    case 'rate': {
+      const path = { LIKE: '/like/like', DISLIKE: '/like/dislike', INDIFFERENT: '/like/removelike' }[pick(c.status, LIKE_STATES)];
+      return path && matching(c.videoId, VIDEO_ID) && [path, { target: { videoId: c.videoId } }];
+    }
     case 'subscribe':
       if (!matching(c.channelId, BROWSE_ID)) return null;
       return [c.on ? '/subscription/subscribe' : '/subscription/unsubscribe', { channelIds: [c.channelId] }];
-    case 'create':
-      return title && ids && ['/playlist/create', { title, privacyStatus: 'PRIVATE', videoIds: ids }];
+    case 'create': {
+      // Empty from the library's + button, with tracks from a menu.
+      const none = Array.isArray(c.videoIds) && !c.videoIds.length;
+      return title && (ids || none) && ['/playlist/create', { title, privacyStatus: 'PRIVATE', ...(ids ? { videoIds: ids } : {}) }];
+    }
     case 'add':
       return list && ids && editPlaylist(list, ids.map((id) => ({ action: 'ACTION_ADD_VIDEO', addedVideoId: id })));
     case 'remove': {
@@ -281,13 +290,29 @@ function parseItems(json) {
   let library = null;
   let subscribe = null;
   let own = null;
+  let header = null;
+  let chips = null;
+  // Rows inside search's top result card belong beside it, not in the list under it.
+  let underTop = false;
   const runsOf = (t) => (Array.isArray(t?.runs) ? t.runs.filter((r) => typeof r?.text === 'string') : []);
-  const text = (t) => runsOf(t).map((r) => r.text).join('').trim().slice(0, 256);
+  const text = (t, max = 256) => runsOf(t).map((r) => r.text).join('').trim().slice(0, max);
   const browseOf = (b) => matching(b?.browseId, BROWSE_ID);
+  // A browse or search target with its params, as chips and "see all" links carry them.
+  const target = (b) => {
+    // Params that fail the check drop the target; without them it would open the unfiltered page.
+    if (b?.params !== undefined && !matching(b.params, PAGE_PARAMS)) return null;
+    const params = matching(b?.params, PAGE_PARAMS);
+    if (b?.query !== undefined) {
+      const query = typeof b.query === 'string' ? b.query.trim().slice(0, 200) : '';
+      return query ? { query, params } : null;
+    }
+    const browseId = browseOf(b);
+    return browseId ? { browseId, params } : null;
+  };
   // The smallest picture that is still sharp at the size it is shown, so a long
   // list does not decode 544 px covers for 48 px rows.
   const thumb = (t, min) => {
-    const raw = t?.musicThumbnailRenderer?.thumbnail?.thumbnails;
+    const raw = (t?.musicThumbnailRenderer || t?.croppedSquareThumbnailRenderer)?.thumbnail?.thumbnails;
     const list = (Array.isArray(raw) ? raw : []).filter((x) => httpsUrl(x?.url)).sort((a, b) => (a.width || 0) - (b.width || 0));
     if (!list.length) return '';
     return (list.find((x) => x.width >= min) || list[list.length - 1]).url;
@@ -325,6 +350,7 @@ function parseItems(json) {
       if (!item.albumId && r.browseId.startsWith('MPRE')) item.albumId = r.browseId;
     }
     menuOf(menu, item);
+    item.underTop = underTop;
     if (!item.play) item.play = item.watch ? { watchEndpoint: item.watch } : null;
     if (!section) sections.push((section = { title: '', items: [] }));
     section.items.push(item);
@@ -332,8 +358,57 @@ function parseItems(json) {
   };
   const overlayPlay = (o) => o?.musicItemThumbnailOverlayRenderer?.content?.musicPlayButtonRenderer?.playNavigationEndpoint;
   const shelfTitle = (sh) => text(sh.title) || text(Object.values(sh.header || {})[0]?.title);
+  const shelfMore = (sh) =>
+    target(Object.values(sh.header || {})[0]?.moreContentButton?.buttonRenderer?.navigationEndpoint?.browseEndpoint) ||
+    target(sh.bottomEndpoint?.browseEndpoint) ||
+    target(sh.bottomEndpoint?.searchEndpoint);
+  const ROUND = ['MUSIC_PAGE_TYPE_ARTIST', 'MUSIC_PAGE_TYPE_USER_CHANNEL', 'MUSIC_PAGE_TYPE_LIBRARY_ARTIST'];
+  // The head of a playlist, album or artist page: what the page is, drawn above its list.
+  const headerOf = (o) => {
+    const l = o.musicResponsiveHeaderRenderer || o.musicDetailHeaderRenderer;
+    if (l) {
+      return {
+        kind: 'list',
+        title: text(l.title),
+        subtitle: text(l.subtitle),
+        second: text(l.secondSubtitle),
+        strap: parts(l.straplineTextOne),
+        thumb: thumb(l.thumbnail, 400),
+        description: text(l.description?.musicDescriptionShelfRenderer?.description || l.description, 1200),
+      };
+    }
+    const a = o.musicImmersiveHeaderRenderer || o.musicVisualHeaderRenderer;
+    if (!a) return null;
+    return {
+      kind: 'artist',
+      title: text(a.title),
+      subtitle: text(a.monthlyListenerCount) || text(a.subscriptionButton?.subscribeButtonRenderer?.subscriberCountText),
+      second: '',
+      strap: [],
+      thumb: thumb(a.thumbnail, 1400) || thumb(a.foregroundThumbnail, 400),
+      description: text(a.description, 1200),
+      // The artist's own shuffle and radio, from the head's two buttons.
+      shuffle: sanitizeEndpoint(a.playButton?.buttonRenderer?.navigationEndpoint),
+      radio: sanitizeEndpoint(a.startRadioButton?.buttonRenderer?.navigationEndpoint),
+    };
+  };
+  const chipOf = (c) => {
+    const to$ = (nav) => target(nav?.browseEndpoint || nav?.searchEndpoint);
+    const to = (c.isSelected === true && to$(c.onDeselectedCommand)) || to$(c.navigationEndpoint);
+    const label = text(c.text, 64);
+    return to && label ? { text: label, selected: c.isSelected === true, ...to } : null;
+  };
   // A list row, a card or the top result. menuOf() and push() fill in the rest.
-  const entry = ({ index = '', title, subtitle, parts, thumb, card = false, watch, browse, play }) => ({
+  const entry = ({ index = '', title, subtitle, parts, thumb, card = false, watch, browse, play, row = {} }) => ({
+    byline: row.byline || parts,
+    album: row.album || null,
+    extra: row.extra || '',
+    duration: row.duration || '',
+    explicit: row.explicit === true,
+    like: row.like || null,
+    round: !watch && ROUND.includes(pageType(browse)),
+    top: row.top === true,
+    underTop: false,
     play: sanitizeEndpoint(play),
     shuffle: null,
     radio: null,
@@ -362,6 +437,10 @@ function parseItems(json) {
     const sb = o.subscribeButtonRenderer;
     if (!subscribe && matching(sb?.channelId, BROWSE_ID)) subscribe = { channelId: sb.channelId, subscribed: sb.subscribed === true };
     if (!own && o.musicPlaylistEditHeaderRenderer) own = { privacy: pick(o.musicPlaylistEditHeaderRenderer.privacy, PRIVACY) };
+    if (!header) header = headerOf(o);
+    if (!chips && Array.isArray(o.chipCloudRenderer?.chips)) {
+      chips = o.chipCloudRenderer.chips.map((c) => c?.chipCloudChipRenderer && chipOf(c.chipCloudChipRenderer)).filter(Boolean).slice(0, 20);
+    }
     if (!shuffle && o.icon?.iconType === 'MUSIC_SHUFFLE') shuffle = sanitizePlaylistWatch(o.navigationEndpoint?.watchPlaylistEndpoint);
     if (!next) {
       const token = o.continuationItemRenderer?.continuationEndpoint?.continuationCommand?.token || o.nextContinuationData?.continuation;
@@ -377,9 +456,28 @@ function parseItems(json) {
       const play = overlayPlay(li.overlay);
       const titleWatch = runsOf(cols[0])[0]?.navigationEndpoint?.watchEndpoint;
       const rowWatch = li.playlistItemData && { videoId: li.playlistItemData.videoId };
-      const watch = sanitizeWatch(play?.watchEndpoint || titleWatch || rowWatch);
+      const watch = sanitizeWatch(play?.watchEndpoint || titleWatch || rowWatch || li.navigationEndpoint?.watchEndpoint);
+      const byline = parts(cols[1]);
       const links = parts(cols[1]);
       for (const f of fixed) links.push(...(links.length ? [{ text: ' • ', browseId: null }] : []), { text: f, browseId: null });
+      // Past the byline: the album as a link (playlists, artist pages), else plays or views.
+      let album = null;
+      let extra = '';
+      for (const c of cols.slice(2)) {
+        const al = runsOf(c).find((r) => browseOf(r.navigationEndpoint?.browseEndpoint)?.startsWith('MPRE'));
+        if (al && !album) album = { text: al.text.slice(0, 256), browseId: browseOf(al.navigationEndpoint.browseEndpoint) };
+        else if (!al && !extra) extra = text(c);
+      }
+      const top = li.menu?.menuRenderer?.topLevelButtons;
+      const lb = (Array.isArray(top) ? top : []).map((b) => b?.likeButtonRenderer).find(Boolean);
+      const row = {
+        byline,
+        album,
+        extra,
+        duration: fixed.find((f) => /^\d{1,2}(:\d\d){1,2}$/.test(f)) || '',
+        explicit: (Array.isArray(li.badges) ? li.badges : []).some((b) => b?.musicInlineBadgeRenderer?.icon?.iconType === 'MUSIC_EXPLICIT_BADGE'),
+        like: watch && lb?.target?.videoId === watch.videoId ? pick(lb.likeStatus, LIKE_STATES) : null,
+      };
       const item = entry({
         index: text(li.index),
         title: text(cols[0]),
@@ -389,6 +487,7 @@ function parseItems(json) {
         watch,
         browse: li.navigationEndpoint?.browseEndpoint,
         play,
+        row,
       });
       push(item, li.menu, links);
     } else if (card) {
@@ -413,18 +512,24 @@ function parseItems(json) {
         title: text(top.title),
         subtitle: text(top.subtitle),
         parts: links,
-        thumb: thumb(top.thumbnail, 96),
+        thumb: thumb(top.thumbnail, 226),
         watch: sanitizeWatch(nav.watchEndpoint),
         browse: nav.browseEndpoint,
         play: overlayPlay(top.thumbnailOverlay),
+        row: { top: true },
       });
+      // A section of its own, so the card and its rows are not mixed into the list before it.
+      section = null;
       push(item, top.menu, links);
+      underTop = true;
       for (const c of top.contents || []) walk(c);
+      underTop = false;
+      section = null;
     } else if (shelf) {
       // A titled shelf opens its own section; whatever follows it starts a fresh one.
       section = null;
       const title = shelfTitle(shelf);
-      if (title) sections.push((section = { title, items: [] }));
+      if (title) sections.push((section = { title, items: [], more: shelfMore(shelf) }));
       for (const k in shelf) walk(shelf[k]);
       section = null;
     } else {
@@ -432,7 +537,23 @@ function parseItems(json) {
     }
   };
   walk(json);
-  return { items: out, sections: sections.filter((x) => x.items.length), shuffle, next, library, subscribe, own };
+  return { items: out, sections: sections.filter((x) => x.items.length), shuffle, next, library, subscribe, own, header, chips: chips || [] };
+}
+
+// The signed-in account's name and picture, from the account menu.
+function parseAccount(json) {
+  let h = null;
+  const walk = (o) => {
+    if (h || !o || typeof o !== 'object') return;
+    if (o.activeAccountHeaderRenderer) h = o.activeAccountHeaderRenderer;
+    else for (const k in o) walk(o[k]);
+  };
+  walk(json);
+  if (!h) return null;
+  const text = (t) => (Array.isArray(t?.runs) ? t.runs.map((r) => (typeof r?.text === 'string' ? r.text : '')).join('').trim().slice(0, 128) : '');
+  const photos = (Array.isArray(h.accountPhoto?.thumbnails) ? h.accountPhoto.thumbnails : []).filter((x) => httpsUrl(x?.url));
+  const photo = photos.sort((a, b) => (a.width || 0) - (b.width || 0)).find((x) => x.width >= 64) || photos[photos.length - 1];
+  return { name: text(h.accountName), handle: text(h.channelHandle), photo: photo ? photo.url : '' };
 }
 
 // The "Lyrics" tab of a /next response points at a page of its own.
@@ -472,7 +593,8 @@ function parseSuggestions(json) {
     for (const k in o) walk(o[k]);
   };
   walk(json);
-  return out;
+  // Under the typed completions YouTube Music suggests artists, songs and albums directly.
+  return { texts: out, items: parseItems(json).items.slice(0, 6) };
 }
 
 // The account's playlists offered by "Save to playlist".
@@ -642,6 +764,8 @@ module.exports = {
   lyricsBrowseId,
   parseLyrics,
   parseSuggestions,
+  parseAccount,
+  PAGE_PARAMS,
   parsePlaylistOptions,
   sanitizeLinks,
   onDisplays,

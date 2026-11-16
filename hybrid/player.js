@@ -60,8 +60,10 @@ function drawProgress() {
   if (seek.max !== max) seek.max = max;
   const pos = scrubbing ? Number(seek.value) : positionNow();
   if (!scrubbing) seek.value = Math.floor(pos);
-  const time = dur ? fmt(pos) + ' / ' + fmt(dur) : '';
-  if (time !== lastTime) $('time').textContent = lastTime = time;
+  const time = dur ? fmt(pos) : '';
+  if (time !== lastTime) $('t-pos').textContent = lastTime = time;
+  const total = dur ? fmt(dur) : '';
+  if ($('t-dur').textContent !== total) $('t-dur').textContent = total;
 }
 
 // Average colour of the cover, capped so a white cover cannot wash out the text over it.
@@ -81,21 +83,30 @@ function coverColor(url) {
   });
 }
 
+// The bar and the lyrics card of the side panel take the cover's colour.
 async function tintBar(art) {
-  const bar = document.querySelector('footer');
-  if (!art) return bar.style.removeProperty('--cover');
+  const targets = [document.querySelector('footer'), $('np-lyrics')];
+  const clear = () => targets.forEach((t, i) => t.style.removeProperty(i ? '--np' : '--cover'));
+  if (!art) return clear();
   // A newer track may have arrived while this one decoded.
   try {
     const color = await coverColor(art);
-    if (art === lastArt) bar.style.setProperty('--cover', color);
+    if (art === lastArt) targets.forEach((t, i) => t.style.setProperty(i ? '--np' : '--cover', color));
   } catch {
-    if (art === lastArt) bar.style.removeProperty('--cover');
+    if (art === lastArt) clear();
   }
 }
 
 function applyLike(like) {
-  $('like').setAttribute('aria-pressed', String(like === 'LIKE'));
+  for (const id of ['like', 'np-like']) $(id).setAttribute('aria-pressed', String(like === 'LIKE'));
   $('dislike').setAttribute('aria-pressed', String(like === 'DISLIKE'));
+}
+
+// Loudness in three steps on the button, the fill on the slider.
+function drawVolume(volume, muted) {
+  const v = muted ? 0 : volume;
+  $('mute').dataset.level = String(muted || v === 0 ? 0 : v < 34 ? 1 : v < 67 ? 2 : 3);
+  $('volume').style.setProperty('--vol', v + '%');
 }
 
 function applyControls(c) {
@@ -110,6 +121,7 @@ function applyControls(c) {
   $('mute').classList.toggle('muted', c.muted);
   // Not while the slider is being dragged, or the page's older value yanks it back.
   if (document.activeElement !== $('volume')) $('volume').value = c.muted ? 0 : c.volume;
+  drawVolume(Number($('volume').value), c.muted);
 }
 
 const refreshControls = () => api.controls().then(applyControls, quiet);
@@ -126,17 +138,31 @@ async function loadNowLinks(id, tries = 0) {
     if (tries < 4) setTimeout(() => loadNowLinks(id, tries + 1), 800);
     return;
   }
-  const box = $('artist');
-  box.replaceChildren();
+  nowArtists = { artists, album };
+  drawArtistLinks();
+}
+
+// The playing track's artists and album as links, in the bar, the side panel and the big view.
+let nowArtists = null;
+function drawArtistLinks() {
   const linkTo = (l) => link(l.text, () => openPage(l.text, l.browseId));
-  artists.forEach((l, i) => {
-    if (i) box.append(', ');
-    box.append(linkTo(l));
-  });
-  if (album) box.append(' \u2022 ', linkTo(album));
+  for (const id of ['artist', 'np-artist', 'stage-artist']) {
+    const box = $(id);
+    if (!nowArtists) {
+      box.textContent = !track ? '' : track.ad ? T.adHint : track.artist;
+      continue;
+    }
+    box.replaceChildren();
+    nowArtists.artists.forEach((l, i) => {
+      if (i) box.append(', ');
+      box.append(linkTo(l));
+    });
+    if (nowArtists.album && id !== 'np-artist') box.append(' \u2022 ', linkTo(nowArtists.album));
+  }
 }
 
 api.onTrack((t) => {
+  if (!uiReady) return;
   const has = !!(t && t.title);
   const art = has ? t.art || '' : '';
   track = has ? t : null;
@@ -157,6 +183,10 @@ api.onTrack((t) => {
     lastArt = art;
     // Quoted and escaped so a stray quote cannot end the value; main only passes https urls anyway.
     $('art').style.backgroundImage = art ? 'url("' + art.replace(/["\\]/g, encodeURIComponent) + '")' : '';
+    for (const id of ['np-art', 'stage-bg', 'stage-art']) {
+      if (art) $(id).src = art;
+      else $(id).removeAttribute('src');
+    }
     tintBar(art);
   }
 
@@ -164,15 +194,15 @@ api.onTrack((t) => {
   const id = has ? [t.videoId, t.title, t.artist, !!t.ad].join('\n') : null;
   if (id !== lastId) {
     lastId = id;
-    $('title').textContent = !has ? T.nothing : t.ad ? T.ad : t.title;
-    $('artist').textContent = !has ? '' : t.ad ? T.adHint : t.artist;
+    const title = !has ? T.nothing : t.ad ? T.ad : t.title;
+    $('title-text').textContent = $('np-title').textContent = $('stage-title').textContent = title;
+    $('title').classList.remove('scroll');
+    nowArtists = null;
+    drawArtistLinks();
+    trackChanged();
     if (!(has && t.ad)) markCurrent(has ? t.videoId : null);
     if (has) refreshControls();
     if (has && !t.ad) loadNowLinks(id);
-    if (!$('queue').hidden) {
-      if (panelTab === 'lyrics') loadLyrics();
-      else loadQueue();
-    }
   }
   drawProgress();
   syncBar();
@@ -186,6 +216,11 @@ for (const id of ['previous', 'playpause', 'next']) {
 for (const action of ['shuffle', 'repeat', 'like', 'dislike', 'mute']) {
   $(action).addEventListener('click', async () => {
     const b = $(action);
+    if (action === 'like' && b.getAttribute('aria-pressed') !== 'true') {
+      b.classList.remove('pop');
+      void b.offsetWidth;
+      b.classList.add('pop');
+    }
     // Shuffle waits on the server for a second or so; show it at once and take no clicks meanwhile.
     if (action === 'shuffle') {
       b.disabled = true;
@@ -204,6 +239,7 @@ $('av-video').addEventListener('click', () => {
   api.control('avVideo').then(loadQueue, quiet);
 });
 $('skip-ad').addEventListener('click', () => api.control('skipAd').catch(quiet));
+$('np-like').addEventListener('click', () => $('like').click());
 // Live while dragging. One request at a time; whatever the slider says when it
 // returns goes next, so a fast drag never queues up a backlog of stale values.
 let volumeBusy = false;
@@ -219,13 +255,18 @@ async function sendVolume() {
   volumeBusy = false;
   applyControls(state);
 }
-$('volume').addEventListener('input', sendVolume);
+$('volume').addEventListener('input', () => {
+  drawVolume(Number($('volume').value), false);
+  sendVolume();
+});
 
 function volumeBy(step) {
   $('volume').value = Number($('volume').value) + step;
+  drawVolume(Number($('volume').value), false);
   sendVolume();
 }
-$('volume').addEventListener(
+// The wheel turns the volume over the slider and over the speaker button.
+for (const el of [$('volume'), $('mute')]) el.addEventListener(
   'wheel',
   (e) => {
     e.preventDefault();
@@ -290,3 +331,14 @@ for (const ev of ['pointerup', 'pointercancel']) {
     })
   );
 }
+
+// A title too long for its box runs through once on hover, at a steady reading speed.
+$('title').addEventListener('mouseenter', () => {
+  const box = $('title');
+  const over = $('title-text').scrollWidth - box.clientWidth;
+  if (over <= 0) return;
+  box.style.setProperty('--mq', -over + 'px');
+  box.style.setProperty('--mq-time', Math.max(3, over / 30) + 's');
+  box.classList.add('scroll');
+});
+$('title').addEventListener('mouseleave', () => $('title').classList.remove('scroll'));

@@ -36,7 +36,7 @@
 
 <div align="center">
 
-<img src="docs/screenshot.png" width="820" alt="The player running in its own frameless window">
+<img src="docs/screenshot.png" width="900" alt="An artist page with the library on the left and the now-playing panel on the right">
 
 <sub>Signed out, on an artist page.</sub>
 
@@ -46,9 +46,10 @@
 
 A desktop interface in front of `music.youtube.com`. The site plays out of sight
 inside the app's window; the app shows home, explore, your library, search,
-playlists, the queue and lyrics and drives the site's player. Clicking the cover
-opens the now-playing view with the site's own player, the cover or the music
-video. Sign-in, Premium, recommendations and the queue stay YouTube's, because
+playlists, the queue and lyrics and drives the site's player. The window is laid
+out like a media player: your library on the left, the page in the middle and a
+panel on the right with what is playing, up next and the lyrics. Clicking the
+cover opens the big view with the cover and its lyrics, or the music video. Sign-in, Premium, recommendations and the queue stay YouTube's, because
 everything goes through the site itself. Google's consent page and the sign-in
 open in the same window when they are needed; `Sign in` in the header is there
 while no account is signed in.
@@ -62,9 +63,11 @@ catches up.
 
 | | |
 |---|---|
-| Own interface | Home, explore, library, search with suggestions, playlists, an editable queue and lyrics, in German or English |
-| Player bar | Seek, shuffle, repeat, like, volume and the song or video switch, all mirrored from the site's own bar |
-| Mini player | A small window with cover, title and playback controls, on top of other windows |
+| Own interface | Home with mood chips, explore, a library sidebar, search with a top result, filter chips and suggestions with covers, playlists, an editable queue and lyrics, in German or English |
+| Pages | Playlists, albums and artists open with a head in the cover's colour; tracks as a table with album, plays and length, to filter and sort |
+| Player bar | Seek with the time on both sides, shuffle, repeat, like, volume and the song or video switch, all mirrored from the site's own bar |
+| Big view | The cover with its lyrics over a blurred backdrop, or the music video; full screen with `F11` |
+| Mini player | A small window with cover, title, progress, like and playback controls, on top of other windows |
 | Media keys | Registered with MPRIS as Music, including the GNOME media widget and the lock screen |
 | Discord | Rich Presence, on by default, switched off in the settings or from the tray |
 | Extras | Sleep timer, a notification on a new track, Last.fm scrobbling with an API account of your own. Scrobbles made offline are sent once Last.fm is reachable again |
@@ -78,7 +81,7 @@ catches up.
 
 <div align="center">
 
-<img src="docs/miniplayer.png" width="344" alt="The mini player: cover art, track, artist, progress bar and playback controls">
+<img src="docs/miniplayer.png" width="344" alt="The mini player: cover art, track, artist, playback controls, like, time and progress">
 
 </div>
 
@@ -139,10 +142,12 @@ quietly every 15 seconds until it gets through.
 | `Space` | Play or pause |
 | `←` / `→` | Back or forward 10 seconds |
 | `Shift` `←` / `Shift` `→` | Previous or next track |
-| `+` / `-` | Volume up or down, also the mouse wheel on the volume slider |
+| `+` / `-` | Volume up or down, also the mouse wheel on the volume slider or the speaker |
 | `M` | Mute |
 | `L` | Like |
 | `/` | Search |
+| `Alt` `←` / `Alt` `→` | Back or forward between pages, also the mouse's side buttons |
+| `F11` | Full screen |
 | `Ctrl` `+` / `Ctrl` `-` | Zoom in and out, kept across restarts |
 | `Ctrl` `0` | Reset zoom |
 

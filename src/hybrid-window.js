@@ -110,6 +110,9 @@ function create(opts) {
   const sendMax = () => alive() && win.webContents.send('hybrid:maximized', win.isMaximized());
   win.on('maximize', sendMax);
   win.on('unmaximize', sendMax);
+  const sendFull = () => alive() && win.webContents.send('hybrid:fullscreen', win.isFullScreen());
+  win.on('enter-full-screen', sendFull);
+  win.on('leave-full-screen', sendFull);
   win.webContents.on('did-finish-load', sendMax);
   // The page may have reached a consent page before this UI finished loading.
   win.webContents.on('did-finish-load', () => playerAway && win.webContents.send('hybrid:player-away'));
@@ -169,19 +172,22 @@ function settings() {
   };
 }
 
-const EMPTY_PAGE = { items: [], sections: [], shuffle: null, next: null, library: null, subscribe: null, own: null };
+const EMPTY_PAGE = { items: [], sections: [], shuffle: null, next: null, library: null, subscribe: null, own: null, header: null, chips: [] };
 
-ipcMain.handle('hybrid:browse', (e, id) => {
+// params pick a chip or a shelf's full list; they come from an earlier answer and are checked again here.
+const withParams = (body, params) => (typeof params === 'string' && pure.PAGE_PARAMS.test(params) ? { ...body, params } : body);
+
+ipcMain.handle('hybrid:browse', (e, id, params) => {
   if (!fromUs(e) || typeof id !== 'string' || !BROWSE_ID.test(id)) return EMPTY_PAGE;
   return page
-    .innertube('/browse', { browseId: id })
+    .innertube('/browse', withParams({ browseId: id }, params))
     .then(parseItems)
     .then((p) => (p.own && id.startsWith('VL') ? { ...p, own: { ...p.own, playlistId: id.slice(2) } } : { ...p, own: null }));
 });
 
-ipcMain.handle('hybrid:search', (e, query) => {
+ipcMain.handle('hybrid:search', (e, query, params) => {
   if (!fromUs(e) || typeof query !== 'string' || !query.trim()) return EMPTY_PAGE;
-  return page.innertube('/search', { query: query.trim().slice(0, 200) }).then(parseItems);
+  return page.innertube('/search', withParams({ query: query.trim().slice(0, 200) }, params)).then(parseItems);
 });
 
 // The next page of a long list. Search continues on its own endpoint.
@@ -192,7 +198,7 @@ ipcMain.handle('hybrid:more', (e, kind, token) => {
 });
 
 ipcMain.handle('hybrid:suggest', (e, input) => {
-  if (!fromUs(e) || typeof input !== 'string' || !input.trim()) return [];
+  if (!fromUs(e) || typeof input !== 'string' || !input.trim()) return { texts: [], items: [] };
   return page.innertube('/music/get_search_suggestions', { input: input.slice(0, 200) }).then(pure.parseSuggestions);
 });
 
@@ -310,10 +316,18 @@ ipcMain.on('hybrid:window', (e, action) => {
   if (action === 'mini') actions.openMini();
   else if (action === 'minimize') win.minimize();
   else if (action === 'close') win.close();
+  else if (action === 'fullscreen') win.setFullScreen(!win.isFullScreen());
+  else if (action === 'leave-fullscreen') win.setFullScreen(false);
   else if (action === 'maximize') {
     if (win.isMaximized()) win.unmaximize();
     else win.maximize();
   }
+});
+
+// Name and picture for the account button; null signed out or while the page cannot tell.
+ipcMain.handle('hybrid:account', async (e) => {
+  if (!fromUs(e) || playerAway || (await page.signedIn()) !== true) return null;
+  return page.innertube('/account/account_menu', {}).then(pure.parseAccount, () => null);
 });
 
 // null while the page cannot tell, so the UI shows no sign-in button by mistake.

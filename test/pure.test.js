@@ -23,6 +23,7 @@ const {
   lyricsBrowseId,
   parseLyrics,
   parseSuggestions,
+  parseAccount,
   parsePlaylistOptions,
   withCovers,
   sanitizeLinks,
@@ -272,7 +273,7 @@ test('pulls tracks and cards out of an InnerTube response', () => {
   assert.equal(card.thumb, 'https://x/226.jpg');
   assert.deepEqual(card.play, { watchPlaylistEndpoint: { playlistId: 'RDCLAK5uy_x', params: 'wAEB' } });
   assert.deepEqual(card.shuffle, { watchPlaylistEndpoint: { playlistId: 'RDCLAK5uy_x', params: 'wAEB8gECGAE%3D' } });
-  assert.deepEqual(parseItems(null), { items: [], sections: [], shuffle: null, next: null, library: null, subscribe: null, own: null });
+  assert.deepEqual(parseItems(null), { items: [], sections: [], shuffle: null, next: null, library: null, subscribe: null, own: null, header: null, chips: [] });
 });
 
 test('reads library toggles, removal, subscribe and the own-playlist editor', () => {
@@ -346,6 +347,8 @@ test('builds only well-formed library changes', () => {
   assert.deepEqual(changeRequest({ kind: 'subscribe', channelId: 'UCdaft', on: true }), ['/subscription/subscribe', { channelIds: ['UCdaft'] }]);
   assert.deepEqual(changeRequest({ kind: 'delete', playlistId: 'PLx' }), ['/playlist/delete', { playlistId: 'PLx' }]);
   assert.equal(changeRequest({ kind: 'create', title: '  ', videoIds: [v] }), null);
+  assert.deepEqual(changeRequest({ kind: 'create', title: 'Empty', videoIds: [] }), ['/playlist/create', { title: 'Empty', privacyStatus: 'PRIVATE' }]);
+  assert.equal(changeRequest({ kind: 'create', title: 'Empty' }), null);
   assert.equal(changeRequest({ kind: 'add', playlistId: 'PLx', videoIds: ['bad'] }), null);
   assert.equal(changeRequest({ kind: 'privacy', playlistId: 'PLx', privacy: 'SECRET' }), null);
   assert.equal(changeRequest({ kind: 'remove', playlistId: 'PLx', rows: [{ videoId: v }] }), null);
@@ -404,7 +407,7 @@ test('reads lyrics, suggestions and playlist choices', () => {
   );
   assert.deepEqual(parseLyrics({}), { text: '', source: '' });
   const sugg = (query) => ({ searchSuggestionRenderer: { navigationEndpoint: { searchEndpoint: { query } } } });
-  assert.deepEqual(parseSuggestions({ c: [sugg('daft punk'), sugg('daft punk'), sugg(' around ')] }), ['daft punk', 'around']);
+  assert.deepEqual(parseSuggestions({ c: [sugg('daft punk'), sugg('daft punk'), sugg(' around ')] }), { texts: ['daft punk', 'around'], items: [] });
   assert.deepEqual(
     parsePlaylistOptions({
       p: [
@@ -555,4 +558,131 @@ test('validSetting takes only the values the settings page offers', () => {
 test('watchUrl encodes the id and the list', () => {
   assert.equal(watchUrl('abc'), 'https://music.youtube.com/watch?v=abc');
   assert.equal(watchUrl('a&b', 'PL1'), 'https://music.youtube.com/watch?v=a%26b&list=PL1');
+});
+
+test('reads page heads, chips, see-all links and table columns', () => {
+  const runs = (...t) => ({ runs: t.map((x) => (typeof x === 'string' ? { text: x } : x)) });
+  const pic = { musicThumbnailRenderer: { thumbnail: { thumbnails: [{ url: 'https://x/60.jpg', width: 60 }, { url: 'https://x/544.jpg', width: 544 }] } } };
+  const col = (t) => ({ musicResponsiveListItemFlexColumnRenderer: { text: t } });
+  const browse = (browseId, pageType) => ({ browseEndpoint: { browseId, browseEndpointContextSupportedConfigs: { browseEndpointContextMusicConfig: { pageType } } } });
+  const page = parseItems({
+    head: {
+      musicResponsiveHeaderRenderer: {
+        title: runs('Discovery'),
+        subtitle: runs('Album • 2001'),
+        secondSubtitle: runs('14 songs • 61 minutes'),
+        straplineTextOne: runs({ text: 'Daft Punk', navigationEndpoint: browse('UCdaft') }),
+        thumbnail: pic,
+        description: { musicDescriptionShelfRenderer: { description: runs('Second album.') } },
+      },
+    },
+    chips: {
+      chipCloudRenderer: {
+        chips: [
+          { chipCloudChipRenderer: { text: runs('Workout'), navigationEndpoint: { browseEndpoint: { browseId: 'FEmusic_home', params: 'ggMx' } } } },
+          { chipCloudChipRenderer: { text: runs('Songs'), navigationEndpoint: { searchEndpoint: { query: 'daft', params: 'EgWK' } } } },
+          { chipCloudChipRenderer: { text: runs('Bad'), navigationEndpoint: { browseEndpoint: { browseId: 'bad id!' } } } },
+        ],
+      },
+    },
+    shelf: {
+      musicShelfRenderer: {
+        title: runs('Top songs'),
+        bottomEndpoint: { browseEndpoint: { browseId: 'VLOLAK5uy_x', params: 'ggMP' } },
+        contents: [
+          {
+            musicResponsiveListItemRenderer: {
+              index: runs('3'),
+              flexColumns: [
+                col(runs({ text: 'Aerodynamic', navigationEndpoint: { watchEndpoint: { videoId: 'iNjGNNoUjkk' } } })),
+                col(runs({ text: 'Daft Punk', navigationEndpoint: browse('UCdaft') })),
+                col(runs('91 M plays')),
+                col(runs({ text: 'Discovery', navigationEndpoint: browse('MPREb_disc') })),
+              ],
+              fixedColumns: [{ musicResponsiveListItemFixedColumnRenderer: { text: runs('3:27') } }],
+              badges: [{ musicInlineBadgeRenderer: { icon: { iconType: 'MUSIC_EXPLICIT_BADGE' } } }],
+              menu: { menuRenderer: { topLevelButtons: [{ likeButtonRenderer: { likeStatus: 'LIKE', target: { videoId: 'iNjGNNoUjkk' } } }] } },
+            },
+          },
+        ],
+      },
+    },
+    card: { musicTwoRowItemRenderer: { title: runs('Thomas'), thumbnailRenderer: pic, navigationEndpoint: browse('UCthomas', 'MUSIC_PAGE_TYPE_ARTIST') } },
+  });
+  assert.deepEqual(page.header, {
+    kind: 'list',
+    title: 'Discovery',
+    subtitle: 'Album • 2001',
+    second: '14 songs • 61 minutes',
+    strap: [{ text: 'Daft Punk', browseId: 'UCdaft' }],
+    thumb: 'https://x/544.jpg',
+    description: 'Second album.',
+  });
+  assert.deepEqual(page.chips, [
+    { text: 'Workout', selected: false, browseId: 'FEmusic_home', params: 'ggMx' },
+    { text: 'Songs', selected: false, query: 'daft', params: 'EgWK' },
+  ]);
+  assert.deepEqual(page.sections[0].more, { browseId: 'VLOLAK5uy_x', params: 'ggMP' });
+  const [t, artist] = page.items;
+  assert.deepEqual(t.album, { text: 'Discovery', browseId: 'MPREb_disc' });
+  assert.equal(t.extra, '91 M plays');
+  assert.equal(t.duration, '3:27');
+  assert.equal(t.index, '3');
+  assert.equal(t.explicit, true);
+  assert.equal(t.like, 'LIKE');
+  assert.deepEqual(t.byline, [{ text: 'Daft Punk', browseId: 'UCdaft' }]);
+  assert.equal(artist.round, true);
+  assert.equal(t.round, false);
+
+  const artistPage = parseItems({ musicImmersiveHeaderRenderer: { title: runs('Daft Punk'), monthlyListenerCount: runs('9 M monthly'), thumbnail: pic } });
+  assert.equal(artistPage.header.kind, 'artist');
+  assert.equal(artistPage.header.subtitle, '9 M monthly');
+
+  const search = parseItems({
+    top: {
+      musicCardShelfRenderer: {
+        title: runs({ text: 'Daft Punk', navigationEndpoint: browse('UCdaft', 'MUSIC_PAGE_TYPE_ARTIST') }),
+        contents: [{ musicResponsiveListItemRenderer: { flexColumns: [col(runs({ text: 'One', navigationEndpoint: { watchEndpoint: { videoId: 'iNjGNNoUjkk' } } }))] } }],
+      },
+    },
+    rest: { musicResponsiveListItemRenderer: { flexColumns: [col(runs({ text: 'Two', navigationEndpoint: { watchEndpoint: { videoId: 'aaaaaaaaaaa' } } }))] } },
+  });
+  assert.deepEqual(search.sections.map((s) => s.items.map((i) => [i.title, i.top, i.underTop])), [
+    [
+      ['Daft Punk', true, false],
+      ['One', false, true],
+    ],
+    [['Two', false, false]],
+  ]);
+});
+
+test('rates single tracks and reads the account head', () => {
+  const v = 'iNjGNNoUjkk';
+  assert.deepEqual(changeRequest({ kind: 'rate', videoId: v, status: 'LIKE' }), ['/like/like', { target: { videoId: v } }]);
+  assert.deepEqual(changeRequest({ kind: 'rate', videoId: v, status: 'INDIFFERENT' }), ['/like/removelike', { target: { videoId: v } }]);
+  assert.equal(changeRequest({ kind: 'rate', videoId: 'bad', status: 'LIKE' }), null);
+  assert.equal(changeRequest({ kind: 'rate', videoId: v, status: 'LOVE' }), null);
+  const head = {
+    activeAccountHeaderRenderer: {
+      accountName: { runs: [{ text: 'Sam' }] },
+      channelHandle: { runs: [{ text: '@sam' }] },
+      accountPhoto: { thumbnails: [{ url: 'https://x/48.jpg', width: 48 }, { url: 'https://x/88.jpg', width: 88 }, { url: 'http://x/176.jpg', width: 176 }] },
+    },
+  };
+  assert.deepEqual(parseAccount({ a: head }), { name: 'Sam', handle: '@sam', photo: 'https://x/88.jpg' });
+  assert.equal(parseAccount({}), null);
+});
+
+test('drops chips whose params fail the check, falls back for a selected chip', () => {
+  const chip = (c) => ({ chipCloudChipRenderer: { text: { runs: [{ text: c.t }] }, ...c.x } });
+  const page = parseItems({
+    chipCloudRenderer: {
+      chips: [
+        chip({ t: 'Long', x: { navigationEndpoint: { searchEndpoint: { query: 'q', params: 'A'.repeat(500) } } } }),
+        chip({ t: 'Odd', x: { navigationEndpoint: { browseEndpoint: { browseId: 'FEmusic_home', params: 'a b' } } } }),
+        chip({ t: 'On', x: { isSelected: true, onDeselectedCommand: {}, navigationEndpoint: { browseEndpoint: { browseId: 'FEmusic_home', params: 'ggMx' } } } }),
+      ],
+    },
+  });
+  assert.deepEqual(page.chips, [{ text: 'On', selected: true, browseId: 'FEmusic_home', params: 'ggMx' }]);
 });

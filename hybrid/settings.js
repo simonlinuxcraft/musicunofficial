@@ -3,7 +3,7 @@
 // Settings, as a page of its own in the list area.
 
 function openSettings() {
-  stack.length = 0;
+  stack.length = ahead.length = 0;
   show({ root: 'settings', title: T.settings, load: () => api.settings(), render: renderSettings });
 }
 
@@ -120,46 +120,58 @@ const QUALITY_LABELS = [
   ['tiny', '144p'],
 ];
 
+// Rows that belong together sit on one card.
+function group(...rows) {
+  const g = div('set-group');
+  g.append(...rows);
+  return g;
+}
+
 function renderSettings(s) {
   shownSettings = s;
   const box = div('settings');
   const sleepChoices = [['off', T.sleepOff], ['track', T.sleepTrack], ...[15, 30, 45, 60, 90].map((m) => [m, m + T.sleepMinutes])];
   box.append(
     heading(T.setGeneral),
-    field(
-      T.setLanguage,
-      select('set-language', [['system', T.langSystem], ['de', 'Deutsch'], ['en', 'English']], s.language, (v) => {
-        // The window reloads in the new language and comes back to this page.
-        sessionStorage.setItem('reopen', 'settings');
-        set('language', v);
-      })
-    ),
-    field(T.setNotify, checkbox('set-notify', s.notify, (v) => set('notify', v)), T.setNotifyHint),
-    field(T.setDiscord, checkbox('set-discord', s.richPresence, (v) => set('richPresence', v))),
-    field(
-      T.setQuality,
-      select('set-quality', [['auto', T.qualityAuto], ...QUALITY_LABELS], s.videoQuality, (v) => set('videoQuality', v)),
-      T.setQualityHint
+    group(
+      field(
+        T.setLanguage,
+        select('set-language', [['system', T.langSystem], ['de', 'Deutsch'], ['en', 'English']], s.language, (v) => {
+          // The window reloads in the new language and comes back to this page.
+          sessionStorage.setItem('reopen', 'settings');
+          set('language', v);
+        })
+      ),
+      field(T.setNotify, checkbox('set-notify', s.notify, (v) => set('notify', v)), T.setNotifyHint),
+      field(T.setDiscord, checkbox('set-discord', s.richPresence, (v) => set('richPresence', v))),
+      field(
+        T.setQuality,
+        select('set-quality', [['auto', T.qualityAuto], ...QUALITY_LABELS], s.videoQuality, (v) => set('videoQuality', v)),
+        T.setQualityHint
+      )
     ),
     heading(T.setSleep),
-    field(
-      T.sleepLabel,
-      select('set-sleep', sleepChoices, s.sleep.mode === 'time' ? s.sleep.minutes : s.sleep.mode, (v) =>
-        set('sleep', /^\d+$/.test(v) ? Number(v) : v)
-      ),
-      sleepNote(s)
+    group(
+      field(
+        T.sleepLabel,
+        select('set-sleep', sleepChoices, s.sleep.mode === 'time' ? s.sleep.minutes : s.sleep.mode, (v) =>
+          set('sleep', /^\d+$/.test(v) ? Number(v) : v)
+        ),
+        sleepNote(s)
+      )
     ),
     heading('Last.fm')
   );
+  const fm = group();
   if (s.lastfm.connected) {
     const row = div('actions');
     row.append(div('', T.lastfmConnected + s.lastfm.name), button(T.lastfmDisconnect, () => lastfmStep(api.lastfmDisconnect)));
-    box.append(row);
-    if (s.lastfm.locked) box.append(div('note', T.lastfmLocked));
+    fm.append(row);
+    if (s.lastfm.locked) fm.append(div('note', T.lastfmLocked));
   } else if (s.lastfm.waiting) {
     const row = div('actions');
     row.append(button(T.lastfmFinish, () => lastfmStep(api.lastfmFinish), true));
-    box.append(div('note', T.lastfmWaiting), row);
+    fm.append(div('note', T.lastfmWaiting), row);
   } else {
     const intro = div('note', T.lastfmIntro + ' ');
     intro.append(link(T.lastfmCreate, api.openLastfmAccount));
@@ -167,16 +179,16 @@ function renderSettings(s) {
     const secret = textInput('lastfm-secret', 'password', T.lastfmSecret);
     const row = div('actions');
     row.append(button(T.lastfmConnect, () => lastfmStep(api.lastfmConnect, key.value, secret.value), true));
-    box.append(intro, field(T.lastfmKey, key), field(T.lastfmSecret, secret), row);
+    fm.append(intro, field(T.lastfmKey, key), field(T.lastfmSecret, secret), row);
   }
-  box.append(heading(T.setUpdates), div('note', T.updateVersion + s.update.version + (s.update.on ? '' : '. ' + T.updateManual)));
+  const up = group(div('note', T.updateVersion + s.update.version + (s.update.on ? '' : '. ' + T.updateManual)));
   if (s.update.on) {
     const row = div('actions');
     row.append(button(T.updateCheck, checkUpdate));
     if (s.update.available) row.append(button(T.updateInstall, () => api.settings().then((now) => offerUpdate(now.update)), true));
-    box.append(row);
+    up.append(row);
   }
-  box.append(heading(T.setKeys), keyList());
+  box.append(fm, heading(T.setUpdates), up, heading(T.setKeys), group(...keyList().children));
   $('list').replaceChildren(box);
 }
 

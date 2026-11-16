@@ -8,7 +8,7 @@ let suggestTimer = null;
 let suggestSeq = 0;
 let active = -1;
 
-const options = () => [...$('suggest').children];
+const options = () => [...$('suggest').querySelectorAll('[role="option"]')];
 
 function closeSuggest() {
   suggestSeq++;
@@ -21,7 +21,7 @@ function closeSuggest() {
 
 function search(q) {
   closeSuggest();
-  if (q) go({ title: q, kind: 'search', load: () => api.search(q) });
+  if (q) go({ title: q, kind: 'search', query: q, load: () => api.search(q) });
 }
 
 function setActive(i) {
@@ -31,8 +31,31 @@ function setActive(i) {
   if (active >= 0) input.setAttribute('aria-activedescendant', list[active].id);
 }
 
+// A direct hit: artist, album or song with its picture, played or opened at once.
+function entityOption(item, n) {
+  const o = document.createElement('div');
+  o.id = 'suggest-e' + n;
+  o.className = 'entity';
+  o.setAttribute('role', 'option');
+  const img = thumb(item.thumb);
+  if (item.round) img.classList.add('round');
+  const text = div('text');
+  text.append(div('title', item.title), div('sub', item.subtitle));
+  o.append(img, text);
+  o.pick = () => {
+    closeSuggest();
+    input.blur();
+    activate(item);
+  };
+  o.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    o.pick();
+  });
+  return o;
+}
+
 // What was typed stays plain, the completion is bold, as on YouTube Music.
-function showSuggestions(q, list) {
+function showSuggestions(q, { texts: list, items }) {
   $('suggest').replaceChildren(
     ...list.map((s, n) => {
       const o = document.createElement('div');
@@ -53,8 +76,12 @@ function showSuggestions(q, list) {
       return o;
     })
   );
+  if (items.length) {
+    if (list.length) $('suggest').append(document.createElement('hr'));
+    $('suggest').append(...items.map(entityOption));
+  }
   active = -1;
-  const open = list.length > 0 && document.activeElement === input;
+  const open = list.length + items.length > 0 && document.activeElement === input;
   $('suggest').hidden = !open;
   input.setAttribute('aria-expanded', String(open));
 }
@@ -62,17 +89,19 @@ function showSuggestions(q, list) {
 $('search').addEventListener('submit', (e) => {
   e.preventDefault();
   const pick = active >= 0 ? options()[active] : null;
+  if (pick && pick.pick) return pick.pick();
   if (pick) input.value = pick.textContent;
   search(input.value.trim());
 });
 input.addEventListener('input', () => {
   $('search-clear').hidden = !input.value;
+  $('search').classList.toggle('filled', !!input.value);
   clearTimeout(suggestTimer);
   const q = input.value.trim();
   if (!q) return closeSuggest();
   suggestTimer = setTimeout(async () => {
     const seq = ++suggestSeq;
-    const list = await api.suggest(q).catch(() => []);
+    const list = await api.suggest(q).catch(() => ({ texts: [], items: [] }));
     if (seq === suggestSeq) showSuggestions(q, list);
   }, 150);
 });
@@ -101,6 +130,7 @@ input.addEventListener('blur', () => {
 $('search-clear').addEventListener('click', () => {
   input.value = '';
   $('search-clear').hidden = true;
+  $('search').classList.remove('filled');
   $('suggest').replaceChildren();
   closeSuggest();
   input.focus();

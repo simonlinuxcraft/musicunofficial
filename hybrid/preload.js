@@ -4,8 +4,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('hybrid', {
   language: ipcRenderer.sendSync('ui:language'),
-  browse: (id) => ipcRenderer.invoke('hybrid:browse', id),
-  search: (query) => ipcRenderer.invoke('hybrid:search', query),
+  browse: (id, params) => ipcRenderer.invoke('hybrid:browse', id, params),
+  search: (query, params) => ipcRenderer.invoke('hybrid:search', query, params),
   more: (kind, token) => ipcRenderer.invoke('hybrid:more', kind, token),
   suggest: (input) => ipcRenderer.invoke('hybrid:suggest', input),
   navigate: (endpoint) => ipcRenderer.invoke('hybrid:navigate', endpoint),
@@ -28,6 +28,8 @@ contextBridge.exposeInMainWorld('hybrid', {
   openLastfmAccount: () => ipcRenderer.send('hybrid:lastfm-account'),
   playerView: (kind, rect) => ipcRenderer.send('hybrid:player-view', kind, rect),
   signedIn: () => ipcRenderer.invoke('hybrid:signed-in'),
+  account: () => ipcRenderer.invoke('hybrid:account'),
+  onFullscreen: (cb) => ipcRenderer.on('hybrid:fullscreen', (_e, value) => cb(value)),
   signIn: () => ipcRenderer.send('hybrid:sign-in'),
   checkUpdate: () => ipcRenderer.invoke('hybrid:check-update'),
   installUpdate: () => ipcRenderer.invoke('hybrid:install-update'),
