@@ -263,10 +263,30 @@ function showTab(tab) {
 }
 
 // The library folds to its covers when the page would otherwise get too narrow.
+// Folded by hand, unfolded by hand, or left to the window's width.
+let railPref = 'auto';
+try {
+  railPref = ['folded', 'unfolded'].includes(localStorage.getItem('rail')) ? localStorage.getItem('rail') : 'auto';
+} catch {}
+
 function updateRail() {
-  document.body.classList.toggle('rail', innerWidth < 1100 || (!$('queue').hidden && innerWidth < 1400));
+  const auto = innerWidth < 1100 || (!$('queue').hidden && innerWidth < 1400);
+  const rail = railPref === 'folded' || (railPref === 'auto' && auto);
+  document.body.classList.toggle('rail', rail);
+  const b = $('side-toggle');
+  b.setAttribute('aria-expanded', String(!rail));
+  b.title = rail ? T.expandLib : T.collapseLib;
+  b.setAttribute('aria-label', b.title);
 }
 addEventListener('resize', updateRail);
+
+$('side-toggle').addEventListener('click', () => {
+  railPref = document.body.classList.contains('rail') ? 'unfolded' : 'folded';
+  try {
+    localStorage.setItem('rail', railPref);
+  } catch {}
+  updateRail();
+});
 
 const savePanel = () => {
   updateRail();
