@@ -6,6 +6,7 @@ const store = require('./store');
 const player = require('./player');
 // The own interface, which the mini player stands in for.
 const front = require('./hybrid-window');
+const page = require('./page');
 const { APP_TITLE, onDisplays } = require('./pure');
 
 const ROOT = path.join(__dirname, '..');
@@ -100,6 +101,8 @@ ipcMain.on('mini:restore', (e) => {
   close();
 });
 ipcMain.on('mini:quit', (e) => fromMini(e) && app.quit());
+// The page's like button; its new state comes back with the next track update.
+ipcMain.on('mini:like', (e) => fromMini(e) && page.control('like').catch(() => {}));
 
 module.exports = {
   open,

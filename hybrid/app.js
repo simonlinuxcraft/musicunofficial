@@ -15,7 +15,7 @@ function smoothWheel(e) {
   el.glideTo = Math.max(0, Math.min(max, (el.glideTo ?? el.scrollTop) + dy));
   el.scrollTo({ top: el.glideTo, behavior: 'smooth' });
 }
-for (const el of [main, $('queue-list'), $('lyrics-pane')]) {
+for (const el of [main, $('queue-list'), $('lyrics-pane'), $('now-pane'), $('lib-list'), $('stage-lyrics')]) {
   el.addEventListener('wheel', smoothWheel, { passive: false });
   el.addEventListener('scrollend', () => (el.glideTo = null));
 }
@@ -39,8 +39,23 @@ const KEYS = {
 // Held down, these would fire again and again.
 const ONCE = [' ', 'm', 'l', 'd', 'p'];
 document.addEventListener('keydown', (e) => {
+  // Window keys first: they work in fields too.
+  if (e.key === 'F11') {
+    e.preventDefault();
+    return api.window('fullscreen');
+  }
+  if (e.altKey && !e.ctrlKey && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+    e.preventDefault();
+    return e.key === 'ArrowLeft' ? goBack() : goForward();
+  }
+  // A menu whose focused entry was replaced (a submenu that finished loading) still closes on Escape.
+  if (e.key === 'Escape' && !$('menu').hidden && !$('menu').contains(e.target) && !$('submenu').contains(e.target)) return closeMenu();
+  if (e.key === 'Escape' && !e.target.closest('input, select, textarea, dialog, #menu, #submenu')) {
+    if (document.documentElement.classList.contains('fullscreen')) return api.window('leave-fullscreen');
+    if (slot === 'stage') return toggleStage(false);
+  }
   if (e.ctrlKey || e.altKey || e.metaKey) return;
-  if (e.target.closest('input, select, textarea, [contenteditable], dialog, #menu')) return;
+  if (e.target.closest('input, select, textarea, [contenteditable], dialog, #menu, #submenu')) return;
   if (e.key === '/') {
     e.preventDefault();
     $('search').querySelector('input').focus();
@@ -53,6 +68,61 @@ document.addEventListener('keydown', (e) => {
   run();
 });
 
+// The mouse's side buttons go back and forward, as in a browser.
+window.addEventListener('mouseup', (e) => {
+  if (e.button === 3) goBack();
+  else if (e.button === 4) goForward();
+});
+
+// Own tooltips: dark, with the key that does the same. The native title is moved
+// aside on hover so it does not show as well; it is read again on every hover, as
+// some buttons change theirs (repeat).
+const tooltip = $('tip');
+let tooltipTimer = 0;
+let tooltipFor = null;
+const keyName = (k) => k.replace('Shift', T.keyShift).replace('Space', T.keySpace);
+function showTooltip(el) {
+  const text = el.dataset.tipText;
+  if (!text) return;
+  tooltip.replaceChildren(text);
+  if (el.dataset.key) {
+    const k = document.createElement('kbd');
+    k.textContent = keyName(el.dataset.key);
+    tooltip.append(k);
+  }
+  tooltip.hidden = false;
+  const r = el.getBoundingClientRect();
+  const t = tooltip.getBoundingClientRect();
+  const below = r.top < 60;
+  tooltip.style.left = Math.max(8, Math.min(r.left + r.width / 2 - t.width / 2, innerWidth - t.width - 8)) + 'px';
+  tooltip.style.top = (below ? r.bottom + 8 : r.top - t.height - 8) + 'px';
+}
+document.addEventListener('pointerover', (e) => {
+  const el = e.target.closest('[title], [data-tip-text]');
+  if (el === tooltipFor) return;
+  clearTimeout(tooltipTimer);
+  tooltip.hidden = true;
+  tooltipFor = el;
+  if (!el) return;
+  if (el.title) {
+    el.dataset.tipText = el.title;
+    // The title may be the element's only name for screen readers.
+    if (!el.hasAttribute('aria-label') && !el.textContent.trim()) el.setAttribute('aria-label', el.title);
+    el.removeAttribute('title');
+  }
+  tooltipTimer = setTimeout(() => tooltipFor === el && el.isConnected && showTooltip(el), 450);
+});
+for (const ev of ['pointerdown', 'wheel', 'keydown']) {
+  document.addEventListener(ev, () => {
+    clearTimeout(tooltipTimer);
+    tooltip.hidden = true;
+  }, { capture: true, passive: true });
+}
+
+// Only once every script is in: an answer can arrive between two of them.
+uiReady = true;
+checkAccount();
+updateRail();
 api.request();
 // After a language change the window reloads and returns to the settings it came from.
 if (sessionStorage.getItem('reopen') === 'settings') {

@@ -11,5 +11,6 @@ contextBridge.exposeInMainWorld('mini', {
   command: (cmd) => ipcRenderer.send('track:command', cmd),
   restore: () => ipcRenderer.send('mini:restore'),
   quit: () => ipcRenderer.send('mini:quit'),
+  like: () => ipcRenderer.send('mini:like'),
   language: ipcRenderer.sendSync('ui:language'),
 });
