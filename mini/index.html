@@ -31,16 +31,6 @@
         -webkit-app-region: drag;
         border: 1px solid rgba(255, 255, 255, 0.1);
       }
-      /* The cover's colour as a faint light on the neutral ground. */
-      #glow {
-        position: absolute;
-        inset: -40%;
-        background: center / cover no-repeat;
-        opacity: 0.35;
-        filter: blur(40px) saturate(1.2) brightness(0.6);
-        pointer-events: none;
-      }
-
       #art {
         position: relative;
         flex: 0 0 auto;
@@ -84,7 +74,8 @@
         display: flex;
         align-items: center;
         gap: 2px;
-        margin-bottom: 11px;
+        /* Pulled left so the first icon lines up with the title. */
+        margin: 0 0 11px -9px;
       }
       #time { margin-left: auto; color: var(--dim); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
@@ -147,7 +138,6 @@
     </style>
   </head>
   <body class="">
-    <div id="glow"></div>
     <div id="art" class="empty"></div>
     <div id="right">
       <div id="meta">

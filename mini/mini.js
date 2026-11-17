@@ -108,7 +108,7 @@ window.mini.onTrack((t) => {
     lastArt = art;
     $('art').classList.toggle('empty', !art);
     // Quoted and escaped so a stray quote cannot end the value; main only passes https urls anyway.
-    $('art').style.backgroundImage = $('glow').style.backgroundImage = art ? 'url("' + art.replace(/["\\]/g, encodeURIComponent) + '")' : '';
+    $('art').style.backgroundImage = art ? 'url("' + art.replace(/["\\]/g, encodeURIComponent) + '")' : '';
   }
   $('like').setAttribute('aria-pressed', String(has && t.like === 'LIKE'));
 
