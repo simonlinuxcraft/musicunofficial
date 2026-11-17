@@ -550,7 +550,7 @@ function renderHero(h) {
     meta.append(b);
   });
   if (h.kind === 'artist') {
-    hero.style.backgroundImage = h.thumb ? 'url("' + h.thumb.replace(/["\\]/g, encodeURIComponent) + '")' : '';
+    hero.style.backgroundImage = cssUrl(h.thumb);
     $('hero-art').removeAttribute('src');
   } else {
     hero.style.backgroundImage = '';

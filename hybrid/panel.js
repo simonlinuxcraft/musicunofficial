@@ -153,19 +153,20 @@ function drawNext() {
   $('np-next-row').replaceChildren(q ? queueRow(q, i) : '');
 }
 
-// Lyrics come from one request per track, shared by the panel and the big view.
-const lyricsCache = new Map();
-function lyricsFor(id) {
-  if (!id) return Promise.resolve(null);
-  if (!lyricsCache.has(id)) {
-    const p = api.lyrics(id).catch(() => null);
-    lyricsCache.set(id, p);
-    // A failed request (page still loading, offline) is tried again next time.
-    p.then((l) => !l && lyricsCache.delete(id));
-    if (lyricsCache.size > 20) lyricsCache.delete(lyricsCache.keys().next().value);
+// One request per key, the last 20 kept. A failed one (page still loading, offline) is tried again next time.
+function cached(map, key, load) {
+  if (!map.has(key)) {
+    const p = load().catch(() => null);
+    map.set(key, p);
+    p.then((v) => !v && map.delete(key));
+    if (map.size > 20) map.delete(map.keys().next().value);
   }
-  return lyricsCache.get(id);
+  return map.get(key);
 }
+
+// Lyrics are shared by the panel and the big view.
+const lyricsCache = new Map();
+const lyricsFor = (id) => (id ? cached(lyricsCache, id, () => api.lyrics(id)) : Promise.resolve(null));
 
 const playingId = () => (track && !track.ad ? track.videoId : null);
 
@@ -453,19 +454,13 @@ async function drawArtistCard() {
   const seq = ++artistSeq;
   if (!a) return (box.hidden = true);
   if ($('queue').hidden || panelTab !== 'now') return;
-  if (!artistPages.has(a.browseId)) {
-    const p = api.browse(a.browseId).catch(() => null);
-    artistPages.set(a.browseId, p);
-    p.then((page) => !page && artistPages.delete(a.browseId));
-    if (artistPages.size > 20) artistPages.delete(artistPages.keys().next().value);
-  }
-  const page = await artistPages.get(a.browseId);
+  const page = await cached(artistPages, a.browseId, () => api.browse(a.browseId));
   if (seq !== artistSeq) return;
   const h = page && page.header;
   box.hidden = !h || h.kind !== 'artist';
   if (box.hidden) return;
   const photo = box.querySelector('.ac-photo');
-  photo.style.backgroundImage = h.thumb ? 'url("' + h.thumb.replace(/["\\]/g, encodeURIComponent) + '")' : '';
+  photo.style.backgroundImage = cssUrl(h.thumb);
   photo.querySelector('b').textContent = h.title;
   const foot = box.querySelector('.ac-foot');
   const sub = page.subscribe && signedIn !== null ? subscribeButton(page.subscribe) : '';

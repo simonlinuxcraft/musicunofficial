@@ -90,6 +90,9 @@ function link(text, onClick) {
   return a;
 }
 
+// Quoted and escaped so a stray quote cannot end the value; main only passes https urls anyway.
+const cssUrl = (url) => (url ? 'url("' + url.replace(/["\\]/g, encodeURIComponent) + '")' : '');
+
 function iconButton(cls, icon, label, onClick) {
   const b = document.createElement('button');
   b.className = cls;
