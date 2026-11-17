@@ -463,15 +463,6 @@ function emptyState(v) {
   return box;
 }
 
-// The head's colour when the cover has none of its own.
-const RED_TINT = '#c4001f';
-const NEUTRAL_TINT = '#3a3a3a';
-// rgb(r g b) with channels close together: black, white or grey.
-function isGrey(rgb) {
-  const c = (rgb.match(/\d+/g) || []).map(Number);
-  return c.length < 3 || Math.max(...c) - Math.min(...c) < 28;
-}
-
 // "About" at the end of an artist's page: photo, listeners and the whole text.
 function renderAbout(h) {
   const box = $('about');
@@ -506,8 +497,6 @@ function renderHero(h) {
   main.style.removeProperty('--tint');
   renderAbout(h);
   if (!h) return;
-  // Lists start in red; an artist's head takes its colour from the photo, a quiet grey until that is read.
-  main.style.setProperty('--tint', h.kind === 'artist' ? NEUTRAL_TINT : RED_TINT);
   hero.className = h.kind;
   // The edition sits under the title as a label; the title gets smaller as it gets longer
   // instead of ending in an ellipsis.
@@ -554,10 +543,9 @@ function renderHero(h) {
   }
   const v = view;
   if (h.thumb) {
-    // A grey cover, or one served without CORS headers (liked songs), keeps YouTube Music's red.
-    // A photo's colour is kept even when muted: red under a grey sky clashes with it.
+    // A cover served without CORS headers (liked songs) leaves the grey default.
     coverColor(h.thumb).then(
-      (c) => view === v && (h.kind === 'artist' || !isGrey(c)) && main.style.setProperty('--tint', c),
+      (c) => view === v && main.style.setProperty('--tint', c),
       () => {}
     );
   }
@@ -632,7 +620,24 @@ async function show(next) {
 }
 
 // YouTube Music's own params for "shuffle this playlist", as its playlist menus send them.
-const SHUFFLE_PARAMS = 'wAEB8gECGAE%3D';
+const SHUFFLE_PARAMS = 'wAEB8gECKAE%3D';
+
+// Liked songs came back in their own order with the shuffle flag set. A queue that
+// starts like the list is shuffled through the player's own toggle instead.
+async function ensureShuffled(items) {
+  const want = items.filter((i) => i.watch).slice(0, 4).map((i) => i.watch.videoId);
+  if (want.length < 4) return;
+  for (let n = 0; n < 10; n++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const got = ((await api.queue().catch(() => null)) || []).slice(0, 4).map((q) => q.videoId);
+    if (got.length < 4) continue;
+    if (got.join() !== want.join()) return;
+    // Off first when the flag is already set, so the second press shuffles.
+    if (track?.shuffle) await api.control('shuffle');
+    await api.control('shuffle');
+    return loadQueue();
+  }
+}
 const listOf = (ep) => ep?.watchEndpoint?.playlistId || ep?.watchPlaylistEndpoint?.playlistId || null;
 
 // Play, shuffle, save, subscribe and the page's menu, as buttons under the head.
@@ -662,7 +667,10 @@ function renderActions(page, v) {
   const playFirst = () => playEp && play(playEp, playEp.watchEndpoint?.videoId || first.watch.videoId);
   $('play-all').onclick = $('sticky-play').onclick = playFirst;
   $('sticky-title').textContent = page.header ? page.header.title : v.title;
-  $('shuffle-all').onclick = () => play(shuffle);
+  $('shuffle-all').onclick = () => {
+    play(shuffle);
+    ensureShuffled(page.items);
+  };
   if (lib) {
     const draw = () => {
       $('save-lib').setAttribute('aria-pressed', String(lib.saved));
