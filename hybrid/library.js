@@ -22,7 +22,6 @@ let pins = new Set();
 try {
   pins = new Set(JSON.parse(localStorage.getItem('pins')) || []);
 } catch {}
-const isPinned = (i) => i.fav || pins.has(i.browseId);
 function togglePin(id) {
   if (!pins.delete(id)) pins.add(id);
   try {
@@ -53,7 +52,7 @@ function libRow(item) {
   }
   const text = div('text');
   const sub = div('sub');
-  if (isPinned(item)) sub.append(svg(ICONS.pin));
+  if (item.fav || pins.has(item.browseId)) sub.append(svg(ICONS.pin));
   sub.append(item.subtitle || '');
   text.append(div('title', item.title), sub);
   b.append(cover, text);

@@ -55,7 +55,7 @@ function open() {
     maximizable: false,
     fullscreenable: false,
     alwaysOnTop: true,
-    backgroundColor: '#0f0f0f',
+    backgroundColor: '#161616',
     show: false,
     title: APP_TITLE,
     icon: path.join(ROOT, 'icon.png'),
