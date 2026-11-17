@@ -94,6 +94,7 @@ async function fetchQueue(seq) {
   return rows;
 }
 
+let queueFor;
 async function loadQueue() {
   const seq = ++queueSeq;
   const rows = await fetchQueue(seq);
@@ -102,8 +103,9 @@ async function loadQueue() {
   if (panelTab === 'now') return drawNext();
   $('queue-empty').hidden = rows.length > 0;
   $('queue-list').replaceChildren(...queueSections(rows));
-  const current = $('queue-list').querySelector('[aria-current="true"]');
-  if (current) current.scrollIntoView({ block: 'nearest' });
+  // Back to the top for a new track; a reload for the same one (drag, remove) keeps its place.
+  if (track?.videoId !== queueFor) $('queue-list').scrollTop = 0;
+  queueFor = track?.videoId;
 }
 
 // "3 Titel · 17 Min." for the tracks queued after the playing one.
@@ -133,7 +135,7 @@ function queueSections(rows) {
   const after = rows.map((q, i) => [q, i]).slice(at + 1);
   const own = after.filter(([q]) => q.top >= 0);
   const auto = after.filter(([q]) => q.top < 0);
-  const out = [...rows.slice(0, Math.max(at, 0)).map(queueRow), now];
+  const out = [now];
   if (own.length) out.push(queueHead(T.queue, queueInfo(own.map(([q]) => q))), ...own.map(([q, i]) => queueRow(q, i)));
   if (auto.length) {
     out.push(queueHead(T.autoplay, '', true));
@@ -142,6 +144,16 @@ function queueSections(rows) {
       el.classList.add('auto');
       out.push(el);
     }
+  }
+  // What has played goes below, so the playing track stays on top however long the session runs.
+  const before = rows.slice(0, Math.max(at, 0));
+  if (before.length) {
+    out.push(queueHead(T.played, '', true));
+    before.forEach((q, i) => {
+      const el = queueRow(q, i);
+      el.classList.add('auto');
+      out.push(el);
+    });
   }
   return out;
 }
