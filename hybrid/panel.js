@@ -122,14 +122,18 @@ function queueHead(title, info, auto) {
 
 // What autoplay added has top < 0 (and cannot be dragged either).
 function queueSections(rows) {
-  const at = rows.findIndex((q) => q.selected);
-  if (at < 0) return rows.map(queueRow);
+  let at = rows.findIndex((q) => q.selected);
+  // The page can lose its mark on the playing row (seen after autoplay took over); the track itself still says which it is.
+  if (at < 0 && track) at = rows.findIndex((q) => q.videoId === track.videoId);
   const now = div('q-now');
-  now.append(queueRow(rows[at], at));
+  if (at >= 0) now.append(queueRow({ ...rows[at], selected: true }, at));
+  // Not in the queue at all: the playing track still heads the panel.
+  else if (track && !track.ad) now.append(queueRow({ videoId: track.videoId, title: track.title, artist: track.artist || '', thumb: track.art || '', length: '', selected: true, top: -1, itemId: null }, -1));
+  else return rows.map(queueRow);
   const after = rows.map((q, i) => [q, i]).slice(at + 1);
   const own = after.filter(([q]) => q.top >= 0);
   const auto = after.filter(([q]) => q.top < 0);
-  const out = [...rows.slice(0, at).map(queueRow), now];
+  const out = [...rows.slice(0, Math.max(at, 0)).map(queueRow), now];
   if (own.length) out.push(queueHead(T.queue, queueInfo(own.map(([q]) => q))), ...own.map(([q, i]) => queueRow(q, i)));
   if (auto.length) {
     out.push(queueHead(T.autoplay, '', true));
