@@ -131,6 +131,7 @@
       .when-max, html.maximized .when-normal { display: none; }
       html.maximized .when-max { display: block; }
       html.fullscreen header { display: none; }
+      body.staged #tab-now, body.staged #tab-lyrics { display: none; }
 
       /* Floating surfaces on black, with a gap instead of lines between them. */
       #middle { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding: 0 8px; min-height: 0; }
@@ -242,8 +243,8 @@
       .chip-scroll.fade-l.fade-r { mask-image: linear-gradient(90deg, transparent, #000 56px, #000 calc(100% - 56px), transparent); }
       h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; margin-bottom: 18px; }
       #actions { display: flex; align-items: center; gap: 18px; margin-bottom: 22px; }
-      .bigplay { display: grid; place-items: center; flex: 0 0 auto; width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: #000; box-shadow: 0 8px 20px rgba(255, 0, 51, 0.22); transition: transform 120ms; }
-      .bigplay:hover { transform: scale(1.05); background: #ff1a47; }
+      .bigplay { display: grid; place-items: center; flex: 0 0 auto; width: 56px; height: 56px; border-radius: 50%; background: #fff; color: #000; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3); transition: transform 120ms; }
+      .bigplay:hover { transform: scale(1.05); background: #f1f1f1; }
       .bigplay svg { width: 28px; height: 28px; }
       .act-btn { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--fg2); }
       .act-btn:hover { color: var(--fg); transform: scale(1.05); }
@@ -639,9 +640,6 @@
       #np-meta .text { flex: 1 1 auto; }
       #np-title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       #np-artist { font-size: 14px; }
-      #np-lyrics { display: block; width: 100%; padding: 14px 16px; border-radius: 10px; background: color-mix(in srgb, var(--np, #444) 70%, #000); text-align: left; }
-      #np-lyrics b { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 700; }
-      #np-lyrics p { font-size: 18px; font-weight: 800; line-height: 1.35; white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
       #np-next { padding: 10px 6px 4px; border-radius: 10px; background: var(--s2); }
       #np-next-head { display: flex; justify-content: space-between; padding: 0 8px 4px; font-size: 13px; }
       #np-next-head b { font-weight: 700; }
@@ -1098,7 +1096,6 @@
               <svg viewBox="0 0 24 24"><path d="M6 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4m6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4m6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4" /></svg>
             </button>
           </div>
-          <button id="np-lyrics" hidden><b data-t="lyrics"></b><p></p></button>
           <div id="np-next" hidden>
             <div id="np-next-head"><b data-t="queue"></b><button id="np-open-queue" data-t="openQueue"></button></div>
             <div id="np-next-row"></div>

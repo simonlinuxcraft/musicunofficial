@@ -4,6 +4,9 @@
 
 let queueSeq = 0;
 let panelTab = 'now';
+// The tab picked outside the big view, back once it closes.
+let chosenTab = panelTab;
+const staged = () => document.body.classList.contains('staged');
 
 const ICON_REMOVE = 'M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z';
 
@@ -153,7 +156,7 @@ function drawNext() {
   $('np-next-row').replaceChildren(q ? queueRow(q, i) : '');
 }
 
-// Lyrics come from one request per track, shared by the panel, its preview and the big view.
+// Lyrics come from one request per track, shared by the panel and the big view.
 const lyricsCache = new Map();
 function lyricsFor(id) {
   if (!id) return Promise.resolve(null);
@@ -238,20 +241,9 @@ function followLyrics(box) {
 }
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
-// The now tab's preview runs along too: the line being sung and the two after it.
-let nowLines = null;
-function followPreview() {
-  if (!nowLines || $('np-lyrics').hidden || $('now-pane').hidden) return;
-  const i = Math.max(0, lineAt(nowLines, positionNow() + 0.2));
-  const text = nowLines.slice(i, i + 2).map((l) => l.text || '\u266a').join('\n');
-  const p = $('np-lyrics').querySelector('p');
-  if (p.textContent !== text) p.textContent = text;
-}
-
 setInterval(() => {
   if (slot === 'stage') followLyrics($('stage-lyrics'));
   if (!$('queue').hidden && panelTab === 'lyrics') followLyrics($('lyrics'));
-  if (!$('queue').hidden && panelTab === 'now') followPreview();
 }, 250);
 
 // A wheel or a drag on the lyrics pauses following for a few seconds.
@@ -272,26 +264,18 @@ async function loadLyrics() {
   $('lyrics-pane').scrollTop = 0;
 }
 
-async function drawNow() {
+function drawNow() {
   const id = playingId();
   // Nothing playing: the title says so, no empty cover or buttons.
   for (const el of ['np-art', 'np-like', 'np-more']) $(el).hidden = !track;
-  $('np-lyrics').hidden = true;
   loadQueue();
   drawArtistCard();
-  nowLines = null;
-  if (!id) return;
-  const { plain, synced } = await lyricsNow(id);
-  if (playingId() !== id || panelTab !== 'now') return;
-  nowLines = synced ? synced.lines : null;
-  const text = plain && plain.text ? plain.text.split('\n').filter((x) => x.trim()).slice(0, 2).join('\n') : '';
-  $('np-lyrics').hidden = !text && !nowLines;
-  $('np-lyrics').querySelector('p').textContent = text;
-  followPreview();
 }
 
 function showTab(tab) {
-  panelTab = tab;
+  // The big view shows the track and its lyrics already, so its panel is the queue alone.
+  if (!staged()) chosenTab = tab;
+  tab = panelTab = staged() ? 'queue' : tab;
   for (const t of ['now', 'queue', 'lyrics']) $('tab-' + t).setAttribute('aria-selected', String(t === tab));
   $('now-pane').hidden = tab !== 'now';
   $('queue-pane').hidden = tab !== 'queue';
@@ -342,7 +326,7 @@ $('side-toggle').addEventListener('click', () => {
 const savePanel = () => {
   updateRail();
   try {
-    localStorage.setItem('panel', $('queue').hidden ? '' : panelTab);
+    localStorage.setItem('panel', $('queue').hidden ? '' : chosenTab);
   } catch {}
 };
 
@@ -427,6 +411,7 @@ function setSlot(next, away = false) {
   stageFold = true;
   updateRail();
   $('stage-toggle').setAttribute('aria-pressed', String(slot === 'stage'));
+  if (!$('queue').hidden) showTab(chosenTab);
   if (slot === 'stage') {
     drawStage();
     fitVideo();
@@ -564,7 +549,6 @@ $('queue-close').addEventListener('click', () => toggleQueue(false));
 // Everything the list shows, autoplay suggestions included.
 $('queue-save').addEventListener('click', () => saveToPlaylist(queueRows.map((q) => q.videoId)));
 for (const t of ['now', 'queue', 'lyrics']) $('tab-' + t).addEventListener('click', () => showTab(t));
-$('np-lyrics').addEventListener('click', () => showTab('lyrics'));
 $('np-open-queue').addEventListener('click', () => showTab('queue'));
 
 // The panel comes back as it was left; the first time it opens on wide windows only.

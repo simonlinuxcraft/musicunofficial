@@ -83,15 +83,15 @@ function coverColor(url) {
   });
 }
 
-// The bar and the lyrics card of the side panel take the cover's colour.
+// The bar takes the cover's colour.
 async function tintBar(art) {
-  const targets = [document.querySelector('footer'), $('np-lyrics')];
-  const clear = () => targets.forEach((t, i) => t.style.removeProperty(i ? '--np' : '--cover'));
+  const bar = document.querySelector('footer');
+  const clear = () => bar.style.removeProperty('--cover');
   if (!art) return clear();
   // A newer track may have arrived while this one decoded.
   try {
     const color = await coverColor(art);
-    if (art === lastArt) targets.forEach((t, i) => t.style.setProperty(i ? '--np' : '--cover', color));
+    if (art === lastArt) bar.style.setProperty('--cover', color);
   } catch {
     if (art === lastArt) clear();
   }
