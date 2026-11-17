@@ -191,7 +191,7 @@ api.onTrack((t) => {
     lastArt = art;
     // Quoted and escaped so a stray quote cannot end the value; main only passes https urls anyway.
     $('art').style.backgroundImage = art ? 'url("' + art.replace(/["\\]/g, encodeURIComponent) + '")' : '';
-    for (const id of ['np-art', 'stage-bg', 'stage-art', 'backdrop']) {
+    for (const id of ['np-art', 'stage-art', 'backdrop']) {
       if (art) $(id).src = art;
       else $(id).removeAttribute('src');
     }

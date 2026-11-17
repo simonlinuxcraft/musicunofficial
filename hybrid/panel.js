@@ -6,9 +6,6 @@ let queueSeq = 0;
 let panelTab = 'now';
 // The tab picked outside the big view, back once it closes.
 let chosenTab = panelTab;
-const staged = () => document.body.classList.contains('staged');
-
-const ICON_REMOVE = 'M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z';
 
 function removeFromQueue(q) {
   api.queueRemove(q.itemId).then(loadQueue, () => toast(T.queueFailed));
@@ -30,7 +27,7 @@ function queueRow(q, i) {
   el.append(cover, text, q.selected ? eqBars() : div('len', q.length));
   // The playing track stays; removing it would only skip ahead.
   const removable = !q.selected && q.itemId !== null;
-  el.append(removable ? iconButton('drop', ICON_REMOVE, T.remove, () => removeFromQueue(q)) : div(''));
+  el.append(removable ? iconButton('drop', ICONS.close, T.remove, () => removeFromQueue(q)) : div(''));
   const playRow = () => api.queuePlay(i, q.videoId).catch(fail);
   el.addEventListener('click', playRow);
   el.addEventListener('contextmenu', (e) => {
@@ -274,8 +271,8 @@ function drawNow() {
 
 function showTab(tab) {
   // The big view shows the track and its lyrics already, so its panel is the queue alone.
-  if (!staged()) chosenTab = tab;
-  tab = panelTab = staged() ? 'queue' : tab;
+  if (slot !== 'stage') chosenTab = tab;
+  tab = panelTab = slot === 'stage' ? 'queue' : tab;
   for (const t of ['now', 'queue', 'lyrics']) $('tab-' + t).setAttribute('aria-selected', String(t === tab));
   $('now-pane').hidden = tab !== 'now';
   $('queue-pane').hidden = tab !== 'queue';
