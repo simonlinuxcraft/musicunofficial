@@ -103,6 +103,7 @@ ipcMain.on('mini:restore', (e) => {
 ipcMain.on('mini:quit', (e) => fromMini(e) && app.quit());
 // The page's like button; its new state comes back with the next track update.
 ipcMain.on('mini:like', (e) => fromMini(e) && page.control('like').catch(() => {}));
+ipcMain.handle('mini:synced-lyrics', (e, q) => (fromMini(e) && store.settings.miniLyrics === true ? front.syncedLyrics(q) : null));
 
 module.exports = {
   open,
@@ -110,6 +111,7 @@ module.exports = {
   destroy,
   saveBounds,
   isOpen: alive,
+  lyricsChanged: () => alive() && mini.webContents.send('mini:lyrics-changed'),
   reload: () => alive() && mini.webContents.reload(),
   webContents: () => (alive() ? mini.webContents : null),
 };

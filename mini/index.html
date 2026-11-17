@@ -71,13 +71,15 @@
       }
 
       #meta { min-width: 0; }
-      #title, #artist {
+      [hidden] { display: none !important; }
+      #title, #artist, #line {
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
       }
       #title { font-weight: 700; font-size: 14px; }
       #artist { color: var(--dim); font-size: 12px; margin-top: 2px; }
+      #line { font-size: 12px; font-weight: 600; margin-top: 2px; }
       body:not(.has-track) #title { color: var(--dim); font-weight: 400; }
 
       #row {
@@ -151,6 +153,7 @@
       <div id="meta">
         <div id="title">Nothing playing</div>
         <div id="artist"></div>
+        <div id="line" hidden></div>
       </div>
       <div id="row">
         <button id="previous" title="Previous">

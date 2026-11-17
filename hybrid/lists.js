@@ -32,8 +32,13 @@ function subLine(item, parts = item.parts) {
   return box;
 }
 
+// The page the music was started from, named in the big view and one click back there.
+let playOrigin = null;
+
 function play(endpoint, videoId) {
   if (!endpoint) return;
+  if (view && !view.render) playOrigin = view;
+  if (slot === 'stage') drawOrigin();
   // Marked right away; YouTube can take a few seconds to start, the next update confirms or corrects it.
   if (videoId) markCurrent(videoId);
   api.navigate(endpoint).catch((e) => {
@@ -44,22 +49,26 @@ function play(endpoint, videoId) {
 
 // A track plays, everything else opens.
 function activate(item) {
+  if (view && view.kind === 'search') rememberHit(item);
   if (item.watch) play({ watchEndpoint: item.watch }, item.watch.videoId);
   else openPage(item.title, item.browseId);
 }
 
-function coverOf(item) {
+function coverOf(item, url = item.thumb) {
   const box = div('cover');
   // Album tracks have no cover of their own; YouTube Music numbers them instead.
-  box.append(!item.thumb && item.index ? div('index', item.index) : thumb(item.thumb));
+  box.append(!url && item.index ? div('index', item.index) : thumb(url));
   if (item.round) box.firstChild.classList.add('round');
   if (item.watch) {
     // Does what the row does, so pointer only: no extra tab stop or announcement.
     const b = iconButton('cover-play', ICON_PLAY, T.playAll, () => activate(item));
     b.tabIndex = -1;
     b.setAttribute('aria-hidden', 'true');
-    box.append(b);
+    const now = div('playing');
+    now.append(eqBars());
+    box.append(now, b);
   } else if (item.play) box.append(iconButton('cover-play', ICON_PLAY, T.playAll, () => play(item.play)));
+  if (item.kind === 'video' && item.duration) box.append(div('dur', item.duration));
   return box;
 }
 
@@ -119,8 +128,10 @@ const moreButton = (item) =>
     openMenu(menuEntries(item), r.left, r.bottom);
   });
 
+const wide = (item) => (item.kind === 'video' ? ' wide' : '');
+
 function row(item) {
-  const el = div('item');
+  const el = div('item' + wide(item));
   const text = div('text');
   text.append(div('title', item.title), subLine(item));
   el.append(coverOf(item), text, div('extra', item.extra || ''), moreButton(item));
@@ -128,9 +139,14 @@ function row(item) {
   return el;
 }
 
+const BULLET = { text: ' • ', browseId: null };
+
+// An edition ("Deluxe Edition") moves from the card's title into the line under it,
+// so two releases of one album read differently.
 function tile(item) {
-  const el = div('tile' + (item.round ? ' round' : ''));
-  el.append(coverOf(item), div('title', item.title), subLine(item), moreButton(item));
+  const el = div('tile' + (item.round ? ' round' : '') + wide(item));
+  const parts = item.edition ? [{ text: item.edition, browseId: null }, ...(item.parts.length ? [BULLET] : []), ...item.parts] : item.parts;
+  el.append(coverOf(item, item.big || item.thumb), div('title', item.edition ? item.base : item.title), subLine(item, parts), moreButton(item));
   bindItem(el, item);
   return el;
 }
@@ -185,9 +201,12 @@ const eqBars = () => {
   return e;
 };
 
+// "55 Mio. Wiedergaben" -> "55 Mio." where the column head already says what is counted.
+const withoutUnit = (text, unit) => (unit && text.endsWith(unit) ? text.slice(0, -unit.length).trim() : text);
+
 // One track of a table; `cols` says which columns the table has.
 function tableRow(item, i, cols) {
-  const el = div('trow');
+  const el = div('trow' + (item.thumb ? wide(item) : ''));
   const n = div('n');
   const num = document.createElement('em');
   num.textContent = item.index || String(i + 1);
@@ -196,10 +215,20 @@ function tableRow(item, i, cols) {
   const cover = div('cover');
   cover.append(item.thumb ? thumb(item.thumb) : div(''));
   const text = div('text');
-  text.append(div('title', item.title), subLine(item, item.byline));
+  const title = div('title', item.title);
+  text.append(title);
+  if (cols.albumArtist === undefined) text.append(subLine(item, item.byline));
+  else {
+    el.classList.add('solo');
+    const by = (item.byline || []).map((p) => p.text).join('').trim();
+    // "(feat. X)" in the title already names the guest.
+    const named = !!cols.albumArtist && by.startsWith(cols.albumArtist) && /[([](feat|ft|with|mit)\b/i.test(item.title);
+    if (by && by !== cols.albumArtist && !named) text.append(subLine(item, item.byline));
+    else if (item.explicit) title.prepend(div('ex', 'E'));
+  }
   tt.append(cover, text);
   el.append(n, tt);
-  if (cols.extra) el.append(div('col col-extra', item.extra || ''));
+  if (cols.extra) el.append(div('col col-extra', withoutUnit(item.extra || '', cols.unit)));
   if (cols.album) {
     const c = div('col col-album');
     if (item.album) c.append(link(item.album.text, (e) => (e.stopPropagation(), openPage(item.album.text, item.album.browseId))));
@@ -215,15 +244,20 @@ function tableRow(item, i, cols) {
 }
 
 // Columns a list of tracks needs, from what its rows carry.
+// A column needs a third of the rows filled; a few stray values leave it mostly empty.
 function tableColumns(items) {
-  const has = (k) => items.some((i) => i[k]);
-  return { extra: has('extra'), album: has('album'), rate: signedIn === true && has('like'), duration: has('duration') };
+  const has = (k) => items.filter((i) => i[k]).length >= Math.max(1, items.length / 3);
+  // The word every count ends in ("Wiedergaben", "Aufrufe") goes to the head once.
+  const counts = items.map((i) => i.extra).filter(Boolean);
+  const words = counts.map((x) => /^(.*\d.*?)\s+(\p{L}+)$/u.exec(x));
+  const unit = words.length && words.every((m) => m && m[2] === words[0][2]) ? words[0][2] : '';
+  return { extra: has('extra'), unit, album: has('album'), rate: signedIn === true && has('like'), duration: has('duration') };
 }
 
 function tableHead(cols) {
   const h = div('thead');
   h.append(div('n', '#'), div('', T.colTitle));
-  if (cols.extra) h.append(div('col col-extra', T.colPlays));
+  if (cols.extra) h.append(div('col col-extra', cols.unit ? cols.unit[0].toUpperCase() + cols.unit.slice(1) : T.colPlays));
   if (cols.album) h.append(div('col col-album', T.colAlbum));
   if (cols.rate) h.append(div(''));
   if (cols.duration) {
@@ -238,7 +272,7 @@ function tableHead(cols) {
 function gridColumns(cols) {
   const c = ['32px', 'minmax(0, 4fr)'];
   // Fixed, not max-content: every row is a grid of its own and the columns have to line up.
-  if (cols.extra) c.push('160px');
+  if (cols.extra) c.push(cols.unit ? '96px' : '160px');
   if (cols.album) c.push('minmax(0, 2.2fr)');
   if (cols.rate) c.push('32px');
   if (cols.duration) c.push('48px');
@@ -256,6 +290,8 @@ function pagers(list) {
   list.updatePagers = () => {
     const max = list.scrollWidth - list.clientWidth;
     prev.hidden = next.hidden = max < 2;
+    list.classList.toggle('fade-l', list.scrollLeft > 2);
+    list.classList.toggle('fade-r', list.scrollLeft < max - 2);
     // aria-disabled, not disabled: a disabled button would drop the keyboard focus.
     prev.setAttribute('aria-disabled', String(list.scrollLeft < 2));
     next.setAttribute('aria-disabled', String(list.scrollLeft > max - 2));
@@ -299,8 +335,8 @@ function isTable(sec, v) {
 // What a section looks like follows what it holds and where it sits.
 function renderSection(sec, v, page) {
   const el = document.createElement('section');
-  if (sec.items[0].top) return renderTop(sec, el);
-  const cards = sec.items.every((i) => i.card);
+  if (sec.items[0].top) return renderTop(sec, el, page);
+  const cards = sec.tiles || sec.items.every((i) => i.card);
   if (cards && v.root === 'FEmusic_home' && !v.params && page.sections.find((s) => s.items.every((i) => i.card) && LISTEN_AGAIN.test(s.title)) === sec) {
     sec.make = quickTile;
     sec.list = div('quick');
@@ -310,6 +346,9 @@ function renderSection(sec, v, page) {
   }
   if (isTable(sec, v)) {
     const cols = tableColumns(sec.items);
+    // An album's tracks (numbered, no covers of their own) name its artist only where it differs.
+    const h = page.header;
+    if (h && h.kind === 'list' && h.strap.length && sec.items.every((i) => !i.thumb)) cols.albumArtist = h.strap.map((p) => p.text).join('').trim();
     el.className = 'table';
     el.style.setProperty('--cols', gridColumns(cols));
     el.style.setProperty('--cols-narrow', gridColumns({ ...cols, album: false, extra: false }));
@@ -334,8 +373,9 @@ function renderSection(sec, v, page) {
   return el;
 }
 
-// Search's top result as a card, the tracks YouTube lists under it beside it.
-function renderTop(sec, el) {
+// Search's top result as a card in its picture's colour, with play and subscribe on it,
+// and the tracks YouTube lists under it beside it.
+function renderTop(sec, el, page) {
   const [top, ...rest] = sec.items;
   const grid = div('topgrid');
   const left = div('');
@@ -346,9 +386,16 @@ function renderTop(sec, el) {
   const cover = div('cover');
   cover.append(thumb(top.thumb));
   if (top.round) cover.firstChild.classList.add('round');
-  const playIt = top.play || (top.watch ? { watchEndpoint: top.watch } : null);
-  if (playIt) cover.append(iconButton('cover-play', ICON_PLAY, T.playAll, () => play(playIt, top.watch?.videoId)));
-  card.append(cover, div('name', top.title), subLine(top));
+  const acts = div('top-acts');
+  const sub = top.kind === 'artist' && page.subscribe && signedIn !== null ? page.subscribe : null;
+  if (sub) acts.append(subscribeButton(sub));
+  const playIt = top.play || (top.watch ? { watchEndpoint: top.watch } : null) || top.shuffle || top.radio;
+  if (playIt) acts.append(iconButton('bigplay', ICON_PLAY, T.playAll, () => play(playIt, top.watch?.videoId)));
+  card.append(cover, div('name', top.title), subLine(top), acts);
+  if (top.thumb) {
+    const v = view;
+    coverColor(top.thumb).then((c) => view === v && (card.style.setProperty('--tint', c), card.classList.add('tinted')), () => {});
+  }
   bindItem(card, top);
   left.append(h, card);
   grid.append(left);
@@ -425,19 +472,53 @@ function isGrey(rgb) {
   return c.length < 3 || Math.max(...c) - Math.min(...c) < 28;
 }
 
+// "About" at the end of an artist's page: photo, listeners and the whole text.
+function renderAbout(h) {
+  const box = $('about');
+  box.hidden = !(h && h.kind === 'artist' && h.description);
+  if (box.hidden) return;
+  box.querySelector('h2').textContent = T.aboutArtist.replace('{name}', h.title);
+  const img = box.querySelector('img');
+  if (h.thumb) img.src = h.thumb;
+  else img.removeAttribute('src');
+  box.querySelector('b').textContent = h.subtitle;
+  const p = box.querySelector('p');
+  const more = box.querySelector('button');
+  p.textContent = h.description;
+  p.classList.remove('open');
+  more.textContent = T.showMore;
+  more.onclick = () => (more.textContent = p.classList.toggle('open') ? T.showLess : T.showMore);
+  fitAbout();
+}
+
+// "Show more" only while the text runs past its five lines, checked again as the width changes.
+function fitAbout() {
+  const p = $('about').querySelector('p');
+  if (!p.classList.contains('open')) $('about').querySelector('button').hidden = p.scrollHeight <= p.clientHeight + 2;
+}
+new ResizeObserver(fitAbout).observe($('about').querySelector('p'));
+
 // Head of a playlist, album or artist page.
 function renderHero(h) {
   const hero = $('hero');
   hero.hidden = !h;
   main.classList.toggle('has-hero', !!h);
   main.style.removeProperty('--tint');
+  renderAbout(h);
   if (!h) return;
   // Lists start in red; an artist's head takes its colour from the photo, a quiet grey until that is read.
   main.style.setProperty('--tint', h.kind === 'artist' ? NEUTRAL_TINT : RED_TINT);
   hero.className = h.kind;
-  $('hero-title').textContent = h.title;
+  // The edition sits under the title as a label; the title gets smaller as it gets longer
+  // instead of ending in an ellipsis.
+  const name = h.base || h.title;
+  $('hero-title').textContent = name;
+  $('hero-title').dataset.size = name.length <= 14 ? 'l' : name.length <= 30 ? 'm' : 's';
+  $('hero-edition').textContent = h.edition || '';
+  $('hero-edition').hidden = !h.edition;
   $('hero-desc').textContent = h.description;
-  $('hero-desc').hidden = !h.description;
+  // An artist's text goes to the card at the end of the page, where it can be read in full.
+  $('hero-desc').hidden = !h.description || h.kind === 'artist';
   // "Album • 2001": the first part names the kind, the rest goes to the details line.
   const [type, ...rest] = h.subtitle.split(' \u2022 ');
   $('hero-type').textContent = h.kind === 'artist' ? '' : type;
@@ -465,7 +546,7 @@ function renderHero(h) {
     meta.append(b);
   });
   if (h.kind === 'artist') {
-    hero.style.backgroundImage = h.thumb ? 'url("' + h.thumb.replace(/["\\]/g, encodeURIComponent) + '")' : '';
+    hero.style.backgroundImage = cssUrl(h.thumb);
     $('hero-art').removeAttribute('src');
   } else {
     hero.style.backgroundImage = '';
@@ -526,6 +607,7 @@ async function show(next) {
     next.loading = next.failed = false;
     // A click elsewhere while this one loaded wins.
     if (view !== next) return;
+    if (next.kind === 'search' && !next.params && !next.render) groupSearch(page);
     next.page = page;
   }
   $('inner').classList.remove('fade');
@@ -565,7 +647,8 @@ function renderActions(page, v) {
     h?.shuffle || (page.shuffle && { watchPlaylistEndpoint: page.shuffle }) || (listId && first ? { watchPlaylistEndpoint: { playlistId: listId, params: SHUFFLE_PARAMS } } : null);
   const playable = !!first && !!(h || page.shuffle);
   const lib = page.library && (page.library.saved ? page.library.unsave : page.library.save) ? page.library : null;
-  const sub = page.subscribe && signedIn !== null ? page.subscribe : null;
+  // On search the subscribe button belongs to the top result's card.
+  const sub = v.kind !== 'search' && page.subscribe && signedIn !== null ? page.subscribe : null;
   const more = pageEntries(page).length > 0;
   // Find and sort where the page is one list of its own: a playlist, an album, an artist's songs.
   const table = !!page.header && page.items.length > 4 && page.sections.some((s) => isTable(s, v));
@@ -595,21 +678,7 @@ function renderActions(page, v) {
       }
     };
   }
-  if (sub) {
-    const draw = () => {
-      $('subscribe').setAttribute('aria-pressed', String(sub.subscribed));
-      $('subscribe').textContent = sub.subscribed ? T.subscribed : T.subscribe;
-    };
-    draw();
-    $('subscribe').onclick = async () => {
-      if (!signedIn) return toast(T.signInFirst, { action: [T.signIn, api.signIn] });
-      const on = !sub.subscribed;
-      if (await change({ kind: 'subscribe', channelId: sub.channelId, on }, on ? T.subscribed : T.unsubscribed)) {
-        sub.subscribed = on;
-        draw();
-      }
-    };
-  }
+  if (sub) subscribeButton(sub, $('subscribe'));
   $('page-more').onclick = (e) => {
     const r = e.currentTarget.getBoundingClientRect();
     openMenu(pageEntries(page), r.left, r.bottom);
@@ -619,16 +688,56 @@ function renderActions(page, v) {
   $('list-sort').firstChild.textContent = SORTS[v.sort || 'custom'];
 }
 
-// Mood and filter chips; a chip swaps this page for its variant instead of stacking a new one.
+// Subscribe on a page's own row of buttons, or on search's top result.
+function subscribeButton(sub, b = document.createElement('button')) {
+  b.classList.add('subscribe');
+  const draw = () => {
+    b.setAttribute('aria-pressed', String(sub.subscribed));
+    b.textContent = sub.subscribed ? T.subscribed : T.subscribe;
+  };
+  draw();
+  b.onclick = async (e) => {
+    e.stopPropagation();
+    if (!signedIn) return toast(T.signInFirst, { action: [T.signIn, api.signIn] });
+    const on = !sub.subscribed;
+    if (await change({ kind: 'subscribe', channelId: sub.channelId, on }, on ? T.subscribed : T.unsubscribed)) {
+      sub.subscribed = on;
+      draw();
+    }
+  };
+  return b;
+}
+
+// A wheel over a sideways row moves it sideways while there is more to see that way;
+// at either end the page scrolls as usual.
+function sideWheel(e) {
+  const el = e.currentTarget;
+  if (e.ctrlKey || Math.abs(e.deltaX) >= Math.abs(e.deltaY)) return;
+  const dy = e.deltaMode === WheelEvent.DOM_DELTA_LINE ? e.deltaY * 40 : e.deltaY;
+  const max = el.scrollWidth - el.clientWidth;
+  if ((dy > 0 && el.scrollLeft >= max - 1) || (dy < 0 && el.scrollLeft <= 0)) return;
+  e.preventDefault();
+  e.stopPropagation();
+  el.scrollBy({ left: dy, behavior: 'smooth' });
+}
+
+// Mood and filter chips on one line; a chip swaps this page for its variant instead of
+// stacking a new one. The chosen chip comes first, with a cross that takes it off.
 function renderChips(chips, v) {
   const box = $('chips');
   box.hidden = !chips.length;
-  box.replaceChildren(
-    ...chips.map((c) => {
+  const list = div('chip-scroll');
+  const order = [...chips.filter((c) => c.selected), ...chips.filter((c) => !c.selected)];
+  list.append(
+    ...order.map((c) => {
       const b = document.createElement('button');
       b.className = 'chip';
       b.textContent = c.text;
       b.setAttribute('aria-pressed', String(c.selected));
+      if (c.selected) {
+        b.append(svg(ICONS.close));
+        b.title = T.clearFilter;
+      }
       b.addEventListener('click', () => {
         const load = c.query ? () => api.search(c.query, c.params) : () => api.browse(c.browseId, c.params);
         show({ ...v, params: c.params || null, page: null, scroll: 0, filter: '', sort: 'custom', attempt: 0, loading: false, loadingMore: false, failed: false, load });
@@ -636,6 +745,57 @@ function renderChips(chips, v) {
       return b;
     })
   );
+  list.addEventListener('wheel', sideWheel, { passive: false });
+  box.replaceChildren(list, ...(chips.length ? pagers(list) : []));
+}
+
+// Search's plain list mixes every kind of result. Below the top result it becomes
+// shelves by kind, each with "show all" on the matching filter chip.
+const SEARCH_KINDS = [
+  ['song', 'moreSongs', /^(songs?|titel)$/i, false],
+  ['video', 'kindVideo', /^videos?$/i, true],
+  ['album', 'kindAlbum', /^(alben|albums?)$/i, true],
+  ['artist', 'kindArtist', /^(künstler|artists?)$/i, true],
+  ['playlist', 'kindPlaylist', /playlists?$/i, true],
+  ['podcast', 'kindPodcast', /^podcasts?$/i, true],
+  ['episode', 'kindEpisode', /^(folgen|episodes?)$/i, false],
+  ['profile', 'kindProfile', /^profile?s?$/i, true],
+];
+
+// "Song • Daft Punk • 3:00" under a heading that already says Songs: the first word goes.
+// Albums keep theirs, it tells album, single and EP apart.
+function withoutType(item) {
+  const p = item.parts;
+  return item.kind !== 'album' && p.length > 2 && !p[0].browseId && p[1].text.trim() === '•' ? p.slice(2) : p;
+}
+
+function groupSearch(page) {
+  const top = page.sections.find((s) => s.items[0].top);
+  if (top) {
+    const [hit, ...songs] = top.items;
+    for (const s of songs) {
+      s.parts = withoutType(s);
+      // Under an artist YouTube leaves the artist out of the songs; it goes back in.
+      if (hit.kind === 'artist' && hit.browseId && !s.parts.some((p) => p.browseId)) {
+        s.parts = [{ text: hit.title, browseId: hit.browseId }, ...(s.parts.length ? [BULLET] : []), ...s.parts];
+      }
+    }
+  }
+  const loose = page.sections.filter((s) => !s.title && !s.items[0].top);
+  const rest = loose.flatMap((s) => s.items);
+  if (!rest.length) return;
+  const shelves = [];
+  for (const [kind, key, chip, tiles] of SEARCH_KINDS) {
+    const items = rest.filter((i) => i.kind === kind);
+    if (!items.length) continue;
+    for (const i of items) i.parts = withoutType(i);
+    const c = page.chips.find((x) => chip.test(x.text) && x.query);
+    const title = kind === 'song' && !(top && top.items.length > 1) ? T.songs : T[key];
+    shelves.push({ title, items, tiles, more: c ? { query: c.query, params: c.params } : null });
+  }
+  const other = rest.filter((i) => !SEARCH_KINDS.some(([k]) => k === i.kind));
+  if (other.length) shelves.push({ title: '', items: other });
+  page.sections = [...page.sections.filter((s) => !loose.includes(s)), ...shelves];
 }
 
 // Find in list and sort, on the tracks loaded so far.

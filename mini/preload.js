@@ -12,5 +12,7 @@ contextBridge.exposeInMainWorld('mini', {
   restore: () => ipcRenderer.send('mini:restore'),
   quit: () => ipcRenderer.send('mini:quit'),
   like: () => ipcRenderer.send('mini:like'),
+  syncedLyrics: (q) => ipcRenderer.invoke('mini:synced-lyrics', q),
+  onLyricsChanged: (cb) => ipcRenderer.on('mini:lyrics-changed', () => cb()),
   language: ipcRenderer.sendSync('ui:language'),
 });

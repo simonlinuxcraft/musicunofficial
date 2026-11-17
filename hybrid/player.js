@@ -83,15 +83,14 @@ function coverColor(url) {
   });
 }
 
-// The bar and the lyrics card of the side panel take the cover's colour.
 async function tintBar(art) {
-  const targets = [document.querySelector('footer'), $('np-lyrics')];
-  const clear = () => targets.forEach((t, i) => t.style.removeProperty(i ? '--np' : '--cover'));
+  const bar = document.querySelector('footer');
+  const clear = () => bar.style.removeProperty('--cover');
   if (!art) return clear();
   // A newer track may have arrived while this one decoded.
   try {
     const color = await coverColor(art);
-    if (art === lastArt) targets.forEach((t, i) => t.style.setProperty(i ? '--np' : '--cover', color));
+    if (art === lastArt) bar.style.setProperty('--cover', color);
   } catch {
     if (art === lastArt) clear();
   }
@@ -157,8 +156,15 @@ function drawArtistLinks() {
       if (i) box.append(', ');
       box.append(linkTo(l));
     });
-    if (nowArtists.album && id !== 'np-artist') box.append(' \u2022 ', linkTo(nowArtists.album));
+    if (nowArtists.album && id !== 'np-artist') {
+      // A narrow bar drops the album first, so the title and artist stay whole.
+      const alb = document.createElement('span');
+      alb.className = 'alb';
+      alb.append(' \u2022 ', linkTo(nowArtists.album));
+      box.append(alb);
+    }
   }
+  drawArtistCard();
 }
 
 api.onTrack((t) => {
@@ -182,9 +188,8 @@ api.onTrack((t) => {
 
   if (art !== lastArt) {
     lastArt = art;
-    // Quoted and escaped so a stray quote cannot end the value; main only passes https urls anyway.
-    $('art').style.backgroundImage = art ? 'url("' + art.replace(/["\\]/g, encodeURIComponent) + '")' : '';
-    for (const id of ['np-art', 'stage-bg', 'stage-art']) {
+    $('art').style.backgroundImage = cssUrl(art);
+    for (const id of ['np-art', 'stage-art', 'backdrop']) {
       if (art) $(id).src = art;
       else $(id).removeAttribute('src');
     }

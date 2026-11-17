@@ -166,6 +166,7 @@ function settings() {
     notify: store.settings.notify === true,
     richPresence: player.discordEnabled(),
     syncedLyrics: store.settings.syncedLyrics !== false,
+    miniLyrics: store.settings.miniLyrics === true,
     videoQuality: store.settings.videoQuality || 'auto',
     sleep: sleep.state(),
     lastfm: lastfm.state(),
@@ -217,8 +218,11 @@ ipcMain.handle('hybrid:lyrics', async (e, videoId) => {
 // Timed lyrics from LRCLIB, which YouTube Music does not hand out. Only title, artist,
 // album and length leave the app, and only while the setting is on.
 const LRCLIB = 'https://lrclib.net/api/search?';
-ipcMain.handle('hybrid:synced-lyrics', async (e, q) => {
-  if (!fromUs(e) || store.settings.syncedLyrics === false || !q || typeof q !== 'object') return null;
+ipcMain.handle('hybrid:synced-lyrics', (e, q) => (fromUs(e) ? syncedLyrics(q) : null));
+
+// Also asked by the mini player, which shows the line being sung.
+async function syncedLyrics(q) {
+  if (store.settings.syncedLyrics === false || !q || typeof q !== 'object') return null;
   const title = pure.lyricsTitle(q.title);
   const artist = pure.primaryArtist(typeof q.artist === 'string' ? q.artist.slice(0, 200) : '');
   const duration = Number.isFinite(q.duration) && q.duration > 0 ? q.duration : 0;
@@ -235,7 +239,7 @@ ipcMain.handle('hybrid:synced-lyrics', async (e, q) => {
   } catch {
     return null;
   }
-});
+}
 
 ipcMain.handle('hybrid:queue-add', (e, raw, position) => {
   const target = pure.sanitizeQueueTarget(raw);
@@ -300,9 +304,11 @@ ipcMain.handle('hybrid:setting', (e, key, value) => {
   } else if (key === 'richPresence') {
     player.setDiscord(value);
     tray.rebuild();
-  } else if (key === 'syncedLyrics') {
-    store.settings.syncedLyrics = value;
+  } else if (key === 'syncedLyrics' || key === 'miniLyrics') {
+    store.settings[key] = value;
     store.saveSettings();
+    // Required here, not on top: mini-window requires this module.
+    require('./mini-window').lyricsChanged();
   } else if (key === 'sleep') {
     sleep.set(value);
     player.sync();
@@ -397,6 +403,7 @@ module.exports = {
   isShown: () => alive() && win.isVisible() && !win.isMinimized(),
   isFocused: () => alive() && win.isFocused(),
   webContents: () => (alive() ? win.webContents : null),
+  syncedLyrics,
   updateEvent: (event, data) => {
     if (!alive()) return false;
     win.webContents.send('hybrid:update', event, data);

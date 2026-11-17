@@ -4,8 +4,8 @@
 
 let queueSeq = 0;
 let panelTab = 'now';
-
-const ICON_REMOVE = 'M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z';
+// The tab picked outside the big view, back once it closes.
+let chosenTab = panelTab;
 
 function removeFromQueue(q) {
   api.queueRemove(q.itemId).then(loadQueue, () => toast(T.queueFailed));
@@ -27,7 +27,7 @@ function queueRow(q, i) {
   el.append(cover, text, q.selected ? eqBars() : div('len', q.length));
   // The playing track stays; removing it would only skip ahead.
   const removable = !q.selected && q.itemId !== null;
-  el.append(removable ? iconButton('drop', ICON_REMOVE, T.remove, () => removeFromQueue(q)) : div(''));
+  el.append(removable ? iconButton('drop', ICONS.close, T.remove, () => removeFromQueue(q)) : div(''));
   const playRow = () => api.queuePlay(i, q.videoId).catch(fail);
   el.addEventListener('click', playRow);
   el.addEventListener('contextmenu', (e) => {
@@ -101,9 +101,45 @@ async function loadQueue() {
   queueRows = rows;
   if (panelTab === 'now') return drawNext();
   $('queue-empty').hidden = rows.length > 0;
-  $('queue-list').replaceChildren(...rows.map(queueRow));
+  $('queue-list').replaceChildren(...queueSections(rows));
   const current = $('queue-list').querySelector('[aria-current="true"]');
   if (current) current.scrollIntoView({ block: 'nearest' });
+}
+
+// "3 Titel · 17 Min." for the tracks queued after the playing one.
+function queueInfo(list) {
+  const total = list.reduce((sum, q) => sum + (Number.isFinite(seconds(q.length)) ? seconds(q.length) : 0), 0);
+  const m = Math.round(total / 60);
+  const length = m >= 60 ? T.durHour.replace('{h}', Math.floor(m / 60)).replace('{m}', m % 60) : T.durMin.replace('{m}', m);
+  return (list.length === 1 ? T.queueOne : T.queueInfo.replace('{n}', list.length)).replace('{d}', length);
+}
+
+function queueHead(title, info, auto) {
+  const h = div('qsec' + (auto ? ' auto' : ''));
+  h.append(div('', title), div('', info));
+  return h;
+}
+
+// What autoplay added has top < 0 (and cannot be dragged either).
+function queueSections(rows) {
+  const at = rows.findIndex((q) => q.selected);
+  if (at < 0) return rows.map(queueRow);
+  const now = div('q-now');
+  now.append(queueRow(rows[at], at));
+  const after = rows.map((q, i) => [q, i]).slice(at + 1);
+  const own = after.filter(([q]) => q.top >= 0);
+  const auto = after.filter(([q]) => q.top < 0);
+  const out = [...rows.slice(0, at).map(queueRow), now];
+  if (own.length) out.push(queueHead(T.queue, queueInfo(own.map(([q]) => q))), ...own.map(([q, i]) => queueRow(q, i)));
+  if (auto.length) {
+    out.push(queueHead(T.autoplay, '', true));
+    for (const [q, i] of auto) {
+      const el = queueRow(q, i);
+      el.classList.add('auto');
+      out.push(el);
+    }
+  }
+  return out;
 }
 
 // Up next on the now-playing tab: the one track after the playing one.
@@ -116,19 +152,20 @@ function drawNext() {
   $('np-next-row').replaceChildren(q ? queueRow(q, i) : '');
 }
 
-// Lyrics come from one request per track, shared by the panel, its preview and the big view.
-const lyricsCache = new Map();
-function lyricsFor(id) {
-  if (!id) return Promise.resolve(null);
-  if (!lyricsCache.has(id)) {
-    const p = api.lyrics(id).catch(() => null);
-    lyricsCache.set(id, p);
-    // A failed request (page still loading, offline) is tried again next time.
-    p.then((l) => !l && lyricsCache.delete(id));
-    if (lyricsCache.size > 20) lyricsCache.delete(lyricsCache.keys().next().value);
+// One request per key, the last 20 kept. A failed one (page still loading, offline) is tried again next time.
+function cached(map, key, load) {
+  if (!map.has(key)) {
+    const p = load().catch(() => null);
+    map.set(key, p);
+    p.then((v) => !v && map.delete(key));
+    if (map.size > 20) map.delete(map.keys().next().value);
   }
-  return lyricsCache.get(id);
+  return map.get(key);
 }
+
+// Lyrics are shared by the panel and the big view.
+const lyricsCache = new Map();
+const lyricsFor = (id) => (id ? cached(lyricsCache, id, () => api.lyrics(id)) : Promise.resolve(null));
 
 const playingId = () => (track && !track.ad ? track.videoId : null);
 
@@ -155,7 +192,11 @@ function drawSynced(box, scroller, lines) {
   box.replaceChildren(
     ...lines.map((l) => {
       const p = document.createElement('p');
-      p.textContent = l.text || '\u266a';
+      if (l.text) p.textContent = l.text;
+      else {
+        p.className = 'gap';
+        p.append(document.createElement('i'), document.createElement('i'), document.createElement('i'));
+      }
       p.addEventListener('click', () => seekTo(l.time));
       return p;
     })
@@ -178,7 +219,7 @@ function lineAt(lines, t) {
   return i;
 }
 
-// Marks the line being sung and keeps it a third down the view, unless the user just scrolled.
+// Marks the line being sung and keeps it 40 % down the view, unless the user just scrolled.
 function followLyrics(box) {
   if (!box.lines || box.offsetParent === null) return;
   const i = lineAt(box.lines, positionNow() + 0.2);
@@ -191,25 +232,14 @@ function followLyrics(box) {
   const el = box.children[Math.max(0, i)];
   const s = box.scroller;
   if (!el || Date.now() < (s.userScroll || 0)) return;
-  const top = s.scrollTop + el.getBoundingClientRect().top - s.getBoundingClientRect().top - s.clientHeight * 0.35;
+  const top = s.scrollTop + el.getBoundingClientRect().top - s.getBoundingClientRect().top - s.clientHeight * 0.4;
   s.scrollTo({ top: Math.max(0, top), behavior: reduceMotion.matches ? 'auto' : 'smooth' });
 }
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)');
 
-// The now tab's preview runs along too: the line being sung and the two after it.
-let nowLines = null;
-function followPreview() {
-  if (!nowLines || $('np-lyrics').hidden || $('now-pane').hidden) return;
-  const i = Math.max(0, lineAt(nowLines, positionNow() + 0.2));
-  const text = nowLines.slice(i, i + 3).map((l) => l.text || '\u266a').join('\n');
-  const p = $('np-lyrics').querySelector('p');
-  if (p.textContent !== text) p.textContent = text;
-}
-
 setInterval(() => {
   if (slot === 'stage') followLyrics($('stage-lyrics'));
   if (!$('queue').hidden && panelTab === 'lyrics') followLyrics($('lyrics'));
-  if (!$('queue').hidden && panelTab === 'now') followPreview();
 }, 250);
 
 // A wheel or a drag on the lyrics pauses following for a few seconds.
@@ -230,25 +260,18 @@ async function loadLyrics() {
   $('lyrics-pane').scrollTop = 0;
 }
 
-async function drawNow() {
+function drawNow() {
   const id = playingId();
   // Nothing playing: the title says so, no empty cover or buttons.
   for (const el of ['np-art', 'np-like', 'np-more']) $(el).hidden = !track;
-  $('np-lyrics').hidden = true;
   loadQueue();
-  nowLines = null;
-  if (!id) return;
-  const { plain, synced } = await lyricsNow(id);
-  if (playingId() !== id || panelTab !== 'now') return;
-  nowLines = synced ? synced.lines : null;
-  const text = plain && plain.text ? plain.text.split('\n').filter((x) => x.trim()).slice(0, 4).join('\n') : '';
-  $('np-lyrics').hidden = !text && !nowLines;
-  $('np-lyrics').querySelector('p').textContent = text;
-  followPreview();
+  drawArtistCard();
 }
 
 function showTab(tab) {
-  panelTab = tab;
+  // The big view shows the track and its lyrics already, so its panel is the queue alone.
+  if (slot !== 'stage') chosenTab = tab;
+  tab = panelTab = slot === 'stage' ? 'queue' : tab;
   for (const t of ['now', 'queue', 'lyrics']) $('tab-' + t).setAttribute('aria-selected', String(t === tab));
   $('now-pane').hidden = tab !== 'now';
   $('queue-pane').hidden = tab !== 'queue';
@@ -269,9 +292,13 @@ try {
   railPref = ['folded', 'unfolded'].includes(localStorage.getItem('rail')) ? localStorage.getItem('rail') : 'auto';
 } catch {}
 
+// The big view takes the whole width: the library folds while it is open, unless unfolded
+// by hand meanwhile.
+let stageFold = true;
+
 function updateRail() {
   const auto = innerWidth < 1100 || (!$('queue').hidden && innerWidth < 1400);
-  const rail = railPref === 'folded' || (railPref === 'auto' && auto);
+  const rail = slot === 'stage' ? stageFold : railPref === 'folded' || (railPref === 'auto' && auto);
   document.body.classList.toggle('rail', rail);
   const b = $('side-toggle');
   b.setAttribute('aria-expanded', String(!rail));
@@ -281,6 +308,10 @@ function updateRail() {
 addEventListener('resize', updateRail);
 
 $('side-toggle').addEventListener('click', () => {
+  if (slot === 'stage') {
+    stageFold = !document.body.classList.contains('rail');
+    return updateRail();
+  }
   railPref = document.body.classList.contains('rail') ? 'unfolded' : 'folded';
   try {
     localStorage.setItem('rail', railPref);
@@ -291,7 +322,7 @@ $('side-toggle').addEventListener('click', () => {
 const savePanel = () => {
   updateRail();
   try {
-    localStorage.setItem('panel', $('queue').hidden ? '' : panelTab);
+    localStorage.setItem('panel', $('queue').hidden ? '' : chosenTab);
   } catch {}
 };
 
@@ -371,7 +402,11 @@ function setSlot(next, away = false) {
   slot = next;
   main.hidden = slot === 'stage';
   $('stage').hidden = slot !== 'stage';
+  document.body.classList.toggle('staged', slot === 'stage');
+  stageFold = true;
+  updateRail();
   $('stage-toggle').setAttribute('aria-pressed', String(slot === 'stage'));
+  if (!$('queue').hidden) showTab(chosenTab);
   if (slot === 'stage') {
     drawStage();
     fitVideo();
@@ -379,8 +414,59 @@ function setSlot(next, away = false) {
   placePlayer();
 }
 
+// Where the music was started, over the big view; a click goes back there.
+function originTitle(o) {
+  return o.kind === 'search' ? T.searchOrigin.replace('{q}', o.query) : (o.page && o.page.header && o.page.header.title) || o.title;
+}
+
+function drawOrigin() {
+  const l = $('stage-label');
+  const o = playOrigin;
+  l.classList.toggle('from', !!o);
+  l.disabled = !o;
+  if (!o) return (l.textContent = T.playingNow);
+  const small = document.createElement('small');
+  small.textContent = T.startedFrom;
+  const b = document.createElement('b');
+  b.textContent = originTitle(o);
+  l.replaceChildren(small, b);
+}
+
+$('stage-label').addEventListener('click', () => {
+  const o = playOrigin;
+  if (!o) return;
+  if (o === view) toggleStage(false);
+  else go(o);
+});
+
+// A card on the playing track's first artist: photo, listeners and subscribe.
+const artistPages = new Map();
+let artistSeq = 0;
+async function drawArtistCard() {
+  const box = $('np-artist-card');
+  const a = nowArtists && nowArtists.artists[0];
+  // Any newer call wins, so a browse still in flight for the last track's artist is dropped.
+  const seq = ++artistSeq;
+  if (!a) return (box.hidden = true);
+  if ($('queue').hidden || panelTab !== 'now') return;
+  const page = await cached(artistPages, a.browseId, () => api.browse(a.browseId));
+  if (seq !== artistSeq) return;
+  const h = page && page.header;
+  box.hidden = !h || h.kind !== 'artist';
+  if (box.hidden) return;
+  const photo = box.querySelector('.ac-photo');
+  photo.style.backgroundImage = cssUrl(h.thumb);
+  photo.querySelector('b').textContent = h.title;
+  const foot = box.querySelector('.ac-foot');
+  const sub = page.subscribe && signedIn !== null ? subscribeButton(page.subscribe) : '';
+  foot.replaceChildren(div('sub', h.subtitle), sub);
+  box.onclick = () => openPage(h.title, a.browseId);
+}
+$('np-artist-card').addEventListener('keydown', (e) => e.key === 'Enter' && e.target === e.currentTarget && e.currentTarget.click());
+
 // The big view's own lyrics, beside the cover.
 async function drawStage() {
+  drawOrigin();
   const id = playingId();
   const box = $('stage-lyrics');
   box.classList.add('none');
@@ -451,7 +537,6 @@ $('queue-close').addEventListener('click', () => toggleQueue(false));
 // Everything the list shows, autoplay suggestions included.
 $('queue-save').addEventListener('click', () => saveToPlaylist(queueRows.map((q) => q.videoId)));
 for (const t of ['now', 'queue', 'lyrics']) $('tab-' + t).addEventListener('click', () => showTab(t));
-$('np-lyrics').addEventListener('click', () => showTab('lyrics'));
 $('np-open-queue').addEventListener('click', () => showTab('queue'));
 
 // The panel comes back as it was left; the first time it opens on wide windows only.

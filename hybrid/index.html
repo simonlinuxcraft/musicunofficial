@@ -43,9 +43,10 @@
       svg { width: 20px; height: 20px; fill: currentColor; pointer-events: none; flex: 0 0 auto; }
       [hidden] { display: none !important; }
       kbd { font: 600 11px/1 var(--font); padding: 4px 7px; border-radius: 5px; background: rgba(255, 255, 255, 0.12); color: var(--fg2); white-space: nowrap; }
-      .chip { flex: 0 0 auto; padding: 6px 13px; border-radius: 16px; background: rgba(255, 255, 255, 0.08); font-size: 13px; font-weight: 500; white-space: nowrap; }
+      .chip { display: inline-flex; align-items: center; flex: 0 0 auto; padding: 6px 13px; border-radius: 16px; background: rgba(255, 255, 255, 0.08); font-size: 13px; font-weight: 500; white-space: nowrap; }
       .chip:hover { background: rgba(255, 255, 255, 0.14); }
       .chip[aria-selected='true'], .chip[aria-pressed='true'] { background: var(--fg); color: #000; }
+      .chip svg { width: 14px; height: 14px; margin: 0 -4px 0 6px; }
       .panel { background: var(--s1); border-radius: 10px; }
       .round { border-radius: 50% !important; }
 
@@ -104,6 +105,13 @@
       #suggest .entity .thumb { flex: 0 0 auto; width: 40px; height: 40px; border-radius: 4px; }
       #suggest .entity .title { color: var(--fg); font-weight: 500; }
       #suggest .entity .sub { font-size: 13px; }
+      #suggest .recent-head { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px 4px; color: var(--fg3); font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+      #suggest .recent-head button { color: var(--fg2); font-size: 12px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+      #suggest .recent-head button:hover { color: var(--fg); text-decoration: underline; }
+      #suggest .drop-x { display: grid; place-items: center; flex: 0 0 auto; width: 28px; height: 28px; margin-left: auto; border-radius: 50%; color: var(--fg3); opacity: 0; }
+      #suggest [role='option']:hover .drop-x, #suggest [aria-selected='true'] .drop-x { opacity: 1; }
+      #suggest .drop-x:hover { background: var(--s4); color: var(--fg); }
+      #suggest .drop-x svg { width: 16px; height: 16px; }
       #suggest hr { border: 0; border-top: 1px solid var(--line); margin: 4px 8px; }
       #suggest [role='option']:hover, #suggest [aria-selected='true'] { background: rgba(255, 255, 255, 0.08); }
       #head-right { display: flex; align-items: center; justify-content: flex-end; gap: 6px; min-width: 0; }
@@ -123,6 +131,7 @@
       .when-max, html.maximized .when-normal { display: none; }
       html.maximized .when-max { display: block; }
       html.fullscreen header { display: none; }
+      body.staged #tab-now, body.staged #tab-lyrics { display: none; }
 
       /* Floating surfaces on black, with a gap instead of lines between them. */
       #middle { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding: 0 8px; min-height: 0; }
@@ -205,6 +214,9 @@
       #hero-text { min-width: 0; }
       #hero-type { font-size: 13px; font-weight: 600; }
       #hero-title { margin: 6px 0 10px; font-size: clamp(30px, 8cqi, 88px); font-weight: 900; line-height: 1.02; letter-spacing: -0.045em; overflow-wrap: break-word; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-wrap: balance; }
+      #hero-title[data-size='m'] { font-size: clamp(28px, 6.2cqi, 64px); }
+      #hero-title[data-size='s'] { font-size: clamp(24px, 4.4cqi, 46px); line-height: 1.08; -webkit-line-clamp: 3; }
+      #hero-edition { display: inline-block; margin: 0 0 12px; padding: 4px 11px; border-radius: 14px; background: rgba(255, 255, 255, 0.16); font-size: 13px; font-weight: 700; }
       #hero-desc { max-width: 80ch; color: rgba(255, 255, 255, 0.72); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; user-select: text; }
       #hero-meta { margin-top: 8px; color: rgba(255, 255, 255, 0.85); }
       #hero-meta .who { display: inline-flex; align-items: center; gap: 8px; vertical-align: middle; font-weight: 700; color: #fff; }
@@ -222,11 +234,17 @@
         #hero-art { width: 160px; }
       }
 
-      #chips, #tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+      #tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+      /* Chips stay on one line and page sideways; an edge with more behind it fades out. */
+      #chips { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; }
+      .chip-scroll { display: flex; gap: 8px; flex: 1 1 auto; min-width: 0; overflow-x: auto; }
+      .chip-scroll.fade-r { mask-image: linear-gradient(90deg, #000 calc(100% - 56px), transparent); }
+      .chip-scroll.fade-l { mask-image: linear-gradient(90deg, transparent, #000 56px); }
+      .chip-scroll.fade-l.fade-r { mask-image: linear-gradient(90deg, transparent, #000 56px, #000 calc(100% - 56px), transparent); }
       h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; margin-bottom: 18px; }
       #actions { display: flex; align-items: center; gap: 18px; margin-bottom: 22px; }
-      .bigplay { display: grid; place-items: center; flex: 0 0 auto; width: 56px; height: 56px; border-radius: 50%; background: var(--accent); color: #000; box-shadow: 0 8px 20px rgba(255, 0, 51, 0.22); transition: transform 120ms; }
-      .bigplay:hover { transform: scale(1.05); background: #ff1a47; }
+      .bigplay { display: grid; place-items: center; flex: 0 0 auto; width: 56px; height: 56px; border-radius: 50%; background: #fff; color: #000; box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3); transition: transform 120ms; }
+      .bigplay:hover { transform: scale(1.05); background: #f1f1f1; }
       .bigplay svg { width: 28px; height: 28px; }
       .act-btn { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; color: var(--fg2); }
       .act-btn:hover { color: var(--fg); transform: scale(1.05); }
@@ -234,9 +252,9 @@
       .act-btn[aria-pressed='true'] { color: var(--accent); }
       .act-btn .on, .act-btn[aria-pressed='true'] .off { display: none; }
       .act-btn[aria-pressed='true'] .on { display: block; }
-      #subscribe { padding: 7px 16px; border-radius: 18px; box-shadow: inset 0 0 0 1px var(--fg3); font-weight: 700; }
-      #subscribe:hover { box-shadow: inset 0 0 0 1px var(--fg); }
-      #subscribe[aria-pressed='true'] { color: var(--fg2); }
+      .subscribe { flex: 0 0 auto; padding: 7px 16px; border-radius: 18px; box-shadow: inset 0 0 0 1px var(--fg3); font-weight: 700; }
+      .subscribe:hover { box-shadow: inset 0 0 0 1px var(--fg); }
+      .subscribe[aria-pressed='true'] { color: var(--fg2); }
       #list-tools { display: flex; align-items: center; gap: 8px; margin-left: auto; color: var(--fg2); }
       #list-filter { width: 0; height: 32px; padding: 0; border: 0; border-radius: 6px; background: var(--s3); outline: none; font-size: 13px; transition: width 160ms, padding 160ms; }
       #list-tools.open #list-filter { width: 200px; padding: 0 10px; }
@@ -293,6 +311,17 @@
       /* Play a playlist or album straight from its cover, without opening it. */
       .cover-play { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 4px; background: rgba(0, 0, 0, 0.5); color: #fff; opacity: 0; transition: opacity 120ms; }
       .item:hover .cover-play, .cover-play:focus-visible { opacity: 1; }
+      /* The playing track's bars on its cover, in rows and on cards alike. */
+      .cover .playing { display: none; position: absolute; inset: 0; place-items: center; border-radius: 4px; background: rgba(0, 0, 0, 0.55); }
+      .cover .playing .eq { display: flex; }
+      .current > .cover .playing { display: grid; }
+      .tile .cover .playing { inset: auto auto 8px 8px; width: 36px; height: 28px; border-radius: 14px; background: rgba(0, 0, 0, 0.72); }
+      .cover .dur { position: absolute; right: 4px; bottom: 4px; padding: 1px 5px; border-radius: 4px; background: rgba(0, 0, 0, 0.8); color: #fff; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+      /* Music videos in their own wide frame. */
+      .item.wide { grid-template-columns: 85px minmax(0, 1fr) auto 32px; }
+      .item.wide .cover { width: 85px; }
+      .tile.wide .cover { aspect-ratio: 16 / 9; }
+      .trow.wide .tt .cover { width: 71px; }
 
       /* Track lists as a table: number, title, album or plays, rating, length. */
       .table { --cols: 32px minmax(0, 1fr) 32px; }
@@ -313,6 +342,11 @@
       .tt { display: flex; align-items: center; gap: 12px; min-width: 0; }
       .tt .cover { width: 40px; height: 40px; flex: 0 0 auto; }
       .tt .title { font-size: 15px; }
+      /* Album tracks on one line: the artist only where it is not the album's own. */
+      .trow.solo { height: 44px; contain-intrinsic-size: auto 44px; }
+      .trow.solo .text { display: flex; align-items: baseline; gap: 10px; }
+      .trow.solo .title { flex: 0 1 auto; min-width: 0; }
+      .trow.solo .sub { flex: 0 10 auto; min-width: 0; }
       /* Narrow lists drop the album and plays columns before the title gets cut. */
       @container (max-width: 640px) {
         .table .thead, .table .trow { grid-template-columns: var(--cols-narrow); }
@@ -354,10 +388,10 @@
       .tile .cover { width: 100%; height: auto; aspect-ratio: 1; margin-bottom: 10px; }
       .tile .thumb { border-radius: 6px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); }
       .tile.round .thumb { border-radius: 50%; }
-      .tile .title { font-weight: 700; }
+      .tile .title { font-weight: 700; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
       .tile .sub { margin-top: 2px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
       /* A round button that rises out of the cover's corner, instead of a veil over the whole cover. */
-      .tile .cover-play, .topres .cover-play, .qt .cover-play {
+      .tile .cover-play, .qt .cover-play {
         inset: auto 8px 8px auto;
         width: 46px;
         height: 46px;
@@ -368,8 +402,8 @@
         transform: translateY(8px);
         transition: opacity 200ms, transform 200ms;
       }
-      .tile .cover-play svg, .topres .cover-play svg { width: 24px; height: 24px; }
-      .tile:hover .cover-play, .tile:focus-visible .cover-play, .topres:hover .cover-play { opacity: 1; transform: none; }
+      .tile .cover-play svg { width: 24px; height: 24px; }
+      .tile:hover .cover-play, .tile:focus-visible .cover-play { opacity: 1; transform: none; }
       .tile .more { position: absolute; top: 16px; right: 16px; background: rgba(0, 0, 0, 0.6); color: #fff; }
 
       /* Quick access on top of home: wide tiles that play with one click. */
@@ -392,8 +426,27 @@
       .topres .thumb { box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5); }
       .topres .name { margin: 18px 0 8px; font-size: 32px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; overflow-wrap: anywhere; }
       .topres .sub { white-space: normal; }
-      .topres .cover-play { position: absolute; right: 20px; bottom: 20px; inset: auto 20px 20px auto; width: 50px; height: 50px; }
+      .topres.tinted { background: linear-gradient(160deg, color-mix(in srgb, var(--tint) 62%, #000), color-mix(in srgb, var(--tint) 26%, #000)); }
+      .topres.tinted:hover { background: linear-gradient(160deg, color-mix(in srgb, var(--tint) 72%, #000), color-mix(in srgb, var(--tint) 32%, #000)); }
+      .topres.tinted .sub { color: rgba(255, 255, 255, 0.78); }
+      .top-acts { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 14px; }
+      .top-acts .bigplay { width: 50px; height: 50px; }
+      .top-acts .bigplay svg { width: 26px; height: 26px; }
+      .topres .subscribe { box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.6); }
       @media (max-width: 899px) { .topgrid { grid-template-columns: minmax(0, 1fr); } }
+
+      /* About an artist, at the end of the page. */
+      #about { margin-top: 40px; }
+      #about h2 { margin-bottom: 12px; }
+      .about-card { display: grid; grid-template-columns: minmax(0, 280px) minmax(0, 1fr); gap: 24px; padding: 18px; border-radius: 10px; background: var(--s2); }
+      .about-card img { width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; object-fit: cover; object-position: center 22%; background: var(--s3); }
+      .about-text { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-width: 0; }
+      .about-text b { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; }
+      .about-text p { max-width: 75ch; color: var(--fg2); line-height: 1.55; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; user-select: text; }
+      .about-text p.open { display: block; }
+      .about-text button { font-size: 13px; font-weight: 700; }
+      .about-text button:hover { text-decoration: underline; }
+      @container page (max-width: 620px) { .about-card { grid-template-columns: minmax(0, 1fr); } }
 
       .empty { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 48px 16px; text-align: center; }
       .empty svg { width: 44px; height: 44px; color: var(--fg3); margin-bottom: 8px; }
@@ -468,6 +521,14 @@
       #ask-buttons button[value='ok']:hover, .btn.primary:hover { background: #d9d9d9; }
       #pl-cancel { display: block; margin: 12px 8px 0 auto; }
       #up-dialog { width: min(440px, 90vw); padding: 24px; }
+      #keys-dialog { width: min(720px, 92vw); max-height: 86vh; padding: 22px 24px; background: var(--s3); }
+      /* The box takes the focus itself when it opens; it needs no ring. */
+      #keys-dialog:focus-visible { outline: none; }
+      #keys-dialog h2 { display: flex; align-items: center; justify-content: space-between; margin: 0 0 14px; font-size: 22px; font-weight: 800; }
+      #keys-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; }
+      .kr { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 0; color: var(--fg2); }
+      .kr kbd { color: var(--fg); background: var(--s4); font-size: 12px; }
+      @media (max-width: 640px) { #keys-cols { grid-template-columns: minmax(0, 1fr); } }
       #up-dialog h2 { margin: 0 0 2px; font-size: 20px; }
       #up-version { color: var(--fg2); font-size: 13px; margin: 0 0 16px; }
       #up-text { margin: 0; line-height: 1.45; }
@@ -564,29 +625,45 @@
       .qrow .len { color: var(--fg2); font-size: 13px; font-variant-numeric: tabular-nums; }
       .qrow[aria-current='true'] .title { color: var(--accent); }
       .qrow .eq { display: flex; justify-self: end; margin-right: 6px; }
+      /* The queue in parts: the playing track on its own surface, then up next, then autoplay. */
+      .q-now { margin: 2px 0 4px; border-radius: 8px; background: var(--s2); }
+      .qsec { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 12px 8px 4px; }
+      .qsec > :first-child { font-weight: 700; font-size: 15px; }
+      .qsec > :last-child { color: var(--fg2); font-size: 12px; font-variant-numeric: tabular-nums; }
+      .qsec.auto { margin-top: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+      .qrow.auto { opacity: 0.65; }
+      .qrow.auto:hover, .qrow.auto:focus-visible { opacity: 1; }
       #now-pane { padding: 4px 16px 16px; gap: 14px; }
-      #np-art { display: block; width: 100%; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: var(--s3); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); cursor: pointer; }
+      /* At most about a third of the window's height, so up next stays in view. */
+      #np-art { display: block; width: min(100%, 36vh); align-self: center; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: var(--s3); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5); cursor: pointer; }
       #np-meta { display: flex; align-items: center; gap: 4px; }
       #np-meta .text { flex: 1 1 auto; }
       #np-title { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       #np-artist { font-size: 14px; }
-      #np-lyrics { display: block; width: 100%; padding: 14px 16px; border-radius: 10px; background: color-mix(in srgb, var(--np, #444) 70%, #000); text-align: left; }
-      #np-lyrics b { display: block; margin-bottom: 6px; font-size: 13px; font-weight: 700; }
-      #np-lyrics p { font-size: 18px; font-weight: 800; line-height: 1.35; white-space: pre-line; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
       #np-next { padding: 10px 6px 4px; border-radius: 10px; background: var(--s2); }
       #np-next-head { display: flex; justify-content: space-between; padding: 0 8px 4px; font-size: 13px; }
       #np-next-head b { font-weight: 700; }
       #np-next-head button { color: var(--fg2); }
       #np-next-head button:hover { color: var(--fg); text-decoration: underline; }
+      #np-artist-card { flex: 0 0 auto; border-radius: 10px; overflow: hidden; background: var(--s2); cursor: pointer; }
+      .ac-photo { position: relative; display: flex; align-items: flex-end; height: 104px; padding: 10px 12px; background: var(--s3) center 22% / cover no-repeat; }
+      .ac-photo::before { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 35%, rgba(0, 0, 0, 0.65)); }
+      .ac-photo b { position: relative; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+      .ac-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; }
+      .ac-foot .subscribe { padding: 5px 12px; font-size: 13px; }
+      #np-artist-card:hover .ac-photo b { text-decoration: underline; }
       @media (max-width: 899px) {
         #queue { position: absolute; top: 0; bottom: 0; right: 8px; z-index: 10; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.6); }
       }
 
       /* The now-playing view: blurred cover behind, the cover or video, lyrics beside it. */
-      #stage { grid-column: 2; position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border-radius: 10px; background: #000; }
-      #stage-bg { position: absolute; inset: -12%; width: 124%; height: 124%; object-fit: cover; filter: blur(64px) saturate(1.35) brightness(0.5); }
+      #stage { grid-column: 2; position: relative; display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); overflow: hidden; border-radius: 10px; }
       #stage-top { position: relative; display: flex; align-items: center; gap: 10px; padding: 14px 16px 10px 24px; }
-      #stage-label { flex: 1 1 auto; min-width: 0; font-size: 13px; font-weight: 700; color: rgba(255, 255, 255, 0.8); }
+      #stage-label { flex: 0 1 auto; min-width: 0; margin-right: auto; font-size: 13px; font-weight: 700; color: rgba(255, 255, 255, 0.8); text-align: left; cursor: default; }
+      #stage-label.from { display: grid; cursor: pointer; }
+      #stage-label small { font-size: 11px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: rgba(255, 255, 255, 0.6); }
+      #stage-label b { font-size: 14px; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      #stage-label.from:hover b { text-decoration: underline; }
       #stage-top .queue-icon { color: #fff; }
       #stage-body { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 56px; align-items: center; min-height: 0; padding: 8px 56px 32px; }
       #stage-song { display: flex; flex-direction: column; justify-content: center; min-height: 0; height: 100%; }
@@ -597,9 +674,16 @@
       #stage-lyrics.none { font-size: 17px; font-weight: 600; color: rgba(255, 255, 255, 0.6); }
       /* Timed lyrics: the line being sung lights up, those sung fade back; a click plays from a line. */
       .synced { white-space: normal; }
-      .synced p { margin: 0 0 6px; color: rgba(255, 255, 255, 0.5); cursor: pointer; transition: color 220ms, transform 220ms; transform-origin: left center; }
-      .synced p.past { color: rgba(255, 255, 255, 0.3); }
-      .synced p.now { color: #fff; transform: scale(1.02); }
+      .synced p { margin: 0 0 6px; color: rgba(255, 255, 255, 0.55); cursor: pointer; transition: color 220ms, transform 220ms; transform-origin: left center; }
+      .synced p.past { color: rgba(255, 255, 255, 0.25); }
+      .synced p.now { color: #fff; transform: scale(1.04); }
+      /* A pause without words: three dots that pulse while it lasts. */
+      .synced p.gap { display: flex; gap: 0.3em; padding: 0.35em 0; }
+      .synced p.gap i { width: 0.36em; height: 0.36em; border-radius: 50%; background: currentColor; }
+      .synced p.gap.now i { animation: gap 1.2s ease-in-out infinite; }
+      .synced p.gap.now i:nth-child(2) { animation-delay: 0.2s; }
+      .synced p.gap.now i:nth-child(3) { animation-delay: 0.4s; }
+      @keyframes gap { 0%, 100% { opacity: 0.35; transform: scale(0.8); } 50% { opacity: 1; transform: none; } }
       .synced p:hover { color: rgba(255, 255, 255, 0.85); }
       #stage-lyrics.synced { color: inherit; }
       #stage-video { display: none; }
@@ -614,6 +698,15 @@
         #stage-body { grid-template-columns: minmax(0, 1fr); padding: 8px 24px 24px; }
         #stage-lyrics { display: none; }
       }
+
+      /* While the big view is open its blurred cover lies behind the whole window. */
+      #backdrop { display: none; position: fixed; inset: -12%; width: 124%; height: 124%; object-fit: cover; filter: blur(72px) saturate(1.35) brightness(0.45); pointer-events: none; }
+      body.staged #backdrop[src] { display: block; }
+      body.staged header, body.staged footer { position: relative; }
+      body.staged .panel { background: rgba(0, 0, 0, 0.28); }
+      body.staged footer { background: linear-gradient(180deg, transparent, rgba(0, 0, 0, 0.35)); }
+      body.staged #arrows button, body.staged input[type='search'] { background: rgba(0, 0, 0, 0.3); }
+      body.staged #fill { background: var(--fg); }
 
       /* Registered so the tint can fade between tracks; a plain custom property would snap. */
       @property --cover {
@@ -752,7 +845,9 @@
       }
 
       .settings { max-width: 720px; display: grid; gap: 8px; }
-      .settings h2 { font-size: 18px; font-weight: 800; margin: 18px 0 4px; }
+      .settings h2 { font-size: 18px; font-weight: 800; margin: 18px 0 4px; scroll-margin-top: 60px; }
+      /* Jumps to each part, and stays at the top while the page scrolls. */
+      .set-jump { position: sticky; top: 0; z-index: 4; display: flex; gap: 8px; overflow-x: auto; margin: -8px 0 0; padding: 8px 0 10px; background: var(--s1); }
       .settings h2:first-child { margin-top: 0; }
       .set-group { padding: 0 16px; border-radius: 10px; background: var(--s2); }
       .set-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px 0; }
@@ -781,6 +876,13 @@
       #skip-ad { flex: 0 0 auto; padding: 6px 14px; border-radius: 16px; background: rgba(255, 255, 255, 0.14); white-space: nowrap; }
       #skip-ad:hover { background: rgba(255, 255, 255, 0.24); }
 
+      /* Below 1280 px the controls give up some width and the album goes, so the title stays whole. */
+      @media (max-width: 1279px) {
+        footer { grid-template-columns: minmax(0, 1.3fr) minmax(0, 440px) minmax(0, 1fr); }
+        #artist .alb { display: none; }
+      }
+      /* The slider goes first; mute and the +/- keys still set the volume. */
+      @media (max-width: 899px) { #volume { display: none; } }
       @media (max-width: 760px) {
         #volume, #lyrics-toggle, #win-mini, #arrows, #shuffle, #repeat, #progress span { display: none; }
         header { grid-template-columns: minmax(0, 1fr) auto; }
@@ -794,6 +896,7 @@
     </style>
   </head>
   <body>
+    <img id="backdrop" alt="" />
     <header>
       <div id="arrows">
         <button id="back" data-tip="back" data-key="Alt+←" aria-disabled="true">
@@ -896,6 +999,7 @@
           <div id="hero-text">
             <div id="hero-type"></div>
             <h1 id="hero-title"></h1>
+            <span id="hero-edition" hidden></span>
             <p id="hero-desc"></p>
             <div id="hero-meta"></div>
           </div>
@@ -928,13 +1032,19 @@
           <p id="status"></p>
           <div id="list"></div>
           <div id="more"></div>
+          <section id="about" hidden>
+            <h2 class="shelf"></h2>
+            <div class="about-card">
+              <img alt="" />
+              <div class="about-text"><b></b><p></p><button type="button"></button></div>
+            </div>
+          </section>
         </div>
       </main>
 
       <div id="stage" hidden>
-        <img id="stage-bg" alt="" />
         <div id="stage-top">
-          <span id="stage-label" data-t="playingNow"></span>
+          <button id="stage-label"></button>
           <div id="av" role="group" data-title="avTip" hidden>
             <button id="av-song" data-t="avSong" aria-pressed="true"></button>
             <button id="av-video" data-t="avVideo" aria-pressed="false"></button>
@@ -981,10 +1091,13 @@
               <svg viewBox="0 0 24 24"><path d="M6 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4m6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4m6 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4" /></svg>
             </button>
           </div>
-          <button id="np-lyrics" hidden><b data-t="lyrics"></b><p></p></button>
           <div id="np-next" hidden>
             <div id="np-next-head"><b data-t="queue"></b><button id="np-open-queue" data-t="openQueue"></button></div>
             <div id="np-next-row"></div>
+          </div>
+          <div id="np-artist-card" role="button" tabindex="0" hidden>
+            <div class="ac-photo"><b></b></div>
+            <div class="ac-foot"></div>
           </div>
         </div>
         <div id="queue-pane" role="tabpanel">
@@ -1018,6 +1131,10 @@
             <button value="" formnovalidate data-t="cancel"></button>
           </div>
         </form>
+      </dialog>
+      <dialog id="keys-dialog">
+        <h2><span data-t="setKeys"></span><kbd>Esc</kbd></h2>
+        <div id="keys-cols"></div>
       </dialog>
       <dialog id="up-dialog">
         <h2 data-t="updateTitle"></h2>
