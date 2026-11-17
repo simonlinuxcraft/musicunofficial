@@ -10,6 +10,16 @@
 
 ---
 
+## Why this exists
+
+I built this app together with Claude because I could not find a decent YouTube
+Music player for Linux. I wanted something that looks and behaves like a desktop
+media player, with media keys, a tray icon and a mini player, and that otherwise
+stays out of the way.
+
+It is a hobby project. I use it myself on Ubuntu with GNOME, and that is where
+it gets tested. If something breaks or you miss something, open an issue.
+
 ## Please read first
 
 > **This is not an official YouTube or Google product.**
@@ -54,10 +64,10 @@ everything goes through the site itself. Google's consent page and the sign-in
 open in the same window when they are needed; `Sign in` in the header is there
 while no account is signed in.
 
-It deliberately does not try to be a music suite. There are no plugins, no
-themes, no downloader, no ad blocker and no telemetry. The interface relies on
-internals of the site, so a YouTube update can break a part of it until the app
-catches up.
+I keep it small on purpose, it is not meant to be a music suite. There are no
+plugins, no themes, no downloader, no ad blocker and no telemetry. The interface
+relies on internals of the site, so a YouTube update can break a part of it
+until I catch up.
 
 ## Features
 
