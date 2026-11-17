@@ -103,7 +103,6 @@ ipcMain.on('mini:restore', (e) => {
 ipcMain.on('mini:quit', (e) => fromMini(e) && app.quit());
 // The page's like button; its new state comes back with the next track update.
 ipcMain.on('mini:like', (e) => fromMini(e) && page.control('like').catch(() => {}));
-// The line being sung, only when the setting asks for it.
 ipcMain.handle('mini:synced-lyrics', (e, q) => (fromMini(e) && store.settings.miniLyrics === true ? front.syncedLyrics(q) : null));
 
 module.exports = {
@@ -112,7 +111,6 @@ module.exports = {
   destroy,
   saveBounds,
   isOpen: alive,
-  // A lyrics setting changed: the mini player asks again for the playing track.
   lyricsChanged: () => alive() && mini.webContents.send('mini:lyrics-changed'),
   reload: () => alive() && mini.webContents.reload(),
   webContents: () => (alive() ? mini.webContents : null),

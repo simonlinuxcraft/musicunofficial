@@ -282,9 +282,6 @@ function buildChange(c) {
 const changeDone = (res) =>
   !!res && !res.error && (!res.status || res.status === 'STATUS_SUCCEEDED') && (res.feedbackResponses || []).every((r) => r?.isProcessed !== false);
 
-// Tracks and cards of a browse or search response, grouped by shelf, plus the
-// header's shuffle entry and the next page token. Walks the whole tree because
-// the shelves change per page and over time, the item renderers have stayed put.
 // "Random Access Memories (Drumless Edition)" -> the name and the edition apart, so the
 // edition can sit under a large title instead of being cut off. Only suffixes that name
 // a release form; "(feat. X)" and ordinary brackets stay in the title.
@@ -315,6 +312,9 @@ function kindOf(watch, browse) {
   return VIDEO_KINDS[type] || (typeof type === 'string' ? 'video' : 'song');
 }
 
+// Tracks and cards of a browse or search response, grouped by shelf, plus the
+// header's shuffle entry and the next page token. Walks the whole tree because
+// the shelves change per page and over time, the item renderers have stayed put.
 function parseItems(json) {
   const out = [];
   const sections = [];

@@ -83,7 +83,6 @@ function coverColor(url) {
   });
 }
 
-// The bar takes the cover's colour.
 async function tintBar(art) {
   const bar = document.querySelector('footer');
   const clear = () => bar.style.removeProperty('--cover');

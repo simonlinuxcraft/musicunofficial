@@ -120,8 +120,7 @@ function queueHead(title, info, auto) {
   return h;
 }
 
-// The queue in parts: the playing track on a surface of its own, what was queued after it
-// with its length, then what autoplay added (top < 0, which cannot be dragged either).
+// What autoplay added has top < 0 (and cannot be dragged either).
 function queueSections(rows) {
   const at = rows.findIndex((q) => q.selected);
   if (at < 0) return rows.map(queueRow);
@@ -193,7 +192,6 @@ function drawSynced(box, scroller, lines) {
   box.replaceChildren(
     ...lines.map((l) => {
       const p = document.createElement('p');
-      // A gap without words: three dots that pulse while it lasts.
       if (l.text) p.textContent = l.text;
       else {
         p.className = 'gap';
@@ -404,7 +402,6 @@ function setSlot(next, away = false) {
   slot = next;
   main.hidden = slot === 'stage';
   $('stage').hidden = slot !== 'stage';
-  // The blurred cover runs under the bars and the folded library, as one surface.
   document.body.classList.toggle('staged', slot === 'stage');
   stageFold = true;
   updateRail();
@@ -417,7 +414,6 @@ function setSlot(next, away = false) {
   placePlayer();
 }
 
-// The big view's own lyrics, beside the cover.
 // Where the music was started, over the big view; a click goes back there.
 function originTitle(o) {
   return o.kind === 'search' ? T.searchOrigin.replace('{q}', o.query) : (o.page && o.page.header && o.page.header.title) || o.title;
@@ -444,7 +440,6 @@ $('stage-label').addEventListener('click', () => {
 });
 
 // A card on the playing track's first artist: photo, listeners and subscribe.
-// One browse per artist, kept for the next time it plays.
 const artistPages = new Map();
 let artistSeq = 0;
 async function drawArtistCard() {
@@ -469,6 +464,7 @@ async function drawArtistCard() {
 }
 $('np-artist-card').addEventListener('keydown', (e) => e.key === 'Enter' && e.target === e.currentTarget && e.currentTarget.click());
 
+// The big view's own lyrics, beside the cover.
 async function drawStage() {
   drawOrigin();
   const id = playingId();

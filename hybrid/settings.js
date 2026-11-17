@@ -199,7 +199,6 @@ function renderSettings(s) {
     up.append(row);
   }
   box.append(fm, heading(T.setUpdates), up, heading(T.setKeys), group(...keyList().children));
-  // One chip per part, standing at the top while the page scrolls.
   const jump = div('set-jump');
   for (const h of box.querySelectorAll('h2')) {
     const b = document.createElement('button');

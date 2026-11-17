@@ -64,7 +64,6 @@ function coverOf(item, url = item.thumb) {
     const b = iconButton('cover-play', ICON_PLAY, T.playAll, () => activate(item));
     b.tabIndex = -1;
     b.setAttribute('aria-hidden', 'true');
-    // The playing track shows its bars on the cover, wherever the cover is.
     const now = div('playing');
     now.append(eqBars());
     box.append(now, b);
@@ -129,7 +128,6 @@ const moreButton = (item) =>
     openMenu(menuEntries(item), r.left, r.bottom);
   });
 
-// Music videos keep their wide frame instead of a square crop.
 const wide = (item) => (item.kind === 'video' ? ' wide' : '');
 
 function row(item) {
@@ -144,7 +142,7 @@ function row(item) {
 const BULLET = { text: ' • ', browseId: null };
 
 // An edition ("Deluxe Edition") moves from the card's title into the line under it,
-// so two releases of one album no longer read the same.
+// so two releases of one album read differently.
 function tile(item) {
   const el = div('tile' + (item.round ? ' round' : '') + wide(item));
   const parts = item.edition ? [{ text: item.edition, browseId: null }, ...(item.parts.length ? [BULLET] : []), ...item.parts] : item.parts;
@@ -221,7 +219,6 @@ function tableRow(item, i, cols) {
   text.append(title);
   if (cols.albumArtist === undefined) text.append(subLine(item, item.byline));
   else {
-    // An album's own artist under every track says nothing; a guest or another artist does.
     el.classList.add('solo');
     const by = (item.byline || []).map((p) => p.text).join('').trim();
     // "(feat. X)" in the title already names the guest.
@@ -293,7 +290,6 @@ function pagers(list) {
   list.updatePagers = () => {
     const max = list.scrollWidth - list.clientWidth;
     prev.hidden = next.hidden = max < 2;
-    // Edges with more behind them fade out (chip rows).
     list.classList.toggle('fade-l', list.scrollLeft > 2);
     list.classList.toggle('fade-r', list.scrollLeft < max - 2);
     // aria-disabled, not disabled: a disabled button would drop the keyboard focus.
