@@ -124,14 +124,10 @@ function queueHead(title, info, auto) {
 
 // What autoplay added has top < 0 (and cannot be dragged either).
 function queueSections(rows) {
-  let at = rows.findIndex((q) => q.selected);
-  // The page can lose its mark on the playing row (seen after autoplay took over); the track itself still says which it is.
-  if (at < 0 && track) at = rows.findIndex((q) => q.videoId === track.videoId);
+  const at = rows.findIndex((q) => q.selected);
+  if (at < 0) return rows.map(queueRow);
   const now = div('q-now');
-  if (at >= 0) now.append(queueRow({ ...rows[at], selected: true }, at));
-  // Not in the queue at all: the playing track still heads the panel.
-  else if (track && !track.ad) now.append(queueRow({ videoId: track.videoId, title: track.title, artist: track.artist || '', thumb: track.art || '', length: '', selected: true, top: -1, itemId: null }, -1));
-  else return rows.map(queueRow);
+  now.append(queueRow(rows[at], at));
   const after = rows.map((q, i) => [q, i]).slice(at + 1);
   const own = after.filter(([q]) => q.top >= 0);
   const auto = after.filter(([q]) => q.top < 0);
@@ -146,7 +142,7 @@ function queueSections(rows) {
     }
   }
   // What has played goes below, so the playing track stays on top however long the session runs.
-  const before = rows.slice(0, Math.max(at, 0));
+  const before = rows.slice(0, at);
   if (before.length) {
     out.push(queueHead(T.played, '', true));
     before.forEach((q, i) => {
