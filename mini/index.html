@@ -75,7 +75,7 @@
         align-items: center;
         gap: 2px;
         /* Pulled left so the first icon lines up with the title. */
-        margin: 0 0 11px -9px;
+        margin: 0 0 10px -9px;
       }
       #time { margin-left: auto; color: var(--dim); font-size: 11px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 
@@ -97,9 +97,11 @@
       #like .on, #like[aria-pressed='true'] .off { display: none; }
       #like[aria-pressed='true'] .on { display: block; }
       button svg { width: 15px; height: 15px; fill: currentColor; pointer-events: none; }
-      #playpause { width: 32px; height: 32px; color: #fff; background: var(--accent); margin: 0 3px; }
+      /* The glyph at its native 24px in an even box, so its edges fall on whole pixels. */
+      #playpause { flex: 0 0 auto; width: 34px; height: 34px; color: #fff; background: var(--accent); margin: 0 3px; }
       #playpause:hover { background: #ff2450; color: #fff; }
-      #playpause svg { width: 19px; height: 19px; }
+      #playpause:active { background: #d9002b; }
+      #playpause svg { width: 24px; height: 24px; }
       /* Window buttons sit in the corner, apart from playback. */
       #restore, #quit { position: absolute; top: 6px; width: 22px; height: 22px; }
       #restore { right: 30px; }
