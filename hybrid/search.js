@@ -32,8 +32,8 @@ function loadRecent() {
   try {
     const r = JSON.parse(localStorage.getItem(RECENT)) || {};
     return {
-      queries: (Array.isArray(r.queries) ? r.queries : []).filter((q) => typeof q === 'string').slice(0, 8),
-      hits: (Array.isArray(r.hits) ? r.hits : []).filter((h) => h && typeof h.title === 'string' && (h.browseId || h.watch)).slice(0, 6),
+      queries: (Array.isArray(r.queries) ? r.queries : []).filter((q) => typeof q === 'string'),
+      hits: (Array.isArray(r.hits) ? r.hits : []).filter((h) => h && typeof h.title === 'string' && (h.browseId || h.watch)),
     };
   } catch {
     return { queries: [], hits: [] };

@@ -558,6 +558,8 @@ test('validSetting takes only the values the settings page offers', () => {
   assert.ok(!validSetting('videoQuality', '8k', q));
   assert.ok(validSetting('notify', false, q));
   assert.ok(!validSetting('richPresence', 'true', q));
+  assert.ok(validSetting('miniLyrics', true, q));
+  assert.ok(!validSetting('miniLyrics', 'yes', q));
   assert.ok(validSetting('sleep', 30, q));
   assert.ok(!validSetting('sleep', '30', q));
   assert.ok(!validSetting('lastfm', {}, q));
@@ -792,10 +794,4 @@ test('parseItems tells songs, videos and pages apart', () => {
   assert.equal(page.items[4].title, 'Album (Deluxe Edition)');
   assert.equal(page.items[4].base, 'Album');
   assert.equal(page.items[4].edition, 'Deluxe Edition');
-});
-
-test('validSetting takes the mini player lyrics switch as a boolean only', () => {
-  assert.ok(validSetting('miniLyrics', true, []));
-  assert.ok(validSetting('miniLyrics', false, []));
-  assert.ok(!validSetting('miniLyrics', 'yes', []));
 });

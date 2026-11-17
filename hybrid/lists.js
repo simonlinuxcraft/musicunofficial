@@ -759,7 +759,7 @@ const SEARCH_KINDS = [
   ['playlist', 'kindPlaylist', /playlists?$/i, true],
   ['podcast', 'kindPodcast', /^podcasts?$/i, true],
   ['episode', 'kindEpisode', /^(folgen|episodes?)$/i, false],
-  ['profile', 'kindProfile', /^(profile?|profiles)$/i, true],
+  ['profile', 'kindProfile', /^profile?s?$/i, true],
 ];
 
 // "Song • Daft Punk • 3:00" under a heading that already says Songs: the first word goes.

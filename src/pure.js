@@ -431,8 +431,6 @@ function parseItems(json) {
     return {
       kind: 'artist',
       title: text(a.title),
-      base: text(a.title),
-      edition: '',
       subtitle: text(a.monthlyListenerCount) || text(a.subscriptionButton?.subscribeButtonRenderer?.subscriberCountText),
       second: '',
       strap: [],
