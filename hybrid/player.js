@@ -96,6 +96,9 @@ async function tintBar(art) {
   }
 }
 
+// A rating just made in the bar, until the page reports it.
+let rating = null;
+
 function applyLike(like) {
   for (const id of ['like', 'np-like']) $(id).setAttribute('aria-pressed', String(like === 'LIKE'));
   $('dislike').setAttribute('aria-pressed', String(like === 'DISLIKE'));
@@ -178,6 +181,10 @@ api.onTrack((t) => {
   // The page reports its player bar with the track, so changes made elsewhere
   // (MPRIS, the YouTube Music window) show here too.
   if (has) applyControls({ shuffle: t.shuffle, repeat: t.repeat, like: t.like, volume: t.volume, muted: t.muted });
+  if (has && rating && t.videoId === rating.id && t.like && t.like !== rating.from && Date.now() < rating.until) {
+    rating = null;
+    rated(t.videoId, t.like);
+  }
   $('av').hidden = !(has && t.avAvailable && !t.ad);
   $('av-song').setAttribute('aria-pressed', String(!has || t.avMode !== 'OMV_PREFERRED'));
   $('av-video').setAttribute('aria-pressed', String(has && t.avMode === 'OMV_PREFERRED'));
@@ -232,6 +239,8 @@ for (const action of ['shuffle', 'repeat', 'like', 'dislike', 'mute']) {
       b.disabled = true;
       b.setAttribute('aria-pressed', String(b.getAttribute('aria-pressed') !== 'true'));
     }
+    // The page shows a new rating once YouTube has answered; its next reports carry it to the lists.
+    if (track && (action === 'like' || action === 'dislike')) rating = { id: track.videoId, from: track.like, until: Date.now() + 6000 };
     applyControls(await api.control(action).catch(() => null));
     b.disabled = false;
     // Shuffle reorders the queue in place.

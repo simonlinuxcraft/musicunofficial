@@ -746,7 +746,7 @@
       /* A notch lighter than the dim grey: it sits on the strongest part of the tint. */
       #artist { color: #bdbdbd; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       body:not(.has-track) #title { color: var(--fg2); font-weight: 400; }
-      body:not(.has-track) #like { visibility: hidden; }
+      body:not(.has-track) :is(#like, #dislike) { visibility: hidden; }
 
       .icon-btn { position: relative; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; color: var(--fg2); flex: 0 0 auto; }
       .icon-btn:hover { color: var(--fg); }
@@ -756,7 +756,8 @@
       /* Thumbs as in YouTube Music: outlined until rated, filled once rated. */
       .icon-btn .on, .icon-btn[aria-pressed='true'] .off { display: none; }
       .icon-btn[aria-pressed='true'] .on { display: block; }
-      #like[aria-pressed='true'] { color: var(--fg); }
+      :is(#like, #dislike)[aria-pressed='true'] { color: var(--fg); }
+      #dislike { margin-left: -8px; }
       #like.pop svg, .rate.pop svg { animation: pop 350ms ease-out; }
       @keyframes pop { 40% { transform: scale(1.35) rotate(-12deg); } }
       #center { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
@@ -769,8 +770,8 @@
       .when-paused, body.playing .when-playing { opacity: 1; transform: none; }
       body:not(.has-track) #controls button,
       body:not(.has-track) #progress,
-      body:not(.has-track) #like,
-      body.ad #like { opacity: 0.35; pointer-events: none; }
+      body:not(.has-track) :is(#like, #dislike),
+      body.ad :is(#like, #dislike) { opacity: 0.35; pointer-events: none; }
       #progress { display: flex; align-items: center; gap: 8px; width: 100%; color: var(--fg2); font-size: 12px; font-variant-numeric: tabular-nums; }
       #progress span { flex: 0 0 auto; min-width: 36px; }
       #t-pos { text-align: right; }
@@ -1166,8 +1167,10 @@
             <svg class="off" viewBox="0 0 24 24"><path d="M21 8h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73v-2c0-1.1-.9-2-2-2zm0 4-3 7H9V9l4.34-4.34L12.23 10H21zM1 9h4v12H1z" /></svg>
             <svg class="on" viewBox="0 0 24 24"><path d="M1 21h4V9H1zm22-11c0-1.1-.9-2-2-2h-6.31l.95-4.57.03-.32c0-.41-.17-.79-.44-1.06L14.17 1 7.59 7.59C7.22 7.95 7 8.45 7 9v10c0 1.1.9 2 2 2h9c.83 0 1.54-.5 1.84-1.22l3.02-7.05c.09-.23.14-.47.14-.73z" /></svg>
           </button>
-          <!-- Rated from the menu and the D key; kept for both and for its state. -->
-          <button id="dislike" aria-pressed="false" hidden></button>
+          <button id="dislike" class="icon-btn" data-tip="dislike" data-key="D" aria-pressed="false">
+            <svg class="off" viewBox="0 0 24 24"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.58-6.59c.37-.36.59-.86.59-1.41V5c0-1.1-.9-2-2-2zm0 12-4.34 4.34L11.77 14H3v-2l3-7h9zm4-12h4v12h-4z" /></svg>
+            <svg class="on" viewBox="0 0 24 24"><path d="M15 3H6c-.83 0-1.54.5-1.84 1.22l-3.02 7.05c-.09.23-.14.47-.14.73v2c0 1.1.9 2 2 2h6.31l-.95 4.57-.03.32c0 .41.17.79.44 1.06L9.83 23l6.59-6.59c.36-.36.58-.86.58-1.41V5c0-1.1-.9-2-2-2zm4 0v12h4V3z" /></svg>
+          </button>
         </div>
         <button id="skip-ad" data-t="skipAd" hidden></button>
       </div>

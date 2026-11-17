@@ -527,11 +527,7 @@ async function nowMenu(x, y) {
   const id = (prefix) => parts.find((p) => p.browseId.startsWith(prefix))?.browseId;
   const item = { here: true, watch: { videoId }, parts, artistId: id('UC'), albumId: id('MPRE'), thumb: track.art };
   item.radio = { watchEndpoint: { videoId, playlistId: 'RDAMVM' + videoId } };
-  const entries = menuEntries(item);
-  const disliked = $('dislike').getAttribute('aria-pressed') === 'true';
-  // Rating sits here as well, with the keys that do the same.
-  entries.splice(entries.indexOf('-') + 1, 0, { label: T.dislike, icon: disliked ? ICONS.block : ICONS.dislike, key: 'D', run: () => $('dislike').click() });
-  openMenu(entries, x, y);
+  openMenu(menuEntries(item), x, y);
 }
 $('now').addEventListener('contextmenu', (e) => {
   e.preventDefault();

@@ -457,6 +457,7 @@ function parseItems(json) {
     duration: row.duration || '',
     explicit: row.explicit === true,
     like: row.like || null,
+    likeId: (row.like && row.likeId) || null,
     round: !watch && ROUND.includes(pageType(browse)),
     top: row.top === true,
     underTop: false,
@@ -523,13 +524,16 @@ function parseItems(json) {
       }
       const top = li.menu?.menuRenderer?.topLevelButtons;
       const lb = (Array.isArray(top) ? top : []).map((b) => b?.likeButtonRenderer).find(Boolean);
+      // The like can sit on the track's other version (song or video) than the one the row plays.
+      const likeId = matching(lb?.target?.videoId, VIDEO_ID);
       const row = {
         byline,
         album,
         extra,
         duration: fixed.find((f) => /^\d{1,2}(:\d\d){1,2}$/.test(f)) || '',
         explicit: (Array.isArray(li.badges) ? li.badges : []).some((b) => b?.musicInlineBadgeRenderer?.icon?.iconType === 'MUSIC_EXPLICIT_BADGE'),
-        like: watch && lb?.target?.videoId === watch.videoId ? pick(lb.likeStatus, LIKE_STATES) : null,
+        like: watch && likeId ? pick(lb.likeStatus, LIKE_STATES) : null,
+        likeId,
       };
       const item = entry({
         index: text(li.index),
