@@ -57,7 +57,7 @@ const SLEEP_CHOICES = ['off', 'track', 15, 30, 45, 60, 90];
 function validSetting(key, value, qualities) {
   if (key === 'language') return ['system', 'de', 'en'].includes(value);
   if (key === 'videoQuality') return qualities.includes(value);
-  if (key === 'notify' || key === 'richPresence' || key === 'syncedLyrics') return typeof value === 'boolean';
+  if (key === 'notify' || key === 'richPresence' || key === 'syncedLyrics' || key === 'miniLyrics') return typeof value === 'boolean';
   if (key === 'sleep') return SLEEP_CHOICES.includes(value);
   return false;
 }
@@ -285,6 +285,36 @@ const changeDone = (res) =>
 // Tracks and cards of a browse or search response, grouped by shelf, plus the
 // header's shuffle entry and the next page token. Walks the whole tree because
 // the shelves change per page and over time, the item renderers have stayed put.
+// "Random Access Memories (Drumless Edition)" -> the name and the edition apart, so the
+// edition can sit under a large title instead of being cut off. Only suffixes that name
+// a release form; "(feat. X)" and ordinary brackets stay in the title.
+const EDITION =
+  /edition|deluxe|remaster|anniversary|jubil|soundtrack|expanded|ausgabe|fassung|reissue|collector|\b(live|version|mono|stereo|bonus|special|acoustic|akustik|instrumental|demos?|edit|remix|mix|redux|sessions?|extended)\b/i;
+function splitEdition(title) {
+  const t = typeof title === 'string' ? title.trim() : '';
+  const m = t.match(/^(.+?)\s*[([]([^()[\]]{2,60})[)\]]$/) || t.match(/^(.+?)\s+[-\u2013\u2014]\s+([^-\u2013\u2014]{2,60})$/);
+  if (!m || !EDITION.test(m[2]) || /^(feat|ft|with|mit)\b/i.test(m[2])) return { base: t, edition: '' };
+  return { base: m[1].trim(), edition: m[2].trim() };
+}
+
+// What a result is: songs and videos by their video type, the rest by the page they open.
+// Every type but the audio track and the episode is a video (OMV, UGC, SHOULDER and more).
+const VIDEO_KINDS = { MUSIC_VIDEO_TYPE_ATV: 'song', MUSIC_VIDEO_TYPE_PODCAST_EPISODE: 'episode' };
+const PAGE_KINDS = {
+  MUSIC_PAGE_TYPE_ALBUM: 'album',
+  MUSIC_PAGE_TYPE_ARTIST: 'artist',
+  MUSIC_PAGE_TYPE_LIBRARY_ARTIST: 'artist',
+  MUSIC_PAGE_TYPE_PLAYLIST: 'playlist',
+  MUSIC_PAGE_TYPE_USER_CHANNEL: 'profile',
+  MUSIC_PAGE_TYPE_PODCAST_SHOW_DETAIL_PAGE: 'podcast',
+  MUSIC_PAGE_TYPE_NON_MUSIC_AUDIO_TRACK_PAGE: 'episode',
+};
+function kindOf(watch, browse) {
+  if (!watch) return PAGE_KINDS[pageType(browse)] || '';
+  const type = watch.watchEndpointMusicSupportedConfigs?.watchEndpointMusicConfig?.musicVideoType;
+  return VIDEO_KINDS[type] || (typeof type === 'string' ? 'video' : 'song');
+}
+
 function parseItems(json) {
   const out = [];
   const sections = [];
@@ -382,6 +412,7 @@ function parseItems(json) {
       return {
         kind: 'list',
         title: text(l.title),
+        ...splitEdition(text(l.title)),
         subtitle: text(l.subtitle),
         second: text(l.secondSubtitle),
         strap: parts(l.straplineTextOne),
@@ -400,6 +431,8 @@ function parseItems(json) {
     return {
       kind: 'artist',
       title: text(a.title),
+      base: text(a.title),
+      edition: '',
       subtitle: text(a.monthlyListenerCount) || text(a.subscriptionButton?.subscribeButtonRenderer?.subscriberCountText),
       second: '',
       strap: [],
@@ -417,7 +450,9 @@ function parseItems(json) {
     return to && label ? { text: label, selected: c.isSelected === true, ...to } : null;
   };
   // A list row, a card or the top result. menuOf() and push() fill in the rest.
-  const entry = ({ index = '', title, subtitle, parts, thumb, card = false, watch, browse, play, row = {} }) => ({
+  const entry = ({ index = '', title, subtitle, parts, thumb, big = '', card = false, watch, rawWatch, browse, play, row = {} }) => ({
+    ...splitEdition(title),
+    kind: kindOf(watch ? rawWatch || {} : null, browse),
     byline: row.byline || parts,
     album: row.album || null,
     extra: row.extra || '',
@@ -441,6 +476,7 @@ function parseItems(json) {
     subtitle,
     parts,
     thumb,
+    big,
     card,
     watch,
     browseId: watch ? null : browseOf(browse),
@@ -474,7 +510,8 @@ function parseItems(json) {
       const play = overlayPlay(li.overlay);
       const titleWatch = runsOf(cols[0])[0]?.navigationEndpoint?.watchEndpoint;
       const rowWatch = li.playlistItemData && { videoId: li.playlistItemData.videoId };
-      const watch = sanitizeWatch(play?.watchEndpoint || titleWatch || rowWatch || li.navigationEndpoint?.watchEndpoint);
+      const rawWatch = play?.watchEndpoint || titleWatch || rowWatch || li.navigationEndpoint?.watchEndpoint;
+      const watch = sanitizeWatch(rawWatch);
       const byline = parts(cols[1]);
       const links = parts(cols[1]);
       for (const f of fixed) links.push(...(links.length ? [{ text: ' • ', browseId: null }] : []), { text: f, browseId: null });
@@ -502,7 +539,10 @@ function parseItems(json) {
         subtitle: links.map((r) => r.text).join('').trim(),
         parts: links,
         thumb: thumb(li.thumbnail, 96),
+        // For search's shelves, where a row becomes a card.
+        big: thumb(li.thumbnail, 226),
         watch,
+        rawWatch,
         browse: li.navigationEndpoint?.browseEndpoint,
         play,
         row,
@@ -518,6 +558,7 @@ function parseItems(json) {
         thumb: thumb(card.thumbnailRenderer, 300),
         card: true,
         watch: sanitizeWatch(nav.watchEndpoint),
+        rawWatch: nav.watchEndpoint,
         browse: nav.browseEndpoint,
         play: overlayPlay(card.thumbnailOverlay),
       });
@@ -532,6 +573,7 @@ function parseItems(json) {
         parts: links,
         thumb: thumb(top.thumbnail, 226),
         watch: sanitizeWatch(nav.watchEndpoint),
+        rawWatch: nav.watchEndpoint,
         browse: nav.browseEndpoint,
         play: overlayPlay(top.thumbnailOverlay),
         row: { top: true },
@@ -808,6 +850,7 @@ module.exports = {
   sanitizeControls,
   sanitizeQueue,
   parseItems,
+  splitEdition,
   lyricsBrowseId,
   parseLyrics,
   parseSuggestions,

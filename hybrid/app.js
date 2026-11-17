@@ -61,12 +61,37 @@ document.addEventListener('keydown', (e) => {
     $('search').querySelector('input').focus();
     return;
   }
+  if (e.key === '?') {
+    e.preventDefault();
+    return showKeys();
+  }
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   const run = KEYS[(e.shiftKey && key.startsWith('Arrow') ? 'Shift+' : '') + key];
   if (!run || !track || (e.repeat && ONCE.includes(key))) return;
   e.preventDefault();
   run();
 });
+
+// "?" lists every key in one place, the same list as on the settings page.
+function showKeys() {
+  const half = Math.ceil(T.keys.length / 2);
+  $('keys-cols').replaceChildren(
+    ...[T.keys.slice(0, half), T.keys.slice(half)].map((list) => {
+      const col = div('');
+      for (const [keys, label] of list) {
+        const row = div('kr');
+        const k = document.createElement('kbd');
+        k.textContent = keys;
+        row.append(div('', label), k);
+        col.append(row);
+      }
+      return col;
+    })
+  );
+  $('keys-dialog').showModal();
+}
+// A click beside the box closes it, as Escape does.
+$('keys-dialog').addEventListener('click', (e) => e.target === e.currentTarget && e.currentTarget.close());
 
 // The mouse's side buttons go back and forward, as in a browser.
 window.addEventListener('mouseup', (e) => {

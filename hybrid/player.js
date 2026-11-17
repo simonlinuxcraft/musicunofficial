@@ -157,8 +157,15 @@ function drawArtistLinks() {
       if (i) box.append(', ');
       box.append(linkTo(l));
     });
-    if (nowArtists.album && id !== 'np-artist') box.append(' \u2022 ', linkTo(nowArtists.album));
+    if (nowArtists.album && id !== 'np-artist') {
+      // A narrow bar drops the album first, so the title and artist stay whole.
+      const alb = document.createElement('span');
+      alb.className = 'alb';
+      alb.append(' \u2022 ', linkTo(nowArtists.album));
+      box.append(alb);
+    }
   }
+  drawArtistCard();
 }
 
 api.onTrack((t) => {
@@ -184,7 +191,7 @@ api.onTrack((t) => {
     lastArt = art;
     // Quoted and escaped so a stray quote cannot end the value; main only passes https urls anyway.
     $('art').style.backgroundImage = art ? 'url("' + art.replace(/["\\]/g, encodeURIComponent) + '")' : '';
-    for (const id of ['np-art', 'stage-bg', 'stage-art']) {
+    for (const id of ['np-art', 'stage-bg', 'stage-art', 'backdrop']) {
       if (art) $(id).src = art;
       else $(id).removeAttribute('src');
     }

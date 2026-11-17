@@ -33,18 +33,56 @@ let track = null;
 
 const fmt = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
 
+// With the setting on, the line being sung takes the artist's place. One request per track.
+let lines = null;
+let linesFor = null;
+function loadLines(t) {
+  const id = t && !t.ad ? t.videoId : null;
+  if (id === linesFor) return;
+  linesFor = id;
+  lines = null;
+  if (!id) return;
+  window.mini.syncedLyrics({ title: t.title, artist: t.artist, duration: t.duration }).then(
+    (l) => linesFor === id && (lines = l && l.lines.length ? l.lines : null),
+    () => {}
+  );
+}
+
+// Switched on or off while a track plays: asked again at once, not with the next track.
+window.mini.onLyricsChanged(() => {
+  linesFor = null;
+  loadLines(track);
+});
+
+let shownLine = null;
+function drawLine(pos) {
+  let text = '';
+  if (lines) {
+    let i = -1;
+    while (i + 1 < lines.length && lines[i + 1].time <= pos + 0.2) i++;
+    text = i >= 0 ? lines[i].text : '';
+  }
+  if (text === shownLine) return;
+  shownLine = text;
+  $('line').textContent = text;
+  $('line').hidden = !text;
+  $('artist').hidden = !!text;
+}
+
 function drawProgress() {
   let width = '0%';
   let time = '';
+  let pos = 0;
   if (track && track.duration > 0) {
     // Projected from when the page measured it, so the IPC hop does not count as playback.
     const at = Number.isFinite(track.at) ? track.at : Date.now();
     const elapsed = track.playing ? Math.max(0, Date.now() - at) / 1000 : 0;
-    const pos = Math.min(track.duration, track.position + elapsed);
+    pos = Math.min(track.duration, track.position + elapsed);
     // One decimal is a third of a pixel at this width; finer only produces invisible writes.
     width = ((pos / track.duration) * 100).toFixed(1) + '%';
     time = fmt(pos) + ' / ' + fmt(track.duration);
   }
+  drawLine(pos);
   if (time !== lastTime) $('time').textContent = lastTime = time;
   if (width === lastWidth) return;
   lastWidth = width;
@@ -61,6 +99,7 @@ window.mini.onTrack((t) => {
 
   $('title').textContent = has ? t.title : T.nothing;
   $('artist').textContent = has ? t.artist || '' : '';
+  loadLines(has ? t : null);
   document.title = has ? t.title + (t.artist ? ' - ' + t.artist : '') : 'Music';
 
   const art = has ? t.art || '' : '';

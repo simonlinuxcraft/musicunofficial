@@ -21,7 +21,109 @@ function closeSuggest() {
 
 function search(q) {
   closeSuggest();
-  if (q) go({ title: q, kind: 'search', query: q, load: () => api.search(q) });
+  if (!q) return;
+  rememberQuery(q);
+  go({ title: q, kind: 'search', query: q, load: () => api.search(q) });
+}
+
+// Recent searches and the hits opened from them, kept on this device only.
+const RECENT = 'recentSearch';
+function loadRecent() {
+  try {
+    const r = JSON.parse(localStorage.getItem(RECENT)) || {};
+    return {
+      queries: (Array.isArray(r.queries) ? r.queries : []).filter((q) => typeof q === 'string').slice(0, 8),
+      hits: (Array.isArray(r.hits) ? r.hits : []).filter((h) => h && typeof h.title === 'string' && (h.browseId || h.watch)).slice(0, 6),
+    };
+  } catch {
+    return { queries: [], hits: [] };
+  }
+}
+function saveRecent(r) {
+  try {
+    localStorage.setItem(RECENT, JSON.stringify(r));
+  } catch {}
+}
+const hitKey = (h) => (h.watch ? h.watch.videoId : h.browseId);
+
+function rememberQuery(q) {
+  const r = loadRecent();
+  r.queries = [q, ...r.queries.filter((x) => x.toLowerCase() !== q.toLowerCase())].slice(0, 8);
+  saveRecent(r);
+}
+
+function rememberHit(item) {
+  if (!item.watch && !item.browseId) return;
+  const r = loadRecent();
+  const hit = {
+    title: item.title,
+    subtitle: item.subtitle || '',
+    thumb: item.thumb || '',
+    round: !!item.round,
+    browseId: item.watch ? null : item.browseId,
+    watch: item.watch ? { videoId: item.watch.videoId } : null,
+  };
+  r.hits = [hit, ...r.hits.filter((h) => hitKey(h) !== hitKey(hit))].slice(0, 6);
+  saveRecent(r);
+}
+
+// A cross that takes one entry off the list, without picking it.
+function dropButton(run) {
+  const b = iconButton('drop-x', ICONS.close, T.remove, () => {});
+  b.tabIndex = -1;
+  b.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    run();
+    showRecent();
+  });
+  return b;
+}
+
+// The empty, focused field offers what was searched and opened before.
+function showRecent() {
+  const r = loadRecent();
+  if (!r.queries.length && !r.hits.length) return closeSuggest();
+  const head = div('recent-head', T.recentSearch);
+  const clear = document.createElement('button');
+  clear.type = 'button';
+  clear.tabIndex = -1;
+  clear.textContent = T.clearHistory;
+  clear.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    saveRecent({ queries: [], hits: [] });
+    closeSuggest();
+  });
+  head.append(clear);
+  const queries = r.queries.map((q, n) => {
+    const o = document.createElement('div');
+    o.id = 'suggest-r' + n;
+    o.setAttribute('role', 'option');
+    const label = document.createElement('span');
+    label.textContent = q;
+    o.append(svg(ICONS.history), label, dropButton(() => saveRecent({ ...r, queries: r.queries.filter((x) => x !== q) })));
+    o.pick = () => {
+      input.value = q;
+      $('search-clear').hidden = false;
+      $('search').classList.add('filled');
+      search(q);
+    };
+    o.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      o.pick();
+    });
+    return o;
+  });
+  const hits = r.hits.map((h, n) => {
+    const o = entityOption(h, 'h' + n);
+    o.append(dropButton(() => saveRecent({ ...r, hits: r.hits.filter((x) => hitKey(x) !== hitKey(h)) })));
+    return o;
+  });
+  $('suggest').replaceChildren(head, ...queries, ...(queries.length && hits.length ? [document.createElement('hr')] : []), ...hits);
+  active = -1;
+  const open = document.activeElement === input;
+  $('suggest').hidden = !open;
+  input.setAttribute('aria-expanded', String(open));
 }
 
 function setActive(i) {
@@ -45,7 +147,10 @@ function entityOption(item, n) {
   o.pick = () => {
     closeSuggest();
     input.blur();
+    rememberHit(item);
     activate(item);
+    // Played straight from the list, not from the page that happens to be open.
+    if (item.watch) playOrigin = null;
   };
   o.addEventListener('pointerdown', (e) => {
     e.preventDefault();
@@ -98,7 +203,10 @@ input.addEventListener('input', () => {
   $('search').classList.toggle('filled', !!input.value);
   clearTimeout(suggestTimer);
   const q = input.value.trim();
-  if (!q) return closeSuggest();
+  if (!q) {
+    closeSuggest();
+    return showRecent();
+  }
   suggestTimer = setTimeout(async () => {
     const seq = ++suggestSeq;
     const list = await api.suggest(q).catch(() => ({ texts: [], items: [] }));
@@ -118,7 +226,8 @@ input.addEventListener('keydown', (e) => {
 input.addEventListener('focus', () => {
   // The list drops into the slot, under the player view.
   setSlot(null);
-  if (options().length && input.value.trim()) {
+  if (!input.value.trim()) showRecent();
+  else if (options().length) {
     $('suggest').hidden = false;
     input.setAttribute('aria-expanded', 'true');
   }

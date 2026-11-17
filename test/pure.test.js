@@ -621,6 +621,8 @@ test('reads page heads, chips, see-all links and table columns', () => {
   assert.deepEqual(page.header, {
     kind: 'list',
     title: 'Discovery',
+    base: 'Discovery',
+    edition: '',
     subtitle: 'Album • 2001',
     second: '14 songs • 61 minutes',
     strap: [{ text: 'Daft Punk', browseId: 'UCdaft' }],
@@ -648,6 +650,8 @@ test('reads page heads, chips, see-all links and table columns', () => {
   assert.deepEqual(t.byline, [{ text: 'Daft Punk', browseId: 'UCdaft' }]);
   assert.equal(artist.round, true);
   assert.equal(t.round, false);
+  assert.equal(artist.kind, 'artist');
+  assert.equal(t.kind, 'song');
 
   const artistPage = parseItems({ musicImmersiveHeaderRenderer: { title: runs('Daft Punk'), monthlyListenerCount: runs('9 M monthly'), thumbnail: pic } });
   assert.equal(artistPage.header.kind, 'artist');
@@ -752,4 +756,46 @@ test('reads timed lyrics and picks the recording that fits the track', () => {
   assert.equal(lyricsTitle('Play Hard (mit Ne-Yo & Akon)'), 'Play Hard');
   assert.equal(lyricsTitle('Faded (Official Video)'), 'Faded');
   assert.equal(lyricsTitle('Out Of Touch (71 Digits Edit)'), 'Out Of Touch (71 Digits Edit)');
+});
+
+test('splitEdition takes release forms off the title, nothing else', () => {
+  const { splitEdition } = require('../src/pure');
+  assert.deepEqual(splitEdition('Random Access Memories (Drumless Edition)'), { base: 'Random Access Memories', edition: 'Drumless Edition' });
+  assert.deepEqual(splitEdition('Abbey Road (Remastered 2019) [Super Deluxe]'), { base: 'Abbey Road (Remastered 2019)', edition: 'Super Deluxe' });
+  assert.deepEqual(splitEdition('Yesterday - Remastered 2009'), { base: 'Yesterday', edition: 'Remastered 2009' });
+  assert.deepEqual(splitEdition('Frozen 2 (Originalsoundtrack)'), { base: 'Frozen 2', edition: 'Originalsoundtrack' });
+  assert.deepEqual(splitEdition('One More Time (Radio Edit)'), { base: 'One More Time', edition: 'Radio Edit' });
+  assert.deepEqual(splitEdition('Instant Crush (feat. Julian Casablancas)'), { base: 'Instant Crush (feat. Julian Casablancas)', edition: '' });
+  assert.deepEqual(splitEdition('Harder, Better, Faster, Stronger'), { base: 'Harder, Better, Faster, Stronger', edition: '' });
+  assert.deepEqual(splitEdition('Mix (Live)'), { base: 'Mix', edition: 'Live' });
+  assert.deepEqual(splitEdition('Remix'), { base: 'Remix', edition: '' });
+  assert.deepEqual(splitEdition('Love - Hate'), { base: 'Love - Hate', edition: '' });
+  assert.deepEqual(splitEdition(null), { base: '', edition: '' });
+});
+
+test('parseItems tells songs, videos and pages apart', () => {
+  const runs = (...t) => ({ runs: t.map((x) => (typeof x === 'string' ? { text: x } : x)) });
+  const col = (t) => ({ musicResponsiveListItemFlexColumnRenderer: { text: t } });
+  const watch = (videoId, type) => ({ watchEndpoint: { videoId, watchEndpointMusicSupportedConfigs: { watchEndpointMusicConfig: { musicVideoType: type } } } });
+  const row = (title, nav) => ({ musicResponsiveListItemRenderer: { flexColumns: [col(runs({ text: title, navigationEndpoint: nav }))], navigationEndpoint: nav.browseEndpoint ? nav : undefined } });
+  const browse = (browseId, pageType) => ({ browseEndpoint: { browseId, browseEndpointContextSupportedConfigs: { browseEndpointContextMusicConfig: { pageType } } } });
+  const page = parseItems([
+    row('Song', watch('aaaaaaaaaaa', 'MUSIC_VIDEO_TYPE_ATV')),
+    row('Clip', watch('bbbbbbbbbbb', 'MUSIC_VIDEO_TYPE_OMV')),
+    row('Upload', watch('ccccccccccc', 'MUSIC_VIDEO_TYPE_SHOULDER')),
+    row('Plain', { watchEndpoint: { videoId: 'ddddddddddd' } }),
+    row('Album (Deluxe Edition)', browse('MPREb_x', 'MUSIC_PAGE_TYPE_ALBUM')),
+    row('Mix', browse('VLPL_x', 'MUSIC_PAGE_TYPE_PLAYLIST')),
+    row('Someone', browse('UCsome', 'MUSIC_PAGE_TYPE_USER_CHANNEL')),
+  ]);
+  assert.deepEqual(page.items.map((i) => i.kind), ['song', 'video', 'video', 'song', 'album', 'playlist', 'profile']);
+  assert.equal(page.items[4].title, 'Album (Deluxe Edition)');
+  assert.equal(page.items[4].base, 'Album');
+  assert.equal(page.items[4].edition, 'Deluxe Edition');
+});
+
+test('validSetting takes the mini player lyrics switch as a boolean only', () => {
+  assert.ok(validSetting('miniLyrics', true, []));
+  assert.ok(validSetting('miniLyrics', false, []));
+  assert.ok(!validSetting('miniLyrics', 'yes', []));
 });

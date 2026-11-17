@@ -153,6 +153,7 @@ function renderSettings(s) {
         }),
         T.setSyncedHint
       ),
+      field(T.setMiniLyrics, checkbox('set-mini-lyrics', s.miniLyrics, (v) => set('miniLyrics', v)), T.setMiniLyricsHint),
       field(
         T.setQuality,
         select('set-quality', [['auto', T.qualityAuto], ...QUALITY_LABELS], s.videoQuality, (v) => set('videoQuality', v)),
@@ -198,8 +199,32 @@ function renderSettings(s) {
     up.append(row);
   }
   box.append(fm, heading(T.setUpdates), up, heading(T.setKeys), group(...keyList().children));
+  // One chip per part, standing at the top while the page scrolls.
+  const jump = div('set-jump');
+  for (const h of box.querySelectorAll('h2')) {
+    const b = document.createElement('button');
+    b.className = 'chip';
+    b.textContent = h.textContent;
+    b.addEventListener('click', () => h.scrollIntoView({ behavior: reduceMotion.matches ? 'auto' : 'smooth', block: 'start' }));
+    jump.append(b);
+  }
+  box.prepend(jump);
   $('list').replaceChildren(box);
+  markJump();
 }
+
+// The chip of the part being read is lit; at the very bottom that is the last part.
+function markJump() {
+  const jump = onSettings() && document.querySelector('.set-jump');
+  if (!jump) return;
+  const heads = [...document.querySelectorAll('.settings h2')];
+  const line = main.getBoundingClientRect().top + 70;
+  let at = 0;
+  heads.forEach((h, i) => h.getBoundingClientRect().top <= line && (at = i));
+  if (main.scrollTop + main.clientHeight >= main.scrollHeight - 2) at = heads.length - 1;
+  [...jump.children].forEach((b, i) => b.setAttribute('aria-pressed', String(i === at)));
+}
+main.addEventListener('scroll', markJump, { passive: true });
 
 $('open-settings').addEventListener('click', openSettings);
 
