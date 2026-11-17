@@ -463,15 +463,6 @@ function emptyState(v) {
   return box;
 }
 
-// The head's colour when the cover has none of its own.
-const RED_TINT = '#c4001f';
-const NEUTRAL_TINT = '#3a3a3a';
-// rgb(r g b) with channels close together: black, white or grey.
-function isGrey(rgb) {
-  const c = (rgb.match(/\d+/g) || []).map(Number);
-  return c.length < 3 || Math.max(...c) - Math.min(...c) < 28;
-}
-
 // "About" at the end of an artist's page: photo, listeners and the whole text.
 function renderAbout(h) {
   const box = $('about');
@@ -506,8 +497,6 @@ function renderHero(h) {
   main.style.removeProperty('--tint');
   renderAbout(h);
   if (!h) return;
-  // Lists start in red; an artist's head takes its colour from the photo, a quiet grey until that is read.
-  main.style.setProperty('--tint', h.kind === 'artist' ? NEUTRAL_TINT : RED_TINT);
   hero.className = h.kind;
   // The edition sits under the title as a label; the title gets smaller as it gets longer
   // instead of ending in an ellipsis.
@@ -554,10 +543,9 @@ function renderHero(h) {
   }
   const v = view;
   if (h.thumb) {
-    // A grey cover, or one served without CORS headers (liked songs), keeps YouTube Music's red.
-    // A photo's colour is kept even when muted: red under a grey sky clashes with it.
+    // A cover served without CORS headers (liked songs) leaves the grey default.
     coverColor(h.thumb).then(
-      (c) => view === v && (h.kind === 'artist' || !isGrey(c)) && main.style.setProperty('--tint', c),
+      (c) => view === v && main.style.setProperty('--tint', c),
       () => {}
     );
   }

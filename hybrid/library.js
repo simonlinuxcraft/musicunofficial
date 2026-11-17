@@ -17,6 +17,20 @@ try {
   if (saved.sort === 'az') libSort = 'az';
 } catch {}
 
+// Pinned entries stay on top of their list; kept on this machine only.
+let pins = new Set();
+try {
+  pins = new Set(JSON.parse(localStorage.getItem('pins')) || []);
+} catch {}
+const isPinned = (i) => i.fav || pins.has(i.browseId);
+function togglePin(id) {
+  if (!pins.delete(id)) pins.add(id);
+  try {
+    localStorage.setItem('pins', JSON.stringify([...pins]));
+  } catch {}
+  drawLibrary();
+}
+
 const saveLib = () => {
   try {
     localStorage.setItem('lib', JSON.stringify({ tab: libTab, sort: libSort }));
@@ -29,7 +43,7 @@ function libRow(item) {
   b.dataset.id = item.browseId || '';
   b.title = item.title;
   let cover;
-  if (item.pinned) {
+  if (item.fav) {
     cover = document.createElement('span');
     cover.className = 'pl-icon fav';
     cover.append(svg(ICONS.liked));
@@ -39,14 +53,19 @@ function libRow(item) {
   }
   const text = div('text');
   const sub = div('sub');
-  if (item.pinned) sub.append(svg(ICONS.pin));
+  if (isPinned(item)) sub.append(svg(ICONS.pin));
   sub.append(item.subtitle || '');
   text.append(div('title', item.title), sub);
   b.append(cover, text);
   b.addEventListener('click', () => activate(item));
   b.addEventListener('contextmenu', (e) => {
     e.preventDefault();
-    openMenu(menuEntries(item), e.clientX || b.getBoundingClientRect().left + 48, e.clientY || b.getBoundingClientRect().bottom);
+    const entries = menuEntries(item);
+    if (item.browseId && !item.fav) {
+      const on = pins.has(item.browseId);
+      entries.unshift({ label: on ? T.unpin : T.pin, run: () => togglePin(item.browseId), icon: ICONS.pin }, '-');
+    }
+    openMenu(entries, e.clientX || b.getBoundingClientRect().left + 48, e.clientY || b.getBoundingClientRect().bottom);
   });
   return b;
 }
@@ -54,7 +73,8 @@ function libRow(item) {
 function drawLibrary() {
   const q = $('lib-filter').value.trim().toLowerCase();
   let items = libItems.filter((i) => !q || (i.title + ' ' + (i.subtitle || '')).toLowerCase().includes(q));
-  if (libSort === 'az') items = [...items].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0) || a.title.localeCompare(b.title));
+  const rank = (i) => (i.fav ? 0 : pins.has(i.browseId) ? 1 : 2);
+  items = [...items].sort((a, b) => rank(a) - rank(b) || (libSort === 'az' ? a.title.localeCompare(b.title) : 0));
   $('lib-list').replaceChildren(...items.map(libRow));
   $('lib-sort').firstChild.textContent = libSort === 'az' ? T.sortAZ : T.sortRecent;
   if (view) markLibrary(view);
@@ -125,7 +145,7 @@ async function refreshLibrary(tries = 0) {
   // Liked songs stay on top of the playlists, with a cover of their own.
   if (libTab === 'FEmusic_liked_playlists') {
     const liked = libItems.find((i) => i.browseId === 'VLLM') || { title: T.liked, subtitle: '', browseId: 'VLLM', parts: [] };
-    libItems = [{ ...liked, pinned: true }, ...libItems.filter((i) => i !== liked)];
+    libItems = [{ ...liked, fav: true }, ...libItems.filter((i) => i !== liked)];
   }
   drawLibrary();
 }
