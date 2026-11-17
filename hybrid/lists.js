@@ -166,6 +166,7 @@ function quickTile(item) {
 function rateButton(item) {
   const b = document.createElement('button');
   b.className = 'rate';
+  b.dataset.like = item.likeId;
   b.append(svg(ICONS.like), svg(ICONS.liked));
   b.firstChild.classList.add('off');
   b.lastChild.classList.add('on');
@@ -184,15 +185,38 @@ function rateButton(item) {
     b.classList.remove('pop');
     void b.offsetWidth;
     if (status === 'LIKE') b.classList.add('pop');
-    const ok = await api.change({ kind: 'rate', videoId: item.watch.videoId, status }).catch(() => false);
+    const ok = await api.change({ kind: 'rate', videoId: item.likeId, status }).catch(() => false);
     if (!ok) {
       item.like = before;
       draw();
       return toast(T.actionFailed);
     }
-    if (track && track.videoId === item.watch.videoId) refreshControls();
+    rated(item.likeId, status);
+    if (track && (track.videoId === item.watch.videoId || track.videoId === item.likeId)) refreshControls();
   });
   return b;
+}
+
+// A rating reaches the track's rows on screen; in liked songs a track that lost its like leaves the list.
+function rated(videoId, like) {
+  // Pages kept for Back and Forward may show the old rating; they load fresh instead.
+  for (const s of [...stack, ...ahead]) s.page = null;
+  const page = view && !view.render && view.page;
+  if (!page) return;
+  // By the version the row plays or the one its like sits on.
+  const hit = (i) => i.watch && (i.watch.videoId === videoId || i.likeId === videoId);
+  for (const i of page.items) if (hit(i) && i.like) i.like = like;
+  for (const b of $('list').querySelectorAll('[data-video="' + videoId + '"] .rate, .rate[data-like="' + videoId + '"]')) b.setAttribute('aria-pressed', String(like === 'LIKE'));
+  if (view.browseId !== 'VLLM' || like === 'LIKE' || !page.items.some(hit)) return;
+  page.items = page.items.filter((i) => !hit(i));
+  for (const sec of page.sections) {
+    sec.items = sec.items.filter((i) => !hit(i));
+    // Drawn again rather than one row taken out, so the numbers stay in step.
+    if (sec.list && sec.items.length) sec.list.replaceChildren(...sec.items.map(sec.make));
+    else if (sec.list) sec.list.closest('section').remove();
+  }
+  page.sections = page.sections.filter((s) => s.items.length);
+  if (!page.items.length) $('list').append(emptyState(view));
 }
 
 const eqBars = () => {
@@ -234,7 +258,7 @@ function tableRow(item, i, cols) {
     if (item.album) c.append(link(item.album.text, (e) => (e.stopPropagation(), openPage(item.album.text, item.album.browseId))));
     el.append(c);
   }
-  if (cols.rate) el.append(item.like && item.watch ? rateButton(item) : div(''));
+  if (cols.rate) el.append(item.likeId && item.watch ? rateButton(item) : div(''));
   if (cols.duration) el.append(div('col r', item.duration));
   el.append(moreButton(item));
   // Rows on album pages have no cover; the number says enough there.
