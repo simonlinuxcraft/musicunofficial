@@ -134,6 +134,9 @@
       /* The big view's panel is the queue alone; a single tab over its own heading said the same twice. */
       body.staged #tab-now, body.staged #tab-lyrics, body.staged #tab-queue { display: none; }
       body.staged #queue-save { margin-left: auto; }
+      /* Over the backdrop the solid greys read as slabs; white at low strength lets it through. */
+      body.staged .q-now { background: rgba(255, 255, 255, 0.09); }
+      body.staged .qrow:hover, body.staged .qrow:focus-visible { background: rgba(255, 255, 255, 0.1); }
 
       /* Floating surfaces on black, with a gap instead of lines between them. */
       #middle { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding: 0 8px; min-height: 0; }
