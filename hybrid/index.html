@@ -131,7 +131,9 @@
       .when-max, html.maximized .when-normal { display: none; }
       html.maximized .when-max { display: block; }
       html.fullscreen header { display: none; }
-      body.staged #tab-now, body.staged #tab-lyrics { display: none; }
+      /* The big view's panel is the queue alone; a single tab over its own heading said the same twice. */
+      body.staged #tab-now, body.staged #tab-lyrics, body.staged #tab-queue { display: none; }
+      body.staged #queue-save { margin-left: auto; }
 
       /* Floating surfaces on black, with a gap instead of lines between them. */
       #middle { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding: 0 8px; min-height: 0; }

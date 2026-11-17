@@ -620,7 +620,24 @@ async function show(next) {
 }
 
 // YouTube Music's own params for "shuffle this playlist", as its playlist menus send them.
-const SHUFFLE_PARAMS = 'wAEB8gECGAE%3D';
+const SHUFFLE_PARAMS = 'wAEB8gECKAE%3D';
+
+// Liked songs came back in their own order with the shuffle flag set. A queue that
+// starts like the list is shuffled through the player's own toggle instead.
+async function ensureShuffled(items) {
+  const want = items.filter((i) => i.watch).slice(0, 4).map((i) => i.watch.videoId);
+  if (want.length < 4) return;
+  for (let n = 0; n < 10; n++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    const got = ((await api.queue().catch(() => null)) || []).slice(0, 4).map((q) => q.videoId);
+    if (got.length < 4) continue;
+    if (got.join() !== want.join()) return;
+    // Off first when the flag is already set, so the second press shuffles.
+    if (track?.shuffle) await api.control('shuffle');
+    await api.control('shuffle');
+    return loadQueue();
+  }
+}
 const listOf = (ep) => ep?.watchEndpoint?.playlistId || ep?.watchPlaylistEndpoint?.playlistId || null;
 
 // Play, shuffle, save, subscribe and the page's menu, as buttons under the head.
@@ -650,7 +667,10 @@ function renderActions(page, v) {
   const playFirst = () => playEp && play(playEp, playEp.watchEndpoint?.videoId || first.watch.videoId);
   $('play-all').onclick = $('sticky-play').onclick = playFirst;
   $('sticky-title').textContent = page.header ? page.header.title : v.title;
-  $('shuffle-all').onclick = () => play(shuffle);
+  $('shuffle-all').onclick = () => {
+    play(shuffle);
+    ensureShuffled(page.items);
+  };
   if (lib) {
     const draw = () => {
       $('save-lib').setAttribute('aria-pressed', String(lib.saved));
