@@ -1,6 +1,6 @@
 {
   "name": "musicunofficial",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "description": "Unofficial desktop wrapper for the YouTube Music player",
   "main": "main.js",
   "license": "MIT",
