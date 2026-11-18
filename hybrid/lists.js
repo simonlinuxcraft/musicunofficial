@@ -783,16 +783,17 @@ function renderChips(chips, v) {
 }
 
 // Search's plain list mixes every kind of result. Below the top result it becomes
-// shelves by kind, each with "show all" on the matching filter chip.
+// shelves by kind, each with "show all" on the matching filter chip. The chip is
+// found by the start of its params, its label changes with the account's language.
 const SEARCH_KINDS = [
-  ['song', 'moreSongs', /^(songs?|titel)$/i, false],
-  ['video', 'kindVideo', /^videos?$/i, true],
-  ['album', 'kindAlbum', /^(alben|albums?)$/i, true],
-  ['artist', 'kindArtist', /^(künstler|artists?)$/i, true],
-  ['playlist', 'kindPlaylist', /playlists?$/i, true],
-  ['podcast', 'kindPodcast', /^podcasts?$/i, true],
-  ['episode', 'kindEpisode', /^(folgen|episodes?)$/i, false],
-  ['profile', 'kindProfile', /^profile?s?$/i, true],
+  ['song', 'moreSongs', 'EgWKAQII', false],
+  ['video', 'kindVideo', 'EgWKAQIQ', true],
+  ['album', 'kindAlbum', 'EgWKAQIY', true],
+  ['artist', 'kindArtist', 'EgWKAQIg', true],
+  ['playlist', 'kindPlaylist', 'EgeKAQQoA', true],
+  ['podcast', 'kindPodcast', 'EgWKAQJQ', true],
+  ['episode', 'kindEpisode', 'EgWKAQJI', false],
+  ['profile', 'kindProfile', 'EgWKAQJY', true],
 ];
 
 // "Song • Daft Punk • 3:00" under a heading that already says Songs: the first word goes.
@@ -822,7 +823,7 @@ function groupSearch(page) {
     const items = rest.filter((i) => i.kind === kind);
     if (!items.length) continue;
     for (const i of items) i.parts = withoutType(i);
-    const c = page.chips.find((x) => chip.test(x.text) && x.query);
+    const c = page.chips.find((x) => x.query && (x.params || '').startsWith(chip));
     const title = kind === 'song' && !(top && top.items.length > 1) ? T.songs : T[key];
     shelves.push({ title, items, tiles, more: c ? { query: c.query, params: c.params } : null });
   }
