@@ -188,8 +188,9 @@
   let last = null;
   let sentAt = 0;
 
-  function send() {
-    const now = read();
+  function send(e) {
+    // As a listener it gets the event; tick hands over what it just read.
+    const now = e instanceof Event || !arguments.length ? read() : e;
     last = now;
     sentAt = Date.now();
     window.nowPlaying.report(now);
@@ -197,7 +198,8 @@
 
   function tick() {
     // The heartbeat is a safety net for metadata, which has no event of its own.
-    if (differs(read(), last) || Date.now() - sentAt > 5000) send();
+    const now = read();
+    if (differs(now, last) || Date.now() - sentAt > 5000) send(now);
   }
 
   // Events for anything that moves the playhead: a seek cannot wait for the next poll.

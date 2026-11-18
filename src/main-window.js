@@ -215,6 +215,7 @@ module.exports = {
   create,
   attach: (win) => view && win.contentView.addChildView(view),
   place,
+  cover: (on) => view && view.setVisible(!on),
   destroy,
   isFocused: () => !!live() && live().isFocused(),
   webContents: live,

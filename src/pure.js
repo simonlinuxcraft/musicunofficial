@@ -54,10 +54,17 @@ function watchUrl(videoId, list) {
 const SLEEP_CHOICES = ['off', 'track', 15, 30, 45, 60, 90];
 
 // Whether the settings page may set key to value. Quality names come from the page.
+// The autostart entry; 'tray' starts without a window.
+const AUTOSTART_MODES = ['off', 'on', 'tray'];
+const autostartEntry = (launcher, mode) =>
+  ['[Desktop Entry]', 'Type=Application', 'Name=Music', 'Exec=' + launcher + (mode === 'tray' ? ' --hidden' : ''), 'Icon=musicunofficial', ''].join('\n');
+const autostartMode = (text) => (/^Hidden=true$/m.test(text) ? 'off' : /^Exec=.* --hidden$/m.test(text) ? 'tray' : 'on');
+
 function validSetting(key, value, qualities) {
   if (key === 'language') return ['system', 'de', 'en'].includes(value);
   if (key === 'videoQuality') return qualities.includes(value);
-  if (key === 'notify' || key === 'richPresence' || key === 'syncedLyrics' || key === 'miniLyrics') return typeof value === 'boolean';
+  if (['notify', 'richPresence', 'syncedLyrics', 'miniLyrics', 'closeQuits'].includes(key)) return typeof value === 'boolean';
+  if (key === 'autostart') return AUTOSTART_MODES.includes(value);
   if (key === 'sleep') return SLEEP_CHOICES.includes(value);
   return false;
 }
@@ -835,6 +842,8 @@ module.exports = {
   SITE,
   watchUrl,
   validSetting,
+  autostartEntry,
+  autostartMode,
   rateLimit,
   isInternal,
   onSite,

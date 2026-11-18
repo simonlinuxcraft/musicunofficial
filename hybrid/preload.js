@@ -27,7 +27,7 @@ contextBridge.exposeInMainWorld('hybrid', {
   lastfmFinish: () => ipcRenderer.invoke('hybrid:lastfm-finish'),
   lastfmDisconnect: () => ipcRenderer.invoke('hybrid:lastfm-disconnect'),
   openLastfmAccount: () => ipcRenderer.send('hybrid:lastfm-account'),
-  playerView: (kind, rect) => ipcRenderer.send('hybrid:player-view', kind, rect),
+  playerView: (kind, rect, covered) => ipcRenderer.send('hybrid:player-view', kind, rect, covered),
   signedIn: () => ipcRenderer.invoke('hybrid:signed-in'),
   account: () => ipcRenderer.invoke('hybrid:account'),
   onFullscreen: (cb) => ipcRenderer.on('hybrid:fullscreen', (_e, value) => cb(value)),
