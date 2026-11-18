@@ -54,7 +54,8 @@ function queueRow(q, i) {
     el.classList.remove('dragging');
   });
   const mark = (e) => {
-    const after = e.offsetY > el.clientHeight / 2;
+    // Against the row itself: offsetY counts from whichever child lies under the pointer.
+    const after = e.clientY - el.getBoundingClientRect().top > el.clientHeight / 2;
     el.classList.toggle('drop-before', !after);
     el.classList.toggle('drop-after', after);
     return after;
@@ -181,21 +182,20 @@ const lyricsFor = (id) => (id ? cached(lyricsCache, id, () => api.lyrics(id)) : 
 
 const playingId = () => (track && !track.ad ? track.videoId : null);
 
-// Timed lyrics from LRCLIB, one request per track; null when there are none or the setting is off.
+// Timed lyrics from LRCLIB, one request per track; no lines when it has none, null when it failed or the setting is off.
 const syncedCache = new Map();
-function syncedFor(t) {
-  if (!t || t.ad || !t.videoId) return Promise.resolve(null);
-  if (!syncedCache.has(t.videoId)) {
-    syncedCache.set(t.videoId, api.syncedLyrics({ title: t.title, artist: t.artist, duration: t.duration }).catch(() => null));
-    if (syncedCache.size > 20) syncedCache.delete(syncedCache.keys().next().value);
-  }
-  return syncedCache.get(t.videoId);
-}
+const syncedFor = (t) =>
+  !t || t.ad || !t.videoId
+    ? Promise.resolve(null)
+    : cached(syncedCache, t.videoId, () => api.syncedLyrics({ title: t.title, artist: t.artist, duration: t.duration }));
 
-// Both kinds for the playing track: timed lines where LRCLIB has them, YouTube's text otherwise.
-async function lyricsNow(id) {
-  const [plain, synced] = await Promise.all([lyricsFor(id), syncedFor(track)]);
-  return { plain, synced: synced && synced.lines.length ? synced : null };
+// YouTube's text as soon as it is there, LRCLIB's timed lines over it when they come.
+// draw gets (plain, null), then (null, synced); never the text after the lines.
+function lyricsNow(id, draw) {
+  let timed = false;
+  const current = (fn) => (v) => playingId() === id && fn(v);
+  lyricsFor(id).then(current((plain) => !timed && draw(plain, null)));
+  syncedFor(track).then(current((s) => s && s.lines.length && ((timed = true), draw(null, s))));
 }
 
 // Timed lines as paragraphs; a click on one plays from there.
@@ -259,17 +259,18 @@ for (const s of [$('lyrics-pane'), $('stage-lyrics')]) {
   for (const ev of ['wheel', 'touchmove']) s.addEventListener(ev, () => (s.userScroll = Date.now() + 4000), { passive: true });
 }
 
-async function loadLyrics() {
+function loadLyrics() {
   const id = playingId();
   $('lyrics-source').textContent = '';
   drawPlain($('lyrics'), id ? T.loading : T.noLyrics);
   if (!id) return;
-  const { plain, synced } = await lyricsNow(id);
-  if (playingId() !== id || panelTab !== 'lyrics') return;
-  if (synced) drawSynced($('lyrics'), $('lyrics-pane'), synced.lines);
-  else drawPlain($('lyrics'), plain && plain.text ? plain.text : T.noLyrics);
-  $('lyrics-source').textContent = synced ? T.lyricsFrom + synced.source : (plain && plain.source) || '';
-  $('lyrics-pane').scrollTop = 0;
+  lyricsNow(id, (plain, synced) => {
+    if (panelTab !== 'lyrics') return;
+    if (synced) drawSynced($('lyrics'), $('lyrics-pane'), synced.lines);
+    else drawPlain($('lyrics'), plain && plain.text ? plain.text : T.noLyrics);
+    $('lyrics-source').textContent = synced ? T.lyricsFrom + synced.source : (plain && plain.source) || '';
+    $('lyrics-pane').scrollTop = 0;
+  });
 }
 
 function drawNow() {
@@ -369,12 +370,30 @@ function slotElement() {
   return null;
 }
 
+// The player is a native view and draws over everything of ours, so a menu or
+// dialog that would lie under it hides it meanwhile.
+// ponytail: toasts and tooltips stay out, a video blanking for each of them is worse than a notice behind it.
+const OVERLAYS = [...document.querySelectorAll('#menu, #submenu, dialog')];
+const covers = (r) =>
+  OVERLAYS.some((el) => {
+    if (el.hidden || (el.tagName === 'DIALOG' && !el.open)) return false;
+    const o = el.getBoundingClientRect();
+    return o.width > 0 && o.left < r.right && o.right > r.left && o.top < r.bottom && o.bottom > r.top;
+  });
+
+// Called on every track report and resize; only a change goes to main.
+let placedAs = '';
 function placePlayer() {
   const el = slotElement();
-  if (!el) return api.playerView(null, null);
-  const r = el.getBoundingClientRect();
-  api.playerView(slot, { x: r.x, y: r.y, width: r.width, height: r.height });
+  const r = el && el.getBoundingClientRect();
+  const args = el ? [slot, { x: r.x, y: r.y, width: r.width, height: r.height }, covers(r)] : [null, null, false];
+  const key = JSON.stringify(args);
+  if (key === placedAs) return;
+  placedAs = key;
+  api.playerView(...args);
 }
+const overlayWatch = new MutationObserver(placePlayer);
+for (const el of OVERLAYS) overlayWatch.observe(el, { attributes: true, attributeFilter: ['hidden', 'open', 'style'] });
 
 // The video's box at its own aspect, as large as the stage allows.
 let stageAspect = 16 / 9;
@@ -477,19 +496,19 @@ async function drawArtistCard() {
 $('np-artist-card').addEventListener('keydown', (e) => e.key === 'Enter' && e.target === e.currentTarget && e.currentTarget.click());
 
 // The big view's own lyrics, beside the cover.
-async function drawStage() {
+function drawStage() {
   drawOrigin();
   const id = playingId();
   const box = $('stage-lyrics');
   box.classList.add('none');
   drawPlain(box, id ? T.loading : '');
   if (!id) return;
-  const { plain, synced } = await lyricsNow(id);
-  if (playingId() !== id) return;
-  box.classList.toggle('none', !synced && !(plain && plain.text));
-  if (synced) drawSynced(box, box, synced.lines);
-  else drawPlain(box, plain && plain.text ? plain.text : T.noLyrics);
-  box.scrollTop = 0;
+  lyricsNow(id, (plain, synced) => {
+    box.classList.toggle('none', !synced && !(plain && plain.text));
+    if (synced) drawSynced(box, box, synced.lines);
+    else drawPlain(box, plain && plain.text ? plain.text : T.noLyrics);
+    box.scrollTop = 0;
+  });
 }
 
 // Like YouTube Music's player page: the player big, with its lyrics.

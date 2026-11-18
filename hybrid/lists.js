@@ -702,13 +702,14 @@ function renderActions(page, v) {
       $('save-lib').setAttribute('aria-label', $('save-lib').title);
     };
     draw();
-    $('save-lib').onclick = async () => {
+    const click = ($('save-lib').onclick = async () => {
       if (await change(lib.saved ? lib.unsave : lib.save, lib.saved ? T.unsavedLib : T.savedLib)) {
         lib.saved = !lib.saved;
-        draw();
+        // The button is shared; by now it may belong to another page.
+        if ($('save-lib').onclick === click) draw();
         refreshLibrary();
       }
-    };
+    });
   }
   if (sub) subscribeButton(sub, $('subscribe'));
   $('page-more').onclick = (e) => {
@@ -728,15 +729,15 @@ function subscribeButton(sub, b = document.createElement('button')) {
     b.textContent = sub.subscribed ? T.subscribed : T.subscribe;
   };
   draw();
-  b.onclick = async (e) => {
+  const click = (b.onclick = async (e) => {
     e.stopPropagation();
     if (!signedIn) return toast(T.signInFirst, { action: [T.signIn, api.signIn] });
     const on = !sub.subscribed;
     if (await change({ kind: 'subscribe', channelId: sub.channelId, on }, on ? T.subscribed : T.unsubscribed)) {
       sub.subscribed = on;
-      draw();
+      if (b.onclick === click) draw();
     }
-  };
+  });
   return b;
 }
 
@@ -852,16 +853,22 @@ function arrange() {
       const hay = [i.title, SORT_KEYS.artist(i), SORT_KEYS.album(i)].join(' ').toLowerCase();
       r.hidden = !!q && !hay.includes(q);
     }
+    // A filter keystroke only hides rows; they move when the order or their number changes.
+    const sorted = view.sort + ':' + rows.length;
+    if (sec.list.sorted === sorted) continue;
+    sec.list.sorted = sorted;
+    const at = new Map(sec.items.map((item, n) => [item, n]));
     const order = key
       ? [...rows].sort((a, b) => {
           const x = key(a.item);
           const y = key(b.item);
-          return typeof x === 'number' ? x - y : String(x).localeCompare(String(y));
+          return typeof x === 'number' ? x - y : collate(String(x), String(y));
         })
-      : rows.sort((a, b) => sec.items.indexOf(a.item) - sec.items.indexOf(b.item));
+      : rows.sort((a, b) => at.get(a.item) - at.get(b.item));
     sec.list.append(...order);
   }
 }
+const collate = new Intl.Collator().compare;
 
 $('list-find').addEventListener('click', () => {
   const tools = $('list-tools');
@@ -1442,8 +1449,10 @@ function playlistCover(url) {
   return box;
 }
 
+let plSeq = 0;
 async function saveToPlaylist(videoIds) {
   if (!videoIds.length) return;
+  const seq = ++plSeq;
   const d = $('pl-dialog');
   $('pl-list').replaceChildren();
   $('pl-status').textContent = T.loading;
@@ -1455,7 +1464,8 @@ async function saveToPlaylist(videoIds) {
   };
   d.showModal();
   const lists = await api.playlists(videoIds[0]).catch(() => null);
-  if (!d.open) return;
+  // Closed, or opened again for other tracks meanwhile.
+  if (!d.open || seq !== plSeq) return;
   // Signed out, YouTube refuses the request; that is the sign-in hint, not a failure.
   if (!lists || (!lists.length && signedIn === false)) return ($('pl-status').textContent = signedIn === false ? T.noPlaylists : T.actionFailed);
   $('pl-status').textContent = '';

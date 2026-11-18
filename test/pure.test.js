@@ -795,3 +795,14 @@ test('parseItems tells songs, videos and pages apart', () => {
   assert.equal(page.items[4].base, 'Album');
   assert.equal(page.items[4].edition, 'Deluxe Edition');
 });
+
+test('the autostart entry reads back as the mode it was written for', () => {
+  const { autostartEntry, autostartMode, validSetting } = require('../src/pure');
+  for (const mode of ['on', 'tray']) assert.equal(autostartMode(autostartEntry('/opt/App/app', mode)), mode);
+  assert.match(autostartEntry('/opt/App/app', 'tray'), /^Exec=\/opt\/App\/app --hidden$/m);
+  // Switched off by the desktop's own autostart tool.
+  assert.equal(autostartMode(autostartEntry('/opt/App/app', 'on') + 'Hidden=true\n'), 'off');
+  assert.ok(validSetting('autostart', 'tray', []));
+  assert.ok(!validSetting('autostart', 'yes', []));
+  assert.ok(validSetting('closeQuits', true, []));
+});

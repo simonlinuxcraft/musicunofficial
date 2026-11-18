@@ -121,8 +121,8 @@ function applyControls(c) {
   $('repeat').querySelector('path').setAttribute('d', c.repeat === 'ONE' ? ICON_REPEAT_ONE : ICON_REPEAT);
   applyLike(c.like);
   $('mute').classList.toggle('muted', c.muted);
-  // Not while the slider is being dragged, or the page's older value yanks it back.
-  if (document.activeElement !== $('volume')) $('volume').value = c.muted ? 0 : c.volume;
+  // Not while the slider is dragged or a change is on its way, or the page's older value yanks it back.
+  if (document.activeElement !== $('volume') && !volumeBusy) $('volume').value = c.muted ? 0 : c.volume;
   drawVolume(Number($('volume').value), c.muted);
 }
 
@@ -136,11 +136,14 @@ async function loadNowLinks(id, tries = 0) {
   if (id !== lastId || !track || track.ad) return;
   const artists = links.filter((l) => l.browseId.startsWith('UC'));
   const album = links.find((l) => l.browseId.startsWith('MPRE'));
-  if (!artists.some((l) => track.artist.includes(l.text))) {
-    if (tries < 4) setTimeout(() => loadNowLinks(id, tries + 1), 800);
-    return;
+  const artistFits = artists.some((l) => track.artist.includes(l.text));
+  // Two tracks by one artist in a row: only the album tells the old byline from the new.
+  const albumFits = !album || !track.album || album.text === track.album;
+  if (!artistFits || !albumFits) {
+    if (tries < 4) return setTimeout(() => loadNowLinks(id, tries + 1), 800);
+    if (!artistFits) return;
   }
-  nowArtists = { artists, album };
+  nowArtists = { artists, album: albumFits ? album : null };
   drawArtistLinks();
 }
 

@@ -43,7 +43,12 @@ function loadLines(t) {
   lines = null;
   if (!id) return;
   window.mini.syncedLyrics({ title: t.title, artist: t.artist, duration: t.duration }).then(
-    (l) => linesFor === id && (lines = l && l.lines.length ? l.lines : null),
+    (l) => {
+      if (linesFor !== id) return;
+      lines = l && l.lines.length ? l.lines : null;
+      // A failed lookup is asked again, but not with every track report.
+      if (!l) setTimeout(() => linesFor === id && (linesFor = null), 30000);
+    },
     () => {}
   );
 }

@@ -35,9 +35,11 @@ const KEYS = {
   l: () => $('like').click(),
   d: () => $('dislike').click(),
   p: () => !track.ad && track.videoId && saveToPlaylist([track.videoId]),
+  s: () => $('shuffle').click(),
+  r: () => $('repeat').click(),
 };
 // Held down, these would fire again and again.
-const ONCE = [' ', 'm', 'l', 'd', 'p'];
+const ONCE = [' ', 'm', 'l', 'd', 'p', 's', 'r'];
 document.addEventListener('keydown', (e) => {
   // Window keys first: they work in fields too.
   if (e.key === 'F11') {
@@ -68,6 +70,14 @@ document.addEventListener('keydown', (e) => {
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
   const run = KEYS[(e.shiftKey && key.startsWith('Arrow') ? 'Shift+' : '') + key];
   if (!run || !track || (e.repeat && ONCE.includes(key))) return;
+  // A focused button keeps Space for itself, and a row of tabs its arrows.
+  if (key === ' ' && e.target.closest('button, a, summary')) return;
+  if (key === ' ' && e.target.matches('[role=button]')) return e.preventDefault(), e.target.click();
+  if (key.startsWith('Arrow') && !e.shiftKey && e.target.matches('[role=tab]')) {
+    const next = key === 'ArrowRight' ? e.target.nextElementSibling : key === 'ArrowLeft' ? e.target.previousElementSibling : null;
+    if (next) next.focus();
+    return e.preventDefault();
+  }
   e.preventDefault();
   run();
 });

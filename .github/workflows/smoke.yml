@@ -1,0 +1,24 @@
+name: Smoke
+
+# Against the live site, to notice a YouTube Music change before users do.
+on:
+  schedule:
+    - cron: '17 5 * * 1'
+  workflow_dispatch:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: sudo apt-get update && sudo apt-get install -y xvfb dbus-x11 libglib2.0-bin
+      # Since Electron 42 npm no longer fetches the binary by itself.
+      - run: npm ci && npx install-electron --no
+      - run: xvfb-run -a dbus-run-session -- npm run smoke
+        env:
+          SMOKE_LOG: '1'

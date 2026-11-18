@@ -4,6 +4,8 @@
 // runs on a timer or from the settings page; the download and the install
 // wait for the user's go. Installing needs root, so the helper the package
 // ships runs dpkg through pkexec, and the desktop asks for the password.
+// The sha256 here only catches a broken download. What may be installed is
+// decided by the helper, which checks the release signature as root.
 
 const { app, net } = require('electron');
 const { execFile, spawn } = require('child_process');
@@ -53,7 +55,9 @@ async function fetchLatest() {
   const asset = (Array.isArray(rel.assets) ? rel.assets : []).find((a) => a && a.name === name);
   const sha = /^sha256:([0-9a-f]{64})$/.exec((asset && asset.digest) || '')?.[1];
   if (!sha) throw new Error(version + ': no ' + name + ' with a sha256 digest in the release');
-  available = { version, name, url: asset.browser_download_url, sha, size: Number(asset.size) || 0 };
+  const sig = rel.assets.find((a) => a && a.name === name + '.sig');
+  if (!sig) throw new Error(version + ': no ' + name + '.sig in the release');
+  available = { version, name, url: asset.browser_download_url, sigUrl: sig.browser_download_url, sha, size: Number(asset.size) || 0 };
   return 'available';
 }
 
@@ -89,10 +93,13 @@ function report(value) {
 }
 
 async function download(target) {
-  const { name, url, sha, size, version } = target;
+  const { name, url, sigUrl, sha, size, version } = target;
   if (ready === version && fs.existsSync(file)) return;
   ready = null;
-  const dest = path.join(app.getPath('temp'), name);
+  // In the profile, not in /tmp, where any local user could plant a file under the name.
+  const dir = path.join(app.getPath('userData'), 'updates');
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const dest = path.join(dir, name);
   const part = dest + '.part';
   // Destroying the source as well: whether an abort reaches a body already streaming is up to net.fetch.
   const idle = new AbortController();
@@ -129,8 +136,11 @@ async function download(target) {
       fs.createWriteStream(part, { mode: 0o600 })
     );
     if (hash.digest('hex') !== sha) throw new Error(version + ': checksum mismatch');
+    const sig = await net.fetch(sigUrl, { signal: AbortSignal.timeout(LOOKUP_MS) });
+    if (!sig.ok) throw new Error('signature: HTTP ' + sig.status);
+    fs.writeFileSync(dest + '.sig', Buffer.from(await sig.arrayBuffer()).subarray(0, 4096), { mode: 0o600 });
     fs.renameSync(part, dest);
-    if (file && file !== dest) fs.rmSync(file, { force: true });
+    if (file && file !== dest) for (const old of [file, file + '.sig']) fs.rmSync(old, { force: true });
     file = dest;
     ready = version;
     report(1);
@@ -144,10 +154,10 @@ async function download(target) {
   }
 }
 
-function runHelper(sha) {
+function runHelper() {
   const helper = path.join(INSTALLED, 'resources', 'update-helper');
   return new Promise((done, fail) => {
-    execFile('pkexec', [helper, file, sha], { maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
+    execFile('pkexec', [helper, file, file + '.sig'], { maxBuffer: 16 * 1024 * 1024 }, (err, stdout, stderr) => {
       if (err) return fail(new Error(String(stderr).trim().split('\n').pop() || err.message));
       done();
     });
@@ -159,13 +169,13 @@ async function run(target) {
   try {
     await download(target);
     emit('installing', target.version);
-    await runHelper(target.sha);
+    await runHelper();
   } catch (e) {
     log('install: ' + e.message);
     return false;
   }
   log(target.version + ' installed, restarting');
-  fs.rmSync(file, { force: true });
+  for (const f of [file, file + '.sig']) fs.rmSync(f, { force: true });
   // The wrapper, not process.execPath: it adds the sandbox and Wayland switches.
   const launcher = path.join(INSTALLED, 'musicunofficial');
   spawn('/bin/sh', ['-c', RELAUNCH, 'sh', String(process.pid), launcher], { detached: true, stdio: 'ignore' }).unref();

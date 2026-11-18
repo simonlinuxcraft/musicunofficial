@@ -70,9 +70,14 @@
       (el) => !el.closest('ytmusic-playlist-panel-video-wrapper-renderer > [hidden]')
     );
   // The row's place in the reorderable list, -1 for autoplay suggestions.
+  // Each list is numbered once per call: this script is evaluated anew for every call.
+  const places = new Map();
   const top = (el) => {
     const row = el.closest('#contents > *');
-    return row ? [...row.parentElement.children].indexOf(row) : -1;
+    if (!row) return -1;
+    const list = row.parentElement;
+    if (!places.has(list)) places.set(list, new Map([...list.children].map((c, i) => [c, i])));
+    return places.get(list).get(row);
   };
   // Store index of the playing track. After a shuffle the store keeps the previous
   // track's index (and selected flag) until the next track, so the player decides.

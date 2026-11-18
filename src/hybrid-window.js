@@ -12,6 +12,7 @@ const sleep = require('./sleep');
 const tray = require('./tray');
 const lastfm = require('./lastfm');
 const update = require('./update');
+const autostart = require('./autostart');
 const pure = require('./pure');
 const { bindKeys } = require('./keys');
 
@@ -84,13 +85,16 @@ function create(opts) {
     backgroundColor: '#030303',
     // Window buttons live in the page header (hybrid/index.html).
     frame: false,
+    show: !opts.hidden,
     title: APP_TITLE,
     icon: path.join(ROOT, 'icon.png'),
     webPreferences: {
       preload: path.join(ROOT, 'hybrid', 'preload.js'),
     },
   });
-  if (b.maximized) win.maximize();
+  // Maximising would show a window that starts in the tray.
+  if (b.maximized && !opts.hidden) win.maximize();
+  else if (b.maximized) win.once('show', () => win.maximize());
   win.setMenuBarVisibility(false);
   win.loadFile(path.join(ROOT, 'hybrid', 'index.html'));
 
@@ -132,7 +136,7 @@ function create(opts) {
   win.on('close', (e) => {
     saveBounds();
     e.preventDefault();
-    opts.canHide().then((hide) => {
+    (store.settings.closeQuits === true ? Promise.resolve(false) : opts.canHide()).then((hide) => {
       if (!alive()) return;
       if (hide) win.hide();
       else app.quit();
@@ -168,6 +172,8 @@ function settings() {
     syncedLyrics: store.settings.syncedLyrics !== false,
     miniLyrics: store.settings.miniLyrics === true,
     videoQuality: store.settings.videoQuality || 'auto',
+    autostart: autostart.get(),
+    closeQuits: store.settings.closeQuits === true,
     sleep: sleep.state(),
     lastfm: lastfm.state(),
     update: update.state(),
@@ -234,8 +240,8 @@ async function syncedLyrics(q) {
     });
     if (!res.ok) return null;
     const hit = pure.pickSynced(await res.json(), duration);
-    const lines = hit ? pure.parseLrc(hit.syncedLyrics) : [];
-    return lines.length ? { lines, source: 'LRCLIB' } : null;
+    // No lines is an answer too, and the windows keep it; null is a failure they ask again about.
+    return { lines: hit ? pure.parseLrc(hit.syncedLyrics) : [], source: 'LRCLIB' };
   } catch {
     return null;
   }
@@ -309,6 +315,11 @@ ipcMain.handle('hybrid:setting', (e, key, value) => {
     store.saveSettings();
     // Required here, not on top: mini-window requires this module.
     require('./mini-window').lyricsChanged();
+  } else if (key === 'autostart') {
+    autostart.set(value);
+  } else if (key === 'closeQuits') {
+    store.settings.closeQuits = value;
+    store.saveSettings();
   } else if (key === 'sleep') {
     sleep.set(value);
     player.sync();
@@ -375,13 +386,15 @@ ipcMain.on('hybrid:sign-in', (e) => {
 });
 
 // Where the page measured a slot for the player view, in CSS pixels of its own zoom.
-ipcMain.on('hybrid:player-view', (e, kind, r) => {
+ipcMain.on('hybrid:player-view', (e, kind, r, covered) => {
   if (!fromUs(e)) return;
   const ok = ['stage', 'page'].includes(kind) && r && ['x', 'y', 'width', 'height'].every((k) => Number.isFinite(r[k]));
   if (!ok) return mainWindow.place(null, null);
   const z = win.webContents.getZoomFactor();
   const px = (v) => Math.max(0, Math.round(v * z));
   mainWindow.place(kind, { x: px(r.x), y: px(r.y), width: px(r.width), height: px(r.height) });
+  // A menu or dialog of the UI lies where the view is; a native view would draw over it.
+  mainWindow.cover(covered === true);
 });
 
 // The player stores the quality only while a track is loaded, so each new track gets it again.

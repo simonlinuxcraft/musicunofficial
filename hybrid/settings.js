@@ -144,6 +144,15 @@ function renderSettings(s) {
       ),
       field(T.setNotify, checkbox('set-notify', s.notify, (v) => set('notify', v)), T.setNotifyHint),
       field(T.setDiscord, checkbox('set-discord', s.richPresence, (v) => set('richPresence', v))),
+      ...(s.autostart === null
+        ? []
+        : [
+            field(
+              T.setAutostart,
+              select('set-autostart', [['off', T.autostartOff], ['on', T.autostartOn], ['tray', T.autostartTray]], s.autostart, (v) => set('autostart', v))
+            ),
+          ]),
+      field(T.setCloseQuits, checkbox('set-close-quits', s.closeQuits, (v) => set('closeQuits', v)), T.setCloseQuitsHint),
       field(
         T.setSynced,
         checkbox('set-synced', s.syncedLyrics, (v) => {
@@ -208,7 +217,12 @@ function renderSettings(s) {
     jump.append(b);
   }
   box.prepend(jump);
+  // The page is drawn anew from every state; what was focused and typed carries over.
+  const focused = $('list').contains(document.activeElement) ? document.activeElement.id : '';
+  const typed = [...$('list').querySelectorAll('input:not([type=checkbox])')].map((i) => [i.id, i.value]);
   $('list').replaceChildren(box);
+  for (const [id, value] of typed) if ($(id)) $(id).value = value;
+  if (focused && $(focused)) $(focused).focus();
   markJump();
 }
 

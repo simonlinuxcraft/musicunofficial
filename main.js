@@ -106,12 +106,15 @@ app.whenReady().then(() => {
   notify.init(() => mainWindow.isFocused() || hybrid.isFocused() || mini.isOpen());
   mpris.start({ raise: showMain, quit: () => app.quit(), command: player.command, control: (action, arg) => page.control(action, arg).catch(() => null) });
   mainWindow.create({ resume, openMini: mini.open });
-  hybrid.create({ openMini: mini.open, canHide, setLanguage });
+  // From the autostart entry: straight to the tray, if there is one to come back from.
+  const hidden = process.argv.includes('--hidden');
+  hybrid.create({ openMini: mini.open, canHide, setLanguage, hidden });
   try {
     tray.create({ toggle, openMini: mini.open });
   } catch (e) {
     console.log('[tray] unavailable: ' + e.message);
   }
+  if (hidden) canHide().then((ok) => ok || showMain());
   update.start(hybrid.updateEvent);
 });
 

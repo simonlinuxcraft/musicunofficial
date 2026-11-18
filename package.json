@@ -15,6 +15,7 @@
     "smoke": "node scripts/smoke.js",
     "smoke:offline": "node scripts/smoke-offline.js",
     "build": "electron-builder --linux deb",
+    "sign": "openssl dgst -sha256 -sign \"${MUSICUNOFFICIAL_SIGN_KEY:-$HOME/.config/musicunofficial-release/update-key.pem}\" -out dist/musicunofficial_${npm_package_version}_amd64.deb.sig dist/musicunofficial_${npm_package_version}_amd64.deb",
     "icons": "node scripts/gen-icons.js"
   },
   "build": {
@@ -71,12 +72,17 @@
       {
         "from": "deb/update-helper",
         "to": "update-helper"
+      },
+      {
+        "from": "deb/update-key.pem",
+        "to": "update-key.pem"
       }
     ],
     "deb": {
       "recommends": [
         "libappindicator3-1",
-        "pkexec"
+        "pkexec",
+        "openssl"
       ],
       "fpm": [
         "deb/io.github.simonlinuxcraft.musicunofficial.policy=/usr/share/polkit-1/actions/io.github.simonlinuxcraft.musicunofficial.policy"
@@ -84,7 +90,7 @@
     }
   },
   "devDependencies": {
-    "electron": "^45.2.3",
+    "electron": "^45.3.4",
     "electron-builder": "^26.15.2"
   },
   "desktopName": "musicunofficial.desktop",

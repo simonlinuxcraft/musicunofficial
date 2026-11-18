@@ -81,7 +81,7 @@ until I catch up.
 | Media keys | Registered with MPRIS as Music, including the GNOME media widget and the lock screen |
 | Discord | Rich Presence, on by default, switched off in the settings or from the tray |
 | Extras | Sleep timer, a notification on a new track, Last.fm scrobbling with an API account of your own. Scrobbles made offline are sent once Last.fm is reachable again |
-| Tray | Closing the window keeps playback running. The icon shows the track and offers play, pause and skip; quit from the tray or with `Ctrl+Q` |
+| Tray | Closing the window keeps playback running. The icon shows the track and offers play, pause and skip; quit from the tray or with `Ctrl+Q`. The settings can make closing quit instead, and start the app at login, in the tray if you like |
 | Remembers itself | Window size, maximised state, zoom and the last opened page are restored on the next start, the window position too on X11. The last track comes back paused where it stopped, if that was less than a week ago |
 | Stays signed in | The profile survives updates, so an update does not sign you out |
 | Installs like any app | A `.deb` for Debian, Ubuntu and their derivatives; new versions install themselves after a password prompt |
@@ -155,6 +155,7 @@ quietly every 15 seconds until it gets through.
 | `+` / `-` | Volume up or down, also the mouse wheel on the volume slider or the speaker |
 | `M` | Mute |
 | `L` | Like |
+| `S` / `R` | Shuffle, repeat |
 | `/` | Search |
 | `Alt` `←` / `Alt` `→` | Back or forward between pages, also the mouse's side buttons |
 | `F11` | Full screen |
@@ -182,10 +183,12 @@ out again; sign-in and settings stay in `~/.config/musicunofficial`.
 ### Updates
 
 A minute after start and every six hours the app looks for a newer GitHub
-release. It downloads the package, checks it against the sha256 digest GitHub
-lists for it and offers it under Settings > Updates. "Install and restart" asks
-for your password, checks the package once more as root, installs it with dpkg
-and starts the new version. A development run never updates itself.
+release and offers it under Settings > Updates. "Install and restart" downloads
+the package, checks it against the sha256 digest GitHub lists for it and asks
+for your password. A small helper then runs as root: it installs the package
+only if it carries a signature made with the release key, whose public half
+came with the installed app, and only if it is newer than what is installed.
+A development run never updates itself.
 
 ### Requirements
 
@@ -213,7 +216,11 @@ the tray icon and the mark in the navigation bar.
 
 For the self-update to pick a release up, tag it `vX.Y.Z` with the version from
 `package.json`, attach `dist/musicunofficial_X.Y.Z_amd64.deb` under exactly that
-name and publish it as the latest release, not as a pre-release. The repository
+name together with its signature `musicunofficial_X.Y.Z_amd64.deb.sig`, which
+`npm run sign` writes next to the package, and publish it as the latest release,
+not as a pre-release. The signing key is read from `MUSICUNOFFICIAL_SIGN_KEY` or
+`~/.config/musicunofficial-release/update-key.pem`; a fork has to replace
+`deb/update-key.pem` with the public half of its own key. The repository
 has to be public, because the app looks the release up without a token.
 
 ## Licence

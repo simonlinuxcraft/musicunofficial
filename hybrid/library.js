@@ -155,7 +155,12 @@ function markLibrary(v) {
   for (const r of $('lib-list').children) r.setAttribute('aria-current', String(!!id && r.dataset.id === id));
 }
 
-$('lib-filter').addEventListener('input', drawLibrary);
+// Up to 250 rows are built anew, so not on every keystroke.
+let libFilterTimer = 0;
+$('lib-filter').addEventListener('input', () => {
+  clearTimeout(libFilterTimer);
+  libFilterTimer = setTimeout(drawLibrary, 120);
+});
 $('lib-sort').addEventListener('click', () => {
   libSort = libSort === 'az' ? 'recent' : 'az';
   saveLib();
