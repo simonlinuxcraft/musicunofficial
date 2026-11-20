@@ -245,7 +245,8 @@ function createPresence(clientId, log = () => {}, onReadyChange = () => {}, retr
 
   function flush(force = false) {
     if (!enabled || !ready || !sock) return;
-    const wait = lastSent + MIN_UPDATE_MS - Date.now();
+    // Capped: a clock set back would hold every update for as long as the jump.
+    const wait = Math.min(lastSent + MIN_UPDATE_MS - Date.now(), MIN_UPDATE_MS);
     if (!force && wait > 0) {
       if (!flushTimer) {
         flushTimer = setTimeout(() => {

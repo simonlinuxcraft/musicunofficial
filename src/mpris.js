@@ -16,6 +16,7 @@ const NO_TRACK = '/org/mpris/MediaPlayer2/TrackList/NoTrack';
 const US = 1e6;
 const DO_NOT_QUEUE = 4;
 const PRIMARY_OWNER = 1;
+const METHOD_CALL = 1;
 
 let bus = null;
 let track = null;
@@ -206,6 +207,20 @@ function update(next) {
   }
 }
 
+// The library serves Properties.Get and Set for any name and calls members that are
+// not methods. All of these throw inside the main process, and a Set would replace
+// a method with the caller's value.
+const IMPLS = { [ROOT_IFACE.name]: [ROOT_IFACE, root], [PLAYER]: [PLAYER_IFACE, player] };
+function refused(msg) {
+  if (msg.type !== METHOD_CALL || msg.path !== PATH) return false;
+  if (IMPLS[msg.interface]) return !Object.hasOwn(IMPLS[msg.interface][0].methods, msg.member);
+  if (msg.interface !== 'org.freedesktop.DBus.Properties' || msg.member === 'GetAll') return false;
+  const [name, prop] = Array.isArray(msg.body) ? msg.body : [];
+  const [iface, impl] = IMPLS[name] || [];
+  if (!iface || typeof prop !== 'string' || !Object.hasOwn(iface.properties, prop)) return true;
+  return msg.member === 'Set' && !Object.getOwnPropertyDescriptor(impl, prop).set;
+}
+
 function start(opts) {
   actions = opts;
   try {
@@ -229,6 +244,19 @@ function start(opts) {
     drop();
   });
   bus.connection.on('end', drop);
+  const [serve] = bus.connection.listeners('message');
+  bus.connection.removeListener('message', serve);
+  bus.connection.on('message', (msg) => {
+    try {
+      if (refused(msg)) bus.sendError(msg, 'org.freedesktop.DBus.Error.InvalidArgs', 'not supported');
+      else serve(msg);
+    } catch (e) {
+      console.log('[mpris] ' + e.message);
+    }
+  });
+  // The library wraps emit once per object and keeps the first bus in it.
+  delete player.__dbusInterfaces;
+  player.emit = () => {};
   bus.exportInterface(root, PATH, ROOT_IFACE);
   bus.exportInterface(player, PATH, PLAYER_IFACE);
   // A second copy beside this one (a dev run next to the installed app) takes an
@@ -252,4 +280,4 @@ function nameHasOwner(name) {
   });
 }
 
-module.exports = { start, update, metadata, nameHasOwner, active: () => !!bus };
+module.exports = { start, update, metadata, refused, nameHasOwner, active: () => !!bus };

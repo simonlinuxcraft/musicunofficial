@@ -304,7 +304,7 @@
       }
       .item .extra { color: var(--fg2); font-size: 13px; white-space: nowrap; font-variant-numeric: tabular-nums; }
       .item:hover, .item:focus-visible, .trow:hover, .trow:focus-visible { background: rgba(255, 255, 255, 0.07); }
-      .item.selected, .trow.selected, .tile.selected { background: rgba(255, 255, 255, 0.15); }
+      .item.selected, .trow.selected, .tile.selected, .qt.selected { background: rgba(255, 255, 255, 0.15); }
       .item.current .title, .trow.current .title, .tile.current .title { color: var(--accent); }
       .cover { position: relative; width: 48px; height: 48px; }
       .cover .index { display: grid; place-items: center; height: 100%; color: var(--fg2); font-variant-numeric: tabular-nums; }
@@ -528,7 +528,7 @@
       /* The box takes the focus itself when it opens; it needs no ring. */
       #keys-dialog:focus-visible { outline: none; }
       #keys-dialog h2 { display: flex; align-items: center; justify-content: space-between; margin: 0 0 14px; font-size: 22px; font-weight: 800; }
-      #keys-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; }
+      #keys-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 28px; max-height: calc(86vh - 100px); overflow-y: auto; }
       .kr { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 5px 0; color: var(--fg2); }
       .kr kbd { color: var(--fg); background: var(--s4); font-size: 12px; }
       @media (max-width: 640px) { #keys-cols { grid-template-columns: minmax(0, 1fr); } }

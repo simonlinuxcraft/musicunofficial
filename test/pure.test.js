@@ -33,6 +33,7 @@ const {
   scrobbleDue,
   replayed,
   lastfmRetryable,
+  lastfmRefused,
   pendingBatch,
   scrobbleBatchParams,
   primaryArtist,
@@ -444,6 +445,8 @@ test('retypes player bar state and queue rows from the page', () => {
   });
   assert.equal(sanitizeControls({ repeat: 'SOMETIMES' }).repeat, 'NONE');
   assert.equal(sanitizeControls({ like: '<b>' }).like, null);
+  // Number(null) is 0, which would show a page without a volume as silent.
+  assert.equal(sanitizeControls({ volume: null }).volume, 100);
   const q = sanitizeQueue([
     { videoId: 'iNjGNNoUjkk', title: 'Within', artist: 'Daft Punk', length: '3:48', thumb: 'javascript:x', selected: true },
     { videoId: 'nope', title: 'dropped' },
@@ -521,6 +524,8 @@ test('retries Last.fm only for errors that pass', () => {
   assert.ok(lastfmRetryable(200, 29));
   assert.ok(!lastfmRetryable(200, 9));
   assert.ok(!lastfmRetryable(400, 6));
+  assert.ok(lastfmRefused(9));
+  assert.ok(!lastfmRefused(11));
 });
 
 test('batches pending scrobbles and drops those Last.fm no longer takes', () => {

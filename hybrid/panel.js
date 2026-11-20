@@ -184,17 +184,28 @@ const playingId = () => (track && !track.ad ? track.videoId : null);
 
 // Timed lyrics from LRCLIB, one request per track; no lines when it has none, null when it failed or the setting is off.
 const syncedCache = new Map();
+// Keyed by title and length too: the first reports after a track change can still carry
+// the old ones, and their answer (another song, or none for the wrong length) would stick.
 const syncedFor = (t) =>
-  !t || t.ad || !t.videoId
+  !t || t.ad || !t.videoId || !(t.duration > 0)
     ? Promise.resolve(null)
-    : cached(syncedCache, t.videoId, () => api.syncedLyrics({ title: t.title, artist: t.artist, duration: t.duration }));
+    : cached(syncedCache, [t.videoId, t.title, t.artist, Math.round(t.duration)].join('\n'), () =>
+        api.syncedLyrics({ title: t.title, artist: t.artist, duration: t.duration })
+      );
 
 // YouTube's text as soon as it is there, LRCLIB's timed lines over it when they come.
 // draw gets (plain, null), then (null, synced); never the text after the lines.
-function lyricsNow(id, draw) {
+function lyricsNow(id, draw, tries = 3) {
   let timed = false;
   const current = (fn) => (v) => playingId() === id && fn(v);
-  lyricsFor(id).then(current((plain) => !timed && draw(plain, null)));
+  lyricsFor(id).then(
+    current((plain) => {
+      if (timed) return;
+      draw(plain, null);
+      // null is a request that failed (page still loading, offline), not a track without lyrics.
+      if (!plain && tries) setTimeout(current(() => !timed && lyricsNow(id, draw, tries - 1)), 4000);
+    })
+  );
   syncedFor(track).then(current((s) => s && s.lines.length && ((timed = true), draw(null, s))));
 }
 
@@ -274,7 +285,6 @@ function loadLyrics() {
 }
 
 function drawNow() {
-  const id = playingId();
   // Nothing playing: the title says so, no empty cover or buttons.
   for (const el of ['np-art', 'np-like', 'np-more']) $(el).hidden = !track;
   loadQueue();
@@ -372,7 +382,7 @@ function slotElement() {
 
 // The player is a native view and draws over everything of ours, so a menu or
 // dialog that would lie under it hides it meanwhile.
-// ponytail: toasts and tooltips stay out, a video blanking for each of them is worse than a notice behind it.
+// Toasts and tooltips stay out, a video blanking for each of them is worse than a notice behind it.
 const OVERLAYS = [...document.querySelectorAll('#menu, #submenu, dialog')];
 const covers = (r) =>
   OVERLAYS.some((el) => {
@@ -447,7 +457,7 @@ function setSlot(next, away = false) {
 
 // Where the music was started, over the big view; a click goes back there.
 function originTitle(o) {
-  return o.kind === 'search' ? T.searchOrigin.replace('{q}', o.query) : (o.page && o.page.header && o.page.header.title) || o.title;
+  return o.kind === 'search' ? T.searchOrigin.replace('{q}', () => o.query) : (o.page && o.page.header && o.page.header.title) || o.title;
 }
 
 function drawOrigin() {
@@ -521,6 +531,11 @@ function trackChanged() {
   if (!$('queue').hidden) showTab(panelTab);
   if (slot === 'stage') drawStage();
 }
+// The length settles a moment after the track, and the timed lyrics are picked by it.
+function lengthChanged() {
+  if (!$('queue').hidden && panelTab === 'lyrics' && !$('lyrics').lines) loadLyrics();
+  if (slot === 'stage' && !$('stage-lyrics').lines) drawStage();
+}
 
 narrow.addEventListener('change', () => narrow.matches && slot === 'stage' && toggleQueue(false));
 
@@ -559,7 +574,8 @@ $('np-more').addEventListener('click', (e) => {
 });
 $('title').addEventListener('click', () => toggleStage());
 $('queue-toggle').addEventListener('click', () => toggleQueue(undefined, 'queue'));
-$('lyrics-toggle').addEventListener('click', () => toggleQueue(undefined, 'lyrics'));
+// Next to the stage the panel only has the queue; asked for that, the button can also close it.
+$('lyrics-toggle').addEventListener('click', () => toggleQueue(undefined, slot === 'stage' ? 'queue' : 'lyrics'));
 $('queue-close').addEventListener('click', () => toggleQueue(false));
 // Everything the list shows, autoplay suggestions included.
 $('queue-save').addEventListener('click', () => saveToPlaylist(queueRows.map((q) => q.videoId)));

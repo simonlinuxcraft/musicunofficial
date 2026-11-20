@@ -12,7 +12,7 @@ let shown = null;
 async function icon(url) {
   if (!url) return undefined;
   try {
-    const res = await net.fetch(url);
+    const res = await net.fetch(url, { signal: AbortSignal.timeout(5000) });
     return nativeImage.createFromBuffer(Buffer.from(await res.arrayBuffer())).resize({ width: 128 });
   } catch {
     return undefined;

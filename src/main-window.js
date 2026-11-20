@@ -53,7 +53,8 @@ let placed = null;
 // The key of the inserted stage CSS, as a promise; null while not inserted.
 let stageCss = null;
 
-const live = () => (view && !view.webContents.isDestroyed() ? view.webContents : null);
+// A destroyed view has no webContents at all.
+const live = () => (view && view.webContents && !view.webContents.isDestroyed() ? view.webContents : null);
 
 // Through mainFrame: webContents.executeJavaScript holds the code back until the
 // page has finished loading.
@@ -68,7 +69,8 @@ function injectAll(wc, resume) {
     wc.once('did-navigate', unmute);
     run(RESUME.replaceAll('__RESUME_DATA__', () => JSON.stringify(resume)))
       .catch(log('resume'))
-      .finally(unmute);
+      // Left bound, it would unmute the reload after a crash before the next resume.js has run.
+      .finally(() => (wc.removeListener('did-navigate', unmute), unmute()));
   }
 }
 
@@ -170,12 +172,16 @@ function create({ resume, openMini }) {
     console.log('[page] renderer gone: ' + d.reason);
     player.setTrack(null);
     stageCss = null;
-    if (d.reason === 'clean-exit' || !mayRestart()) return;
-    setTimeout(() => {
-      if (wc.isDestroyed()) return;
-      resume = player.resumePoint();
-      load();
-    }, 1000);
+    if (d.reason === 'clean-exit') return;
+    // After a run of crashes one late try, so the player does not stay dead until a restart.
+    setTimeout(
+      () => {
+        if (wc.isDestroyed()) return;
+        resume = player.resumePoint();
+        load();
+      },
+      mayRestart() ? 1000 : 60000
+    );
   });
 
   // Google's consent page sets no background of its own and would show dark text on DARK.

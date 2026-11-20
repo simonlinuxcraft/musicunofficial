@@ -187,6 +187,7 @@ function renderSettings(s) {
     row.append(div('', T.lastfmConnected + s.lastfm.name), button(T.lastfmDisconnect, () => lastfmStep(api.lastfmDisconnect)));
     fm.append(row);
     if (s.lastfm.locked) fm.append(div('note', T.lastfmLocked));
+    if (s.lastfm.refused) fm.append(div('note', T.lastfmRefused));
   } else if (s.lastfm.waiting) {
     const row = div('actions');
     row.append(button(T.lastfmFinish, () => lastfmStep(api.lastfmFinish), true));

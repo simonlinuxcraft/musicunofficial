@@ -27,11 +27,20 @@ let onTrack = () => {};
 let track = null;
 let presence = null;
 let lastResume = null;
+let persisted = 0;
 
 const isView = (wc) => views.some((v) => v() === wc);
 
 function setTrack(next) {
   track = next;
+  // Fresher than the capture timer: a pause or a seek right before quitting. A new track
+  // is captured instead: its list comes from the page, and the old one would load the
+  // new track into the old queue.
+  if (track && track.videoId && !track.ad) {
+    const { videoId, position, duration, playing, at } = track;
+    if (lastResume && lastResume.videoId === videoId) Object.assign(lastResume, { position, duration, playing, at });
+    else capture();
+  }
   for (const v of views) {
     const wc = v();
     if (wc) wc.send('track:update', track);
@@ -67,19 +76,27 @@ function capture() {
     .executeJavaScript('window.__ytmSnapshot && window.__ytmSnapshot()')
     .then((snap) => {
       const r = sanitizeResume(snap);
-      if (r) lastResume = r;
+      if (!r) return;
+      lastResume = r;
+      // To disk once a minute as well: a killed process or a power cut skips saveResume.
+      if (r.playing && Date.now() - persisted > 60000) {
+        persisted = Date.now();
+        saveResume();
+      }
     })
     .catch(() => {});
 }
 
-// Consumed on read, so a record that breaks startup cannot loop.
+// Consumed on read, so a record that breaks startup cannot loop. Kept in memory,
+// so quitting before the first capture writes it back.
 function takeResume() {
   const saved = store.settings.resume;
   if (!saved) return null;
   delete store.settings.resume;
   store.saveSettings();
   if (typeof saved.savedAt !== 'number' || Date.now() - saved.savedAt >= MAX_RESUME_AGE) return null;
-  return sanitizeResume(saved);
+  lastResume = sanitizeResume(saved);
+  return lastResume;
 }
 
 // The last captured track at its projected position, or null.

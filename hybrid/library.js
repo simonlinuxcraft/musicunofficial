@@ -102,7 +102,7 @@ function drawLibTabs() {
   );
 }
 
-// ponytail: up to 10 pages (about 250 entries); a bigger library shows the newest first.
+// Up to 10 pages (about 250 entries); a bigger library shows the newest first.
 const LIB_PAGES = 10;
 
 // Loaded once the account is known, and again after anything that changes it.

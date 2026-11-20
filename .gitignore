@@ -1,6 +1,3 @@
 node_modules/
 dist/
-*.AppImage
 *.deb
-*.snap
-squashfs-root/

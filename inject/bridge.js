@@ -2,7 +2,7 @@
 // Music page and calls one of its functions with the page's <ytmusic-app> and
 // JSON arguments, so nothing stays behind in the page. No semicolon at the end:
 // src/page.js uses the file as an expression.
-// ponytail: internals of the page (control classes, the queue element and its store); they break when YouTube renames them.
+// Internals of the page (control classes, the queue element and its store); they break when YouTube renames them.
 (() => {
   const { BAR, MINI, QUEUE, SKIP_AD } = __SELECTORS__;
   const $ = (sel) => document.querySelector(sel);

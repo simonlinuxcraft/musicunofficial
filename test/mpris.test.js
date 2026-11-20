@@ -21,3 +21,18 @@ test('leaves out what the track does not have', () => {
   assert.deepEqual(m.map(([k]) => k), ['mpris:trackid', 'xesam:title']);
   assert.deepEqual(metadata(null), [['mpris:trackid', ['o', '/org/mpris/MediaPlayer2/TrackList/NoTrack']]]);
 });
+
+test('refuses the calls the bus library would throw on', () => {
+  const { refused } = require('../src/mpris');
+  const call = (iface, member, body) => ({ type: 1, path: '/org/mpris/MediaPlayer2', interface: iface, member, body });
+  const props = (member, ...body) => call('org.freedesktop.DBus.Properties', member, body);
+  const PLAYER = 'org.mpris.MediaPlayer2.Player';
+  assert.equal(refused(props('Get', 'org.mpris.MediaPlayer2', 'Fullscreen')), true);
+  assert.equal(refused(props('Get', 'org.mpris.MediaPlayer2', 'Identity')), false);
+  assert.equal(refused(props('Set', PLAYER, 'Next', [[], ['x']])), true);
+  assert.equal(refused(props('Set', PLAYER, 'Rate', [[], [2]])), true);
+  assert.equal(refused(props('Set', PLAYER, 'Volume', [[], [0.5]])), false);
+  assert.equal(refused(props('GetAll', PLAYER)), false);
+  assert.equal(refused(call(PLAYER, 'Rate')), true);
+  assert.equal(refused(call(PLAYER, 'Next')), false);
+});

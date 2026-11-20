@@ -46,7 +46,8 @@
       // seekableEnd, not the video element: that one spans everything appended to the MediaSource.
       const len = g && g.seekableEnd > 0 ? g.seekableEnd : 0;
       if (!len) return;
-      if (saved.duration > 0 && Math.abs(len - saved.duration) > 3) {
+      if (!(saved.duration > 0 && Math.abs(len - saved.duration) > 3)) mismatchSince = 0;
+      else {
         // A length that stays off is not settling: paused and unmuted rather than playing muted until the deadline.
         mismatchSince ||= Date.now();
         if (Date.now() - mismatchSince < 5000) return;

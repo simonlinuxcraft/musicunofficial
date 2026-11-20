@@ -217,6 +217,8 @@ function rated(videoId, like) {
   }
   page.sections = page.sections.filter((s) => s.items.length);
   if (!page.items.length) $('list').append(emptyState(view));
+  // The fresh rows know nothing of the filter.
+  arrange();
 }
 
 const eqBars = () => {
@@ -492,7 +494,7 @@ function renderAbout(h) {
   const box = $('about');
   box.hidden = !(h && h.kind === 'artist' && h.description);
   if (box.hidden) return;
-  box.querySelector('h2').textContent = T.aboutArtist.replace('{name}', h.title);
+  box.querySelector('h2').textContent = T.aboutArtist.replace('{name}', () => h.title);
   const img = box.querySelector('img');
   if (h.thumb) img.src = h.thumb;
   else img.removeAttribute('src');
@@ -735,6 +737,8 @@ function subscribeButton(sub, b = document.createElement('button')) {
     const on = !sub.subscribed;
     if (await change({ kind: 'subscribe', channelId: sub.channelId, on }, on ? T.subscribed : T.unsubscribed)) {
       sub.subscribed = on;
+      // The artist card of the playing track holds its own copy of the state.
+      artistPages.clear();
       if (b.onclick === click) draw();
     }
   });
@@ -921,7 +925,7 @@ function updateArrows() {
   $('forward').setAttribute('aria-disabled', String(!ahead.length));
 }
 
-// ponytail: history keeps the last 50 pages, older ones drop out.
+// History keeps the last 50 pages, older ones drop out.
 const HISTORY = 50;
 
 function go(next) {
@@ -930,7 +934,7 @@ function go(next) {
   ahead.length = 0;
   show(next);
 }
-// ponytail: pages on the back stack are kept as loaded; a root tab or search always loads fresh.
+// Pages on the back stack are kept as loaded; a root tab or search always loads fresh.
 
 function goBack() {
   if (!stack.length) return;
@@ -1266,14 +1270,16 @@ async function renamePlaylist(own) {
   const title = await ask(T.rename, v.page?.header?.title || v.title);
   if (!title || !(await change({ kind: 'rename', playlistId: own.playlistId, title }, T.changed))) return;
   v.title = title;
+  if (v.page?.header) Object.assign(v.page.header, { title, base: '', edition: '' });
   if (view === v) $('heading').textContent = $('hero-title').textContent = $('sticky-title').textContent = title;
   refreshLibrary();
 }
 
 async function deletePlaylist(own) {
   const v = view;
-  if (!confirm(T.deleteAsk) || !(await change({ kind: 'delete', playlistId: own.playlistId }, T.deleted)) || view !== v) return;
+  if (!confirm(T.deleteAsk) || !(await change({ kind: 'delete', playlistId: own.playlistId }, T.deleted))) return;
   refreshLibrary();
+  if (view !== v) return;
   if (stack.length) show(stack.pop());
   else restoreRoot();
 }

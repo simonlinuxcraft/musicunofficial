@@ -12,6 +12,7 @@ const {
   primaryArtist,
   lastfmSignature,
   lastfmRetryable,
+  lastfmRefused,
   pendingBatch,
   scrobbleBatchParams,
 } = require('./pure');
@@ -25,6 +26,8 @@ const CALL_MS = 20 * 1000;
 let token = null;
 // The stored session key could not be read (keyring locked or replaced); scrobbles wait meanwhile.
 let locked = false;
+// Last.fm turned the session key down; shown in the settings.
+let refused = false;
 // The track being listened to, with how long it has actually played.
 let cur = null;
 
@@ -62,7 +65,9 @@ async function call(method, params, post) {
   const json = await res.json().catch(() => ({}));
   if (!res.ok || json.error) {
     const e = new Error(json.message || 'Last.fm answered ' + res.status);
-    e.retry = lastfmRetryable(res.status, json.error);
+    e.refused = lastfmRefused(json.error);
+    // A refused session keeps its scrobbles for the next connect.
+    e.retry = e.refused || lastfmRetryable(res.status, json.error);
     throw e;
   }
   return json;
@@ -90,6 +95,7 @@ async function finish() {
   const { session } = await call('auth.getSession', { token }, false);
   token = null;
   locked = false;
+  refused = false;
   const sealed = await seal(session.key);
   store.settings.lastfm = { ...cfg(), session: sealed, name: String(session.name).slice(0, 64) };
   store.saveSettings();
@@ -99,6 +105,7 @@ function disconnect() {
   token = null;
   cur = null;
   locked = false;
+  refused = false;
   delete store.settings.lastfm;
   store.saveSettings();
 }
@@ -106,7 +113,7 @@ function disconnect() {
 const connected = () => !!(cfg().key && cfg().session);
 
 function state() {
-  return { connected: connected(), name: connected() ? cfg().name : null, waiting: !!token, locked };
+  return { connected: connected(), name: connected() ? cfg().name : null, waiting: !!token, locked, refused };
 }
 
 // Scrobbles that failed for a reason that passes (offline, Last.fm down) wait in
@@ -135,6 +142,7 @@ async function flush() {
   } catch (e) {
     console.log('[lastfm] pending scrobbles: ' + e.message);
     done = !e.retry;
+    refused = !!e.refused;
   }
   // Sent, or refused for good: a refused batch would block every later one.
   if (done) c.pending = (cfg().pending || []).filter((p) => !batch.includes(p));
@@ -155,9 +163,11 @@ async function send(method, params) {
     await call(method, { ...params, sk }, true);
   } catch (e) {
     console.log('[lastfm] ' + method + ': ' + e.message);
+    refused = !!e.refused;
     if (e.retry && method === 'track.scrobble') keep(params);
     return;
   }
+  refused = false;
   flush();
 }
 

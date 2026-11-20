@@ -6,6 +6,7 @@ let track = null;
 let lastArt = null;
 let lastTime = null;
 let lastId = null;
+let lastLength = 0;
 const quiet = () => {};
 
 const fmt = (s) => {
@@ -122,7 +123,7 @@ function applyControls(c) {
   applyLike(c.like);
   $('mute').classList.toggle('muted', c.muted);
   // Not while the slider is dragged or a change is on its way, or the page's older value yanks it back.
-  if (document.activeElement !== $('volume') && !volumeBusy) $('volume').value = c.muted ? 0 : c.volume;
+  if (!volumeHeld && !volumeBusy) $('volume').value = c.muted ? 0 : c.volume;
   drawVolume(Number($('volume').value), c.muted);
 }
 
@@ -220,6 +221,11 @@ api.onTrack((t) => {
     if (has) refreshControls();
     if (has && !t.ad) loadNowLinks(id);
   }
+  const length = has && !t.ad ? Math.round(t.duration) : 0;
+  if (length !== lastLength) {
+    lastLength = length;
+    if (length) lengthChanged();
+  }
   drawProgress();
   syncBar();
 });
@@ -261,6 +267,10 @@ $('np-like').addEventListener('click', () => $('like').click());
 // Live while dragging. One request at a time; whatever the slider says when it
 // returns goes next, so a fast drag never queues up a backlog of stale values.
 let volumeBusy = false;
+// Held by the pointer, not merely focused: the slider keeps the focus after a click.
+let volumeHeld = false;
+$('volume').addEventListener('pointerdown', () => (volumeHeld = true));
+for (const type of ['pointerup', 'pointercancel']) addEventListener(type, () => (volumeHeld = false));
 async function sendVolume() {
   if (volumeBusy) return;
   volumeBusy = true;
@@ -284,11 +294,17 @@ function volumeBy(step) {
   sendVolume();
 }
 // The wheel turns the volume over the slider and over the speaker button.
+let wheel = 0;
 for (const el of [$('volume'), $('mute')]) el.addEventListener(
   'wheel',
   (e) => {
+    // Sideways gestures are not for the volume, and a touchpad sends dozens of small steps.
+    if (!e.deltaY) return;
     e.preventDefault();
-    volumeBy(e.deltaY < 0 ? 5 : -5);
+    wheel += e.deltaY;
+    if (Math.abs(wheel) < 40) return;
+    volumeBy(wheel < 0 ? 5 : -5);
+    wheel = 0;
   },
   { passive: false }
 );
