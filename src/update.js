@@ -101,6 +101,8 @@ async function download(target) {
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const dest = path.join(dir, name);
   const part = dest + '.part';
+  // Left by earlier runs: a package never installed, a download cut off by quitting.
+  for (const f of fs.readdirSync(dir)) if (f !== name && f !== name + '.sig') fs.rmSync(path.join(dir, f), { force: true });
   // Destroying the source as well: whether an abort reaches a body already streaming is up to net.fetch.
   const idle = new AbortController();
   let src = null;

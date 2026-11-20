@@ -13,6 +13,10 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 cp -- "$src" "$tmp/deb"
 cp -- "$sig" "$tmp/sig"
+command -v openssl >/dev/null || {
+  echo "update: openssl is not installed" >&2
+  exit 5
+}
 openssl dgst -sha256 -verify "$key" -signature "$tmp/sig" "$tmp/deb" >/dev/null || {
   echo "update: signature does not match" >&2
   exit 3

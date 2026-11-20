@@ -106,7 +106,7 @@ function create(opts) {
   const mayReload = pure.rateLimit(3, 60000);
   win.webContents.on('render-process-gone', (e, d) => {
     console.log('[ui] renderer gone: ' + d.reason);
-    if (d.reason !== 'clean-exit' && mayReload()) setTimeout(() => alive() && win.webContents.reload(), 1000);
+    if (d.reason !== 'clean-exit') setTimeout(() => alive() && win.webContents.reload(), mayReload() ? 1000 : 60000);
   });
 
   bindKeys(win.webContents, 'uiZoom', opts.openMini);

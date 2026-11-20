@@ -37,7 +37,8 @@ const fmt = (s) => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStar
 let lines = null;
 let linesFor = null;
 function loadLines(t) {
-  const id = t && !t.ad ? t.videoId : null;
+  // Title and length are part of it: the first reports after a track change can still carry the old ones.
+  const id = t && !t.ad && t.videoId && t.duration > 0 ? [t.videoId, t.title, t.artist, Math.round(t.duration)].join('\n') : null;
   if (id === linesFor) return;
   linesFor = id;
   lines = null;

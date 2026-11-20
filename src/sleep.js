@@ -44,7 +44,7 @@ function set(choice) {
 // The end of a track shows as the next one beginning, so that one plays for a moment.
 // Not before it actually plays: a pause sent while it still loads is lost, and
 // the page starts it anyway.
-// ponytail: a pause a second before the end needs the position, add it if the moment bothers.
+// A pause a second before the end needs the position, add it if the moment bothers.
 function onTrack(t) {
   current = t;
   if (!afterTrack || !t || t.ad) return;

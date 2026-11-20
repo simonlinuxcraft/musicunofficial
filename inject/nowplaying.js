@@ -51,7 +51,7 @@
   }
 
   function adShowing(p) {
-    // ponytail: the only ad signal we have. Verified present as a class on
+    // The only ad signal we have. Verified present as a class on
     // #movie_player, but not verified to flip true during a Free-tier ad. If it
     // never flips, capture during an ad falls back to lastSnap on the duration
     // mismatch alone, which the restore side also guards.
@@ -80,7 +80,7 @@
     const p = moviePlayer();
     let volume = null;
     let muted = false;
-    if (bar) {
+    if (bar && typeof bar.volume === 'number') {
       volume = bar.volume;
       muted = !!bar.isMuted;
     } else if (typeof p?.getVolume === 'function') {
@@ -117,6 +117,20 @@
   // src/page.js reads it back after a click.
   window.__ytmControls = () => ({ ...controls(), like: likeStatus() });
 
+  // A track change shows its new id a moment before its title, cover and length. That
+  // report is held back: lyrics, notifications and scrobbles would pair the new id
+  // with the old track. Not for longer than 3 s, in case two tracks share title and cover.
+  let seen = null;
+  let turning = 0;
+  function settled(r) {
+    const meta = r.title + '\n' + r.artist + '\n' + r.art;
+    const waits = seen && seen.r.videoId && r.videoId !== seen.r.videoId && meta === seen.meta && !r.ad;
+    if (waits && Date.now() - (turning ||= Date.now()) < 3000) return seen.r;
+    turning = 0;
+    seen = { r, meta };
+    return r;
+  }
+
   function read() {
     const v = video();
     const m = navigator.mediaSession && navigator.mediaSession.metadata;
@@ -138,7 +152,7 @@
 
     const t = times(v);
 
-    return {
+    return settled({
       title: m.title || '',
       artist: m.artist || '',
       album: m.album || '',
@@ -158,31 +172,14 @@
       duration: t.duration,
       // When position was read, so the asynchronous consumers can project it forward.
       at: Date.now(),
-    };
+    });
   }
 
   // Everything except position, which the consumers project forward from `at` themselves.
+  const SAME = ['title', 'artist', 'album', 'art', 'playing', 'ad', 'like', 'videoId', 'video', 'shuffle', 'repeat', 'volume', 'muted', 'avMode', 'avAvailable', 'adSkip'];
   function differs(a, b) {
     if (!a || !b) return a !== b;
-    return (
-      a.title !== b.title ||
-      a.artist !== b.artist ||
-      a.album !== b.album ||
-      a.art !== b.art ||
-      a.playing !== b.playing ||
-      a.ad !== b.ad ||
-      a.like !== b.like ||
-      a.videoId !== b.videoId ||
-      a.video !== b.video ||
-      a.shuffle !== b.shuffle ||
-      a.repeat !== b.repeat ||
-      a.volume !== b.volume ||
-      a.muted !== b.muted ||
-      a.avMode !== b.avMode ||
-      a.avAvailable !== b.avAvailable ||
-      a.adSkip !== b.adSkip ||
-      Math.round(a.duration) !== Math.round(b.duration)
-    );
+    return SAME.some((k) => a[k] !== b[k]) || Math.round(a.duration) !== Math.round(b.duration);
   }
 
   let last = null;

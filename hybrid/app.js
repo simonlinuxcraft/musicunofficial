@@ -32,8 +32,8 @@ const KEYS = {
   '+': () => volumeBy(5),
   '-': () => volumeBy(-5),
   m: () => $('mute').click(),
-  l: () => $('like').click(),
-  d: () => $('dislike').click(),
+  l: () => !track.ad && $('like').click(),
+  d: () => !track.ad && $('dislike').click(),
   p: () => !track.ad && track.videoId && saveToPlaylist([track.videoId]),
   s: () => $('shuffle').click(),
   r: () => $('repeat').click(),
@@ -57,7 +57,9 @@ document.addEventListener('keydown', (e) => {
     if (slot === 'stage') return toggleStage(false);
   }
   if (e.ctrlKey || e.altKey || e.metaKey) return;
-  if (e.target.closest('input, select, textarea, [contenteditable], dialog, #menu, #submenu')) return;
+  // A slider keeps the focus after a click and needs only its arrows; the letter keys go on working.
+  const slider = e.target.type === 'range' && e.key.length === 1;
+  if (!slider && e.target.closest('input, select, textarea, [contenteditable], dialog, #menu, #submenu')) return;
   if (e.key === '/') {
     e.preventDefault();
     $('search').querySelector('input').focus();

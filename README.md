@@ -81,7 +81,7 @@ until I catch up.
 | Media keys | Registered with MPRIS as Music, including the GNOME media widget and the lock screen |
 | Discord | Rich Presence, on by default, switched off in the settings or from the tray |
 | Extras | Sleep timer, a notification on a new track, Last.fm scrobbling with an API account of your own. Scrobbles made offline are sent once Last.fm is reachable again |
-| Tray | Closing the window keeps playback running. The icon shows the track and offers play, pause and skip; quit from the tray or with `Ctrl+Q`. The settings can make closing quit instead, and start the app at login, in the tray if you like |
+| Tray | Closing the window keeps playback running. The icon offers play, pause and skip; quit from the tray or with `Ctrl+Q`. The settings can make closing quit instead, and start the app at login, in the tray if you like |
 | Remembers itself | Window size, maximised state, zoom and the last opened page are restored on the next start, the window position too on X11. The last track comes back paused where it stopped, if that was less than a week ago |
 | Stays signed in | The profile survives updates, so an update does not sign you out |
 | Installs like any app | A `.deb` for Debian, Ubuntu and their derivatives; new versions install themselves after a password prompt |
@@ -97,9 +97,10 @@ until I catch up.
 
 
 
-`Ctrl` `M`, the button in the navigation bar or the tray entry shrinks the app
+`Ctrl` `M`, the button in the player bar or the tray entry shrinks the app
 to a small window that stays above every other window. It shows the cover art,
-the track, the artist, a progress bar and play, previous and next.
+the track, the artist, a line of lyrics, the time with a progress bar, like and
+play, previous and next.
 
 Drag it anywhere by its background; on X11 it comes back where you left it. The two
 buttons on the right go back to the full window and quit the application. There
@@ -154,9 +155,11 @@ quietly every 15 seconds until it gets through.
 | `Shift` `←` / `Shift` `→` | Previous or next track |
 | `+` / `-` | Volume up or down, also the mouse wheel on the volume slider or the speaker |
 | `M` | Mute |
-| `L` | Like |
+| `L` / `D` | Like, dislike |
+| `P` | Save to a playlist |
 | `S` / `R` | Shuffle, repeat |
 | `/` | Search |
+| `?` | Show the keys |
 | `Alt` `←` / `Alt` `→` | Back or forward between pages, also the mouse's side buttons |
 | `F11` | Full screen |
 | `Ctrl` `+` / `Ctrl` `-` | Zoom in and out, kept across restarts |

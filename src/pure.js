@@ -302,8 +302,8 @@ function splitEdition(title) {
 }
 
 // What a result is: songs and videos by their video type, the rest by the page they open.
-// Every type but the audio track and the episode is a video (OMV, UGC, SHOULDER and more).
-const VIDEO_KINDS = { MUSIC_VIDEO_TYPE_ATV: 'song', MUSIC_VIDEO_TYPE_PODCAST_EPISODE: 'episode' };
+// Every type but the audio track, the upload and the episode is a video (OMV, UGC, SHOULDER and more).
+const VIDEO_KINDS = { MUSIC_VIDEO_TYPE_ATV: 'song', MUSIC_VIDEO_TYPE_PRIVATELY_OWNED_TRACK: 'song', MUSIC_VIDEO_TYPE_PODCAST_EPISODE: 'episode' };
 const PAGE_KINDS = {
   MUSIC_PAGE_TYPE_ALBUM: 'album',
   MUSIC_PAGE_TYPE_ARTIST: 'artist',
@@ -776,6 +776,8 @@ function lastfmSignature(params, secret) {
 function lastfmRetryable(status, code) {
   return status >= 500 || [8, 11, 16, 29].includes(code);
 }
+// Authentication failed, invalid session key, token not authorized: the user has to connect again.
+const lastfmRefused = (code) => [4, 9, 14].includes(code);
 
 // Last.fm takes up to 50 scrobbles per call, and none older than 14 days.
 function pendingBatch(pending, now) {
@@ -796,12 +798,11 @@ function scrobbleBatchParams(batch) {
 // Player bar state read out of the hidden page.
 function sanitizeControls(raw) {
   if (!raw || typeof raw !== 'object') return null;
-  const volume = Number(raw.volume);
   return {
     shuffle: raw.shuffle === true,
     repeat: pick(raw.repeat, REPEAT_MODES) || 'NONE',
     like: pick(raw.like, LIKE_STATES),
-    volume: Number.isFinite(volume) ? clampVolume(volume) : 100,
+    volume: Number.isFinite(raw.volume) ? clampVolume(raw.volume) : 100,
     muted: raw.muted === true,
   };
 }
@@ -878,6 +879,7 @@ module.exports = {
   primaryArtist,
   lastfmSignature,
   lastfmRetryable,
+  lastfmRefused,
   pendingBatch,
   scrobbleBatchParams,
   CONTINUATION,

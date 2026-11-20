@@ -57,7 +57,7 @@ async function inPage(code) {
 // One function of inject/bridge.js. Arguments go in as JSON, never as code.
 const call = (fn, ...args) => inPage(`{ const b = ${BRIDGE}\n; return b.${fn}(app, ...${JSON.stringify(args)}); }`);
 
-// ponytail: an internal of the page; a plain fetch to /youtubei/v1 with a SAPISIDHASH header if it goes away.
+// An internal of the page; a plain fetch to /youtubei/v1 with a SAPISIDHASH header if it goes away.
 const innertube = (endpoint, body) => call('fetch', endpoint, body);
 const navigate = (endpoint) => call('navigate', endpoint);
 const signedIn = () => call('signedIn');
