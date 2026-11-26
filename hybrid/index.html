@@ -689,6 +689,8 @@
       @keyframes gap { 0%, 100% { opacity: 0.35; transform: scale(0.8); } 50% { opacity: 1; transform: none; } }
       .synced p:hover { color: rgba(255, 255, 255, 0.85); }
       #stage-lyrics.synced { color: inherit; }
+      #stage.nolyrics #stage-body { grid-template-columns: minmax(0, 1fr); }
+      #stage.nolyrics #stage-lyrics { display: none; }
       #stage-video { display: none; }
       /* A music video as large as the view allows, at its own aspect, so no black bars show. */
       #stage.video #stage-body { display: flex; align-items: center; justify-content: center; padding: 0 12px 12px; }
