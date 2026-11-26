@@ -301,7 +301,7 @@ function showTab(tab) {
   $('lyrics-pane').hidden = tab !== 'lyrics';
   $('queue-save').hidden = tab !== 'queue';
   $('queue-toggle').setAttribute('aria-pressed', String(!$('queue').hidden && tab === 'queue'));
-  $('lyrics-toggle').setAttribute('aria-pressed', String(!$('queue').hidden && tab === 'lyrics'));
+  markLyrics();
   savePanel();
   if (tab === 'lyrics') loadLyrics();
   else if (tab === 'now') drawNow();
@@ -360,7 +360,7 @@ function toggleQueue(open, tab = panelTab) {
   if (open) showTab(tab);
   else {
     $('queue-toggle').setAttribute('aria-pressed', 'false');
-    $('lyrics-toggle').setAttribute('aria-pressed', 'false');
+    markLyrics();
     savePanel();
   }
 }
@@ -434,6 +434,7 @@ function setStageVideo(video) {
   fitVideo();
   if (video === stageVideo) return;
   stageVideo = video;
+  markLyrics();
   placePlayer();
 }
 
@@ -447,6 +448,7 @@ function setSlot(next, away = false) {
   stageFold = true;
   updateRail();
   $('stage-toggle').setAttribute('aria-pressed', String(slot === 'stage'));
+  markLyrics();
   if (!$('queue').hidden) showTab(chosenTab);
   if (slot === 'stage') {
     drawStage();
@@ -537,7 +539,10 @@ function lengthChanged() {
   if (slot === 'stage' && !$('stage-lyrics').lines) drawStage();
 }
 
-narrow.addEventListener('change', () => narrow.matches && slot === 'stage' && toggleQueue(false));
+narrow.addEventListener('change', () => {
+  markLyrics();
+  if (narrow.matches && slot === 'stage') toggleQueue(false);
+});
 
 const slotWatch = new ResizeObserver(placePlayer);
 slotWatch.observe($('stage-video'));
@@ -574,8 +579,18 @@ $('np-more').addEventListener('click', (e) => {
 });
 $('title').addEventListener('click', () => toggleStage());
 $('queue-toggle').addEventListener('click', () => toggleQueue(undefined, 'queue'));
-// Next to the stage the panel only has the queue; asked for that, the button can also close it.
-$('lyrics-toggle').addEventListener('click', () => toggleQueue(undefined, slot === 'stage' ? 'queue' : 'lyrics'));
+// The stage has lyrics of its own, so there the button shows or hides them instead of the panel.
+function markLyrics() {
+  const shown = slot === 'stage' && !stageVideo && !narrow.matches;
+  const on = slot === 'stage' ? shown && !$('stage').classList.contains('nolyrics') : !$('queue').hidden && panelTab === 'lyrics';
+  $('lyrics-toggle').disabled = slot === 'stage' && !shown;
+  $('lyrics-toggle').setAttribute('aria-pressed', String(on));
+}
+$('lyrics-toggle').addEventListener('click', () => {
+  if (slot !== 'stage') return toggleQueue(undefined, 'lyrics');
+  $('stage').classList.toggle('nolyrics');
+  markLyrics();
+});
 $('queue-close').addEventListener('click', () => toggleQueue(false));
 // Everything the list shows, autoplay suggestions included.
 $('queue-save').addEventListener('click', () => saveToPlaylist(queueRows.map((q) => q.videoId)));
