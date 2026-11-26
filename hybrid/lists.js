@@ -277,13 +277,14 @@ function tableColumns(items) {
   const counts = items.map((i) => i.extra).filter(Boolean);
   const words = counts.map((x) => /^(.*\d.*?)\s+(\p{L}+)$/u.exec(x));
   const unit = words.length && words.every((m) => m && m[2] === words[0][2]) ? words[0][2] : '';
-  return { extra: has('extra'), unit, album: has('album'), rate: signedIn === true && has('like'), duration: has('duration') };
+  const about = items.length > 0 && items.every((i) => i.kind === 'episode');
+  return { extra: has('extra'), unit: about ? '' : unit, about, album: has('album'), rate: signedIn === true && has('like'), duration: has('duration') };
 }
 
 function tableHead(cols) {
   const h = div('thead');
   h.append(div('n', '#'), div('', T.colTitle));
-  if (cols.extra) h.append(div('col col-extra', cols.unit ? cols.unit[0].toUpperCase() + cols.unit.slice(1) : T.colPlays));
+  if (cols.extra) h.append(div('col col-extra', cols.about ? T.colAbout : cols.unit ? cols.unit[0].toUpperCase() + cols.unit.slice(1) : T.colPlays));
   if (cols.album) h.append(div('col col-album', T.colAlbum));
   if (cols.rate) h.append(div(''));
   if (cols.duration) {
