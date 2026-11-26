@@ -557,6 +557,26 @@ function parseItems(json) {
         row,
       });
       push(item, li.menu, links);
+    } else if (o.musicMultiRowListItemRenderer) {
+      const mr = o.musicMultiRowListItemRenderer;
+      const play = overlayPlay(mr.overlay);
+      const rawWatch = play?.watchEndpoint || mr.onTap?.watchEndpoint;
+      const watch = sanitizeWatch(rawWatch);
+      const links = parts(mr.subtitle);
+      const sub = text(mr.subtitle);
+      const item = entry({
+        title: text(mr.title),
+        subtitle: sub,
+        parts: links,
+        thumb: thumb(mr.thumbnail, 96),
+        big: thumb(mr.thumbnail, 226),
+        watch,
+        rawWatch,
+        browse: runsOf(mr.title)[0]?.navigationEndpoint?.browseEndpoint,
+        play,
+        row: { byline: links, album: null, extra: text(mr.description, 300), duration: '', explicit: false, like: null, likeId: '' },
+      });
+      push(item, mr.menu, links);
     } else if (card) {
       const nav = card.navigationEndpoint || {};
       const links = parts(card.subtitle);
