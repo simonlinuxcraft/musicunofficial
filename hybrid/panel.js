@@ -434,6 +434,7 @@ function setStageVideo(video) {
   fitVideo();
   if (video === stageVideo) return;
   stageVideo = video;
+  markLyrics();
   placePlayer();
 }
 
@@ -538,7 +539,10 @@ function lengthChanged() {
   if (slot === 'stage' && !$('stage-lyrics').lines) drawStage();
 }
 
-narrow.addEventListener('change', () => narrow.matches && slot === 'stage' && toggleQueue(false));
+narrow.addEventListener('change', () => {
+  markLyrics();
+  if (narrow.matches && slot === 'stage') toggleQueue(false);
+});
 
 const slotWatch = new ResizeObserver(placePlayer);
 slotWatch.observe($('stage-video'));
@@ -575,9 +579,11 @@ $('np-more').addEventListener('click', (e) => {
 });
 $('title').addEventListener('click', () => toggleStage());
 $('queue-toggle').addEventListener('click', () => toggleQueue(undefined, 'queue'));
-// Next to the stage the panel only has the queue; asked for that, the button can also close it.
+// The stage has lyrics of its own, so there the button shows or hides them instead of the panel.
 function markLyrics() {
-  const on = slot === 'stage' ? !$('stage').classList.contains('nolyrics') : !$('queue').hidden && panelTab === 'lyrics';
+  const shown = slot === 'stage' && !stageVideo && !narrow.matches;
+  const on = slot === 'stage' ? shown && !$('stage').classList.contains('nolyrics') : !$('queue').hidden && panelTab === 'lyrics';
+  $('lyrics-toggle').disabled = slot === 'stage' && !shown;
   $('lyrics-toggle').setAttribute('aria-pressed', String(on));
 }
 $('lyrics-toggle').addEventListener('click', () => {
